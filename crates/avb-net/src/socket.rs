@@ -66,6 +66,7 @@ impl Socket {
 }
 
 /// The error for a raw socket the process may not open, with what to do.
+#[cfg(target_os = "linux")]
 fn permission_error() -> io::Error {
     let program = std::env::current_exe()
         .map(|path| path.display().to_string())
