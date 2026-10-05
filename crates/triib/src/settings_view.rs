@@ -1,0 +1,312 @@
+//! The Settings dialog: a header with the title, close button and tabs
+//! that stays put, the chosen tab's settings under it, which scroll, and
+//! triib's version at the foot.
+
+use std::fmt;
+
+use iced::widget::{container, mouse_area, opaque, pick_list, space, toggler};
+use iced::{Center, Color, Element, Fill, Length, Theme};
+use scramble_ui::appearance::{Appearance, hex_to_color};
+use scramble_ui::button::{self, Kind};
+use scramble_ui::component;
+use scramble_ui::font::{Type, aligned, styled};
+use scramble_ui::icon::Icon;
+use scramble_ui::{Scheme, enter, scheme, shape, style};
+
+use crate::app::{Message, TRIIB_SEED, Triib};
+use crate::settings::SYSTEM_LANGUAGE;
+
+/// The tabs Settings is split into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettingsTab {
+    #[default]
+    General,
+    Appearance,
+}
+
+/// The widest and tallest the dialog gets.
+const WIDTH: f32 = 520.0;
+const HEIGHT: f32 = 640.0;
+/// The narrowest the appearance choices show their labels in.
+const ROOM_FOR_LABELS: f32 = 330.0;
+
+/// The languages triib has text for: each one's tag and its name in its
+/// own language. More come with the translations.
+const LANGUAGES: [(&str, &str); 1] = [("en", "English")];
+
+/// Colors offered for the scheme when the system accent is not used,
+/// triib's teal first.
+const ACCENT_SWATCHES: [Color; 11] = [
+    TRIIB_SEED,
+    scheme::DEFAULT_SEED,
+    Color::from_rgb8(0x43, 0xa0, 0x47),
+    Color::from_rgb8(0xf9, 0xa8, 0x25),
+    Color::from_rgb8(0xf5, 0x7c, 0x00),
+    Color::from_rgb8(0xe5, 0x39, 0x35),
+    Color::from_rgb8(0xd8, 0x1b, 0x60),
+    Color::from_rgb8(0x8e, 0x24, 0xaa),
+    Color::from_rgb8(0x39, 0x49, 0xab),
+    Color::from_rgb8(0x6d, 0x4c, 0x41),
+    Color::from_rgb8(0x75, 0x75, 0x75),
+];
+
+/// The dialog over `base`, dimming it; a click outside the dialog closes
+/// it.
+pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, Message> {
+    let tab = |label: &'static str, which: SettingsTab| component::Tab {
+        label,
+        icon: None,
+        selected: triib.settings_tab == which,
+        on_press: Message::SettingsTab(which),
+    };
+    let header = iced::widget::column![
+        iced::widget::row![
+            styled("Settings", Type::HeadlineSmall).width(Fill),
+            component::tip(
+                button::icon_button(Icon::Close).on_press(Message::SettingsClosed),
+                "Close",
+            ),
+        ]
+        .align_y(Center),
+        component::tabs(vec![
+            tab("General", SettingsTab::General),
+            tab("Appearance", SettingsTab::Appearance),
+        ]),
+    ]
+    .spacing(12);
+    let mut content = match triib.settings_tab {
+        SettingsTab::General => general(triib),
+        SettingsTab::Appearance => appearance(triib),
+    };
+    if let Some(error) = &triib.settings_error {
+        content = content.push(aligned(
+            styled(error.as_str(), Type::BodyMedium).style(style::error_text),
+        ));
+    }
+    let footer = container(
+        styled(
+            format!("triib {}", env!("CARGO_PKG_VERSION")),
+            Type::BodySmall,
+        )
+        .style(style::on_surface_variant),
+    )
+    .padding([12, 24])
+    .center_x(Fill);
+    let card = container(iced::widget::column![
+        container(header).padding(iced::Padding {
+            top: 24.0,
+            right: 24.0,
+            bottom: 0.0,
+            left: 24.0,
+        }),
+        container(component::scroll(container(content).padding([16, 24]))).height(Fill),
+        footer,
+    ])
+    .max_width(WIDTH)
+    .max_height(HEIGHT)
+    .width(Fill)
+    .height(Fill)
+    .style(style::dialog);
+    iced::widget::stack![
+        base,
+        mouse_area(
+            container(enter::grow(opaque(card)))
+                .padding(24)
+                .center(Fill)
+                .style(style::scrim),
+        )
+        .on_press(Message::SettingsClosed),
+    ]
+    .into()
+}
+
+/// A language as the picker shows it.
+#[derive(Debug, Clone, PartialEq)]
+struct Language {
+    tag: &'static str,
+    label: String,
+}
+
+impl fmt::Display for Language {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.label)
+    }
+}
+
+/// The interface's language.
+fn general(triib: &Triib) -> iced::widget::Column<'_, Message> {
+    // The system's language falls back to English while it is the only
+    // one triib has.
+    let mut choices = vec![Language {
+        tag: SYSTEM_LANGUAGE,
+        label: "System (English)".to_owned(),
+    }];
+    choices.extend(LANGUAGES.iter().map(|&(tag, name)| Language {
+        tag,
+        label: name.to_owned(),
+    }));
+    let selected = choices
+        .iter()
+        .find(|choice| choice.tag == triib.settings.language)
+        .unwrap_or(&choices[0])
+        .clone();
+    iced::widget::column![
+        component::section("Language"),
+        pick_list(choices, Some(selected), |choice: Language| {
+            Message::LanguageSelected(choice.tag.to_owned())
+        })
+        .text_size(16)
+        .padding([10, 12])
+        .width(Fill)
+        .style(style::outlined_select)
+        .menu_style(style::select_menu),
+        aligned(
+            styled(
+                "triib speaks English for now; more languages are coming.",
+                Type::BodySmall,
+            )
+            .style(style::on_surface_variant),
+        ),
+    ]
+    .spacing(12)
+}
+
+/// Light or dark, colors, and motion.
+fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
+    let settings = &triib.settings;
+    let current = settings.appearance;
+    // With room, each choice with its label; on a phone, icons with their
+    // labels as tooltips.
+    let choices = iced::widget::responsive(move |size| {
+        const CHOICES: [(Icon, &str, Appearance); 3] = [
+            (Icon::Settings, "System", Appearance::System),
+            (Icon::LightMode, "Light", Appearance::Light),
+            (Icon::DarkMode, "Dark", Appearance::Dark),
+        ];
+        let roomy = size.width >= ROOM_FOR_LABELS;
+        component::connected_with_tips(
+            CHOICES
+                .into_iter()
+                .map(|(glyph, label, value)| {
+                    let choice = if roomy {
+                        button::with_icon(Kind::Tonal, glyph, label)
+                    } else {
+                        button::icon_button(glyph).kind(Kind::Tonal)
+                    };
+                    let choice = choice
+                        .selected(current == value)
+                        .on_press(Message::AppearanceSelected(value));
+                    (choice, (!roomy).then(|| label.into()))
+                })
+                .collect(),
+        )
+    })
+    .height(Length::Fixed(button::Size::Small.height()));
+    let accent_note = match (settings.system_accent, &triib.omarchy, triib.system_accent) {
+        (false, _, _) => "The color below seeds triib's colors.".to_owned(),
+        (true, Some(palette), _) => format!("From the Omarchy theme, {}.", palette.name),
+        (true, None, Some(_)) => "From the desktop's accent color.".to_owned(),
+        (true, None, None) => {
+            "The desktop has no accent color, so the color below is used.".to_owned()
+        }
+    };
+    // The picked color is in use when the system accent is off or the
+    // system has none.
+    let picking =
+        !settings.system_accent || (triib.omarchy.is_none() && triib.system_accent.is_none());
+    let chosen = settings
+        .accent_color
+        .as_deref()
+        .and_then(hex_to_color)
+        .unwrap_or(TRIIB_SEED);
+    let swatches: Element<'_, Message> = if picking {
+        iced::widget::row(
+            ACCENT_SWATCHES
+                .iter()
+                .map(|&swatch| accent_swatch(swatch, hex(swatch) == hex(chosen))),
+        )
+        .spacing(4)
+        .wrap()
+        .into()
+    } else {
+        space().into()
+    };
+    let animations_note = if triib.system_animations {
+        "Springs and slides as things change."
+    } else {
+        "The desktop asks for reduced motion, so triib stays still."
+    };
+    iced::widget::column![
+        choices,
+        component::section("Colors"),
+        switch_row(
+            "Use the system accent color",
+            accent_note,
+            settings.system_accent,
+            Message::SystemAccentToggled,
+        ),
+        swatches,
+        component::section("Motion"),
+        switch_row(
+            "Animations",
+            animations_note.to_owned(),
+            settings.animations,
+            Message::AnimationsToggled,
+        ),
+    ]
+    .spacing(12)
+}
+
+/// A setting with a title, a note under it and a switch.
+fn switch_row<'a>(
+    title: &'static str,
+    note: String,
+    on: bool,
+    toggled: fn(bool) -> Message,
+) -> Element<'a, Message> {
+    iced::widget::row![
+        iced::widget::column![
+            styled(title, Type::BodyLarge),
+            aligned(styled(note, Type::BodyMedium).style(style::on_surface_variant)),
+        ]
+        .spacing(2)
+        .width(Fill),
+        toggler(on).on_toggle(toggled).size(28).style(style::switch),
+    ]
+    .spacing(16)
+    .align_y(Center)
+    .into()
+}
+
+fn hex(color: Color) -> String {
+    let [red, green, blue, _] = color.into_rgba8();
+    format!("#{red:02X}{green:02X}{blue:02X}")
+}
+
+/// A round button that picks `color` for the scheme, ringed when chosen.
+fn accent_swatch<'a>(color: Color, selected: bool) -> Element<'a, Message> {
+    let dot = container(space().width(24).height(24)).style(move |theme: &Theme| {
+        let scheme = Scheme::of(theme);
+        container::Style {
+            background: Some(color.into()),
+            border: iced::Border {
+                color: if selected {
+                    scheme.on_surface
+                } else {
+                    scheme.outline_variant
+                },
+                width: if selected { 3.0 } else { 1.0 },
+                radius: shape::FULL.into(),
+            },
+            ..container::Style::default()
+        }
+    });
+    let hex = hex(color);
+    component::tip(
+        button::custom(Kind::Standard, dot)
+            .size(button::Size::ExtraSmall)
+            .width(Length::Fixed(36.0))
+            .on_press(Message::AccentPicked(hex.clone())),
+        hex,
+    )
+}

@@ -1,0 +1,85 @@
+# triib
+
+A lightweight ATDECC (IEEE 1722.1) controller with Milan and AVB Lite
+support, for Linux, Windows and macOS. On a computer with a hardware
+timestamping Ethernet interface it will also run its own talkers and
+listeners, routed to the computer's audio. Built in Rust with
+[iced](https://iced.rs), sharing its look with
+[prev](https://github.com/scrambletools/prev) through
+[scramble-ui](https://github.com/scrambletools/scramble-ui).
+
+> **Status:** early. On Linux, triib discovers ATDECC entities, reads their
+> entity models (names, streams, clocks, Milan support) and keeps them for
+> next time, shows and changes stream connections in a matrix, maps the
+> network from each entity's gPTP path, identifies entities, renames them,
+> changes their stream formats, sampling rates and clock sources, and
+> shows and changes how their channels map to streams. See the
+> [plan](docs/PLAN.md).
+
+## Building
+
+```
+git clone https://github.com/scrambletools/triib
+cd triib
+cargo run -p triib          # the app
+cargo run -p triib-cli -- interfaces
+cargo run -p triib-cli -- discover <interface>
+cargo run -p triib-cli -- describe <interface> [entity-id]
+cargo run -p triib-cli -- network <interface>
+cargo run -p triib-cli -- name <interface> <entity-id> <entity|group|type:index> <name>
+cargo run -p triib-cli -- format <interface> <entity-id> <stream-input:N|stream-output:N> <hex>
+cargo run -p triib-cli -- rate <interface> <entity-id> <audio-unit> <hertz>
+cargo run -p triib-cli -- clock <interface> <entity-id> <clock-domain> <clock-source>
+cargo run -p triib-cli -- maps <interface> [entity-id]
+cargo run -p triib-cli -- map <interface> <entity-id> <add|remove> <stream-port-input:N|stream-port-output:N> <stream:channel=cluster:channel>...
+```
+
+triib uses [scramble-ui](https://github.com/scrambletools/scramble-ui)
+at the revision `Cargo.toml` pins, as prev does. To change both together,
+clone scramble-ui beside triib and build with
+`cargo --config .cargo/scramble-ui-local.toml build`, a git-ignored file
+pointing at that checkout:
+
+```toml
+[patch."https://github.com/scrambletools/scramble-ui"]
+scramble-ui = { path = "../scramble-ui" }
+
+[patch.crates-io]
+iced_graphics = { path = "../scramble-ui/vendor/iced_graphics" }
+iced_widget = { path = "../scramble-ui/vendor/iced_widget" }
+```
+
+Once the scramble-ui change is pushed, move the pin to its revision and
+build once without the file, so `Cargo.lock` names the revision again.
+
+On Linux, sending and receiving ATDECC frames needs `CAP_NET_RAW`:
+
+```
+sudo setcap cap_net_raw+ep target/debug/triib
+```
+
+## Workspace
+
+| Crate | What it does |
+|---|---|
+| `triib` | The app |
+| `triib-cli` | Headless controller |
+| `triib-store` | Settings and cache files |
+| `atdecc` | IEEE 1722.1 ATDECC with Milan: frames and state machines, no I/O |
+| `avb-mrp` | IEEE 802.1Q MRP, MSRP and MVRP: frames and state machines, no I/O |
+| `avb-net` | Raw Ethernet, interfaces and hardware timestamps per operating system |
+
+`atdecc`, `avb-mrp` and `avb-net` are meant for other applications too:
+they depend on nothing but `avb-net`, do no I/O of their own outside its
+optional platform support, and build without std for microcontrollers.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option. Unless you explicitly state
+otherwise, any contribution intentionally submitted for inclusion in triib
+by you, as defined in the Apache-2.0 license, shall be dual licensed as
+above, without any additional terms or conditions.
+
+Milan and AVB are trademarks of Avnu Alliance. triib is not certified by
+Avnu Alliance.

@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/scrambletools/triib"
+
+[workspace.dependencies]
+# Protocol crates, usable outside triib: no dependencies beyond avb-net, and
+# without std when its default feature is off.
+atdecc = { path = "crates/atdecc", version = "0.1.0", default-features = false }
+avb-mrp = { path = "crates/avb-mrp", version = "0.1.0", default-features = false }
+avb-net = { path = "crates/avb-net", version = "0.1.0", default-features = false }
+triib-store = { path = "crates/triib-store", version = "0.1.0" }
+# Pinned by revision, as prev pins it. A git-ignored .cargo/config.toml can
+# point it at a local checkout while changing both (see the README).
+scramble-ui = { git = "https://github.com/scrambletools/scramble-ui", rev = "4d08da23082512ae1641ca11d9a2c34708c9c50f", version = "0.1.0" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Right to left text in text inputs; the copies live with scramble-ui, see
+# its vendor/PATCHES.md.
+[patch.crates-io]
+iced_graphics = { git = "https://github.com/scrambletools/scramble-ui", rev = "4d08da23082512ae1641ca11d9a2c34708c9c50f" }
+iced_widget = { git = "https://github.com/scrambletools/scramble-ui", rev = "4d08da23082512ae1641ca11d9a2c34708c9c50f" }

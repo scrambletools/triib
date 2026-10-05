@@ -1,0 +1,44 @@
+# Dependency policy: open source and permissive, so triib stays
+# MIT OR Apache-2.0. No GPL, AGPL or LGPL crates; MPL-2.0 is file level and
+# allowed for unmodified use.
+
+[graph]
+all-features = true
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+]
+
+[licenses]
+allow = [
+    "MIT",
+    "MIT-0",
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "BSL-1.0",
+    "CC0-1.0",
+    "MPL-2.0",
+]
+confidence-threshold = 0.9
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[advisories]
+yanked = "deny"
+unmaintained = "workspace"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = ["https://github.com/scrambletools/scramble-ui"]

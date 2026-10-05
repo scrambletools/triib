@@ -1,0 +1,22 @@
+[package]
+name = "triib"
+description = "Lightweight ATDECC and Milan controller"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+iced = { version = "0.14", features = ["advanced", "canvas"] }
+serde = { version = "1", features = ["derive"] }
+scramble-ui.workspace = true
+atdecc = { workspace = true, features = ["std"] }
+avb-net = { workspace = true, features = ["std"] }
+triib-store.workspace = true
+
+[dev-dependencies]
+iced_test = "0.14"
