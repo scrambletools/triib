@@ -14,6 +14,7 @@ use scramble_ui::icon::Icon;
 use scramble_ui::{Scheme, dropdown, enter, scheme, shape, style};
 
 use crate::app::{Message, TRIIB_SEED, Triib};
+use crate::fl;
 use crate::settings::SYSTEM_LANGUAGE;
 
 /// The tabs Settings is split into.
@@ -29,10 +30,6 @@ const WIDTH: f32 = 520.0;
 const HEIGHT: f32 = 640.0;
 /// The narrowest the appearance choices show their labels in.
 const ROOM_FOR_LABELS: f32 = 330.0;
-
-/// The languages triib has text for: each one's tag and its name in its
-/// own language. More come with the translations.
-const LANGUAGES: [(&str, &str); 1] = [("en", "English")];
 
 /// Colors offered for the scheme when the system accent is not used,
 /// triib's teal first.
@@ -53,24 +50,24 @@ const ACCENT_SWATCHES: [Color; 11] = [
 /// The dialog over `base`, dimming it; a click outside the dialog closes
 /// it.
 pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, Message> {
-    let tab = |label: &'static str, which: SettingsTab| component::Tab {
-        label,
+    let tab = |label: String, which: SettingsTab| component::Tab {
+        label: crate::i18n::lasting(label),
         icon: None,
         selected: triib.settings_tab == which,
         on_press: Message::SettingsTab(which),
     };
     let header = iced::widget::column![
         iced::widget::row![
-            styled("Settings", Type::HeadlineSmall).width(Fill),
+            styled(fl!("settings-title"), Type::HeadlineSmall).width(Fill),
             component::tip(
                 button::icon_button(Icon::Close).on_press(Message::SettingsClosed),
-                "Close",
+                fl!("common-close"),
             ),
         ]
         .align_y(Center),
         component::tabs(vec![
-            tab("General", SettingsTab::General),
-            tab("Appearance", SettingsTab::Appearance),
+            tab(fl!("settings-general"), SettingsTab::General),
+            tab(fl!("settings-appearance"), SettingsTab::Appearance),
         ]),
     ]
     .spacing(12);
@@ -123,7 +120,7 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
 /// A language as the picker shows it.
 #[derive(Debug, Clone, PartialEq)]
 struct Language {
-    tag: &'static str,
+    tag: String,
     label: String,
 }
 
@@ -135,15 +132,16 @@ impl fmt::Display for Language {
 
 /// The interface's language.
 fn general(triib: &Triib) -> iced::widget::Column<'_, Message> {
-    // The system's language falls back to English while it is the only
-    // one triib has.
     let mut choices = vec![Language {
-        tag: SYSTEM_LANGUAGE,
-        label: "System (English)".to_owned(),
+        tag: SYSTEM_LANGUAGE.to_owned(),
+        label: fl!(
+            "settings-language-system",
+            language = crate::i18n::system_language_name()
+        ),
     }];
-    choices.extend(LANGUAGES.iter().map(|&(tag, name)| Language {
-        tag,
-        label: name.to_owned(),
+    choices.extend(crate::i18n::languages().iter().map(|(tag, name)| Language {
+        tag: tag.clone(),
+        label: name.clone(),
     }));
     let selected = choices
         .iter()
@@ -151,17 +149,13 @@ fn general(triib: &Triib) -> iced::widget::Column<'_, Message> {
         .unwrap_or(&choices[0])
         .clone();
     iced::widget::column![
-        component::section("Language"),
+        component::section(fl!("settings-language")),
         dropdown::pick(choices, Some(selected), |choice: Language| {
-            Message::LanguageSelected(choice.tag.to_owned())
+            Message::LanguageSelected(choice.tag)
         })
         .width(Fill),
         aligned(
-            styled(
-                "triib speaks English for now; more languages are coming.",
-                Type::BodySmall,
-            )
-            .style(style::on_surface_variant),
+            styled(fl!("settings-language-note"), Type::BodySmall).style(style::on_surface_variant),
         ),
     ]
     .spacing(12)
@@ -174,18 +168,30 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
     // With room, each choice with its label; on a phone, icons with their
     // labels as tooltips.
     let choices = iced::widget::responsive(move |size| {
-        const CHOICES: [(Icon, &str, Appearance); 3] = [
-            (Icon::Settings, "System", Appearance::System),
-            (Icon::LightMode, "Light", Appearance::Light),
-            (Icon::DarkMode, "Dark", Appearance::Dark),
+        let choices = [
+            (
+                Icon::Settings,
+                fl!("settings-appearance-system"),
+                Appearance::System,
+            ),
+            (
+                Icon::LightMode,
+                fl!("settings-appearance-light"),
+                Appearance::Light,
+            ),
+            (
+                Icon::DarkMode,
+                fl!("settings-appearance-dark"),
+                Appearance::Dark,
+            ),
         ];
         let roomy = size.width >= ROOM_FOR_LABELS;
         component::connected_with_tips(
-            CHOICES
+            choices
                 .into_iter()
                 .map(|(glyph, label, value)| {
                     let choice = if roomy {
-                        button::with_icon(Kind::Tonal, glyph, label)
+                        button::with_icon(Kind::Tonal, glyph, label.clone())
                     } else {
                         button::icon_button(glyph).kind(Kind::Tonal)
                     };
@@ -199,12 +205,10 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
     })
     .height(Length::Fixed(button::Size::Small.height()));
     let accent_note = match (settings.system_accent, &triib.omarchy, triib.system_accent) {
-        (false, _, _) => "The color below seeds triib's colors.".to_owned(),
-        (true, Some(palette), _) => format!("From the Omarchy theme, {}.", palette.name),
-        (true, None, Some(_)) => "From the desktop's accent color.".to_owned(),
-        (true, None, None) => {
-            "The desktop has no accent color, so the color below is used.".to_owned()
-        }
+        (false, _, _) => fl!("settings-accent-picked"),
+        (true, Some(palette), _) => fl!("settings-accent-omarchy", theme = palette.name.clone()),
+        (true, None, Some(_)) => fl!("settings-accent-desktop"),
+        (true, None, None) => fl!("settings-accent-none"),
     };
     // The picked color is in use when the system accent is off or the
     // system has none.
@@ -228,24 +232,24 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
         space().into()
     };
     let animations_note = if triib.system_animations {
-        "Springs and slides as things change."
+        fl!("settings-animations-note")
     } else {
-        "The desktop asks for reduced motion, so triib stays still."
+        fl!("settings-animations-reduced")
     };
     iced::widget::column![
         choices,
-        component::section("Colors"),
+        component::section(fl!("settings-colors")),
         switch_row(
-            "Use the system accent color",
+            fl!("settings-system-accent"),
             accent_note,
             settings.system_accent,
             Message::SystemAccentToggled,
         ),
         swatches,
-        component::section("Motion"),
+        component::section(fl!("settings-motion")),
         switch_row(
-            "Animations",
-            animations_note.to_owned(),
+            fl!("settings-animations"),
+            animations_note,
             settings.animations,
             Message::AnimationsToggled,
         ),
@@ -255,7 +259,7 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
 
 /// A setting with a title, a note under it and a switch.
 fn switch_row<'a>(
-    title: &'static str,
+    title: String,
     note: String,
     on: bool,
     toggled: fn(bool) -> Message,

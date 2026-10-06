@@ -246,6 +246,7 @@ impl Triib {
 
     pub fn boot(omarchy_dir: Option<PathBuf>) -> (Self, Task<Message>) {
         let (settings, settings_error) = Settings::load();
+        crate::i18n::set_language(settings.chosen_language());
         let mut triib = Self {
             settings,
             theme: Theme::Dark,
@@ -557,8 +558,7 @@ impl Triib {
                         self.presets.push(preset);
                         self.presets.sort_by_key(|kept| kept.name.to_lowercase());
                         self.preset_name.clear();
-                        let plural = if entities == 1 { "entity" } else { "entities" };
-                        format!("Saved \"{name}\" with {entities} {plural}.")
+                        crate::fl!("presets-saved", name = name, count = entities)
                     }
                     Err(error) => error,
                 });
@@ -570,15 +570,15 @@ impl Triib {
                 let recall = crate::presets::recall(self, preset);
                 let changes = recall.actions.len();
                 let mut report = match changes {
-                    0 => format!("Nothing differs from \"{name}\"."),
-                    1 => format!("Recalling \"{name}\": 1 change."),
-                    _ => format!("Recalling \"{name}\": {changes} changes."),
+                    0 => crate::fl!("presets-nothing-differs", name = name.as_str()),
+                    _ => crate::fl!("presets-recalling", name = name.as_str(), count = changes),
                 };
                 if !recall.missing.is_empty() {
-                    report.push_str(&format!(
-                        " Not here or not read: {}.",
-                        recall.missing.join(", ")
-                    ));
+                    report = crate::fl!(
+                        "presets-missing",
+                        report = report,
+                        missing = crate::i18n::list(recall.missing.clone())
+                    );
                 }
                 self.preset_report = Some(report);
                 if changes > 0 {
@@ -589,7 +589,7 @@ impl Triib {
                 self.preset_report = Some(match crate::presets::delete(&name) {
                     Ok(()) => {
                         self.presets.retain(|preset| preset.name != name);
-                        format!("Deleted \"{name}\".")
+                        crate::fl!("presets-deleted", name = name.as_str())
                     }
                     Err(error) => error,
                 });
@@ -602,6 +602,7 @@ impl Triib {
             Message::SettingsTab(tab) => self.settings_tab = tab,
             Message::LanguageSelected(tag) => {
                 self.settings.language = tag;
+                crate::i18n::set_language(self.settings.chosen_language());
                 self.save_settings();
             }
             Message::AppearanceSelected(appearance) => {

@@ -68,7 +68,7 @@ fn control_name(model: &EntityModel, control: &ControlDescriptor<'_>) -> String 
         return name.to_owned();
     }
     control.control_type.name().map_or_else(
-        || format!("Control {}", control.index),
+        || crate::fl!("control-numbered", index = control.index),
         |kind| {
             let words = kind.to_lowercase().replace('_', " ");
             let mut letters = words.chars();
@@ -163,7 +163,7 @@ fn editor<'a>(
             reading(text)
         }
         (Shape::Utf8, _) => reading(control.text().unwrap_or_default().to_owned()),
-        _ => reading("Not shown here".to_owned()),
+        _ => reading(crate::fl!("control-not-shown")),
     }
 }
 
@@ -318,7 +318,10 @@ impl Choice {
         let label = if selector.strings {
             model
                 .localized(LocalizedStringRef(number.to_f64() as u16))
-                .map_or_else(|| format!("Option {}", number.to_f64()), str::to_owned)
+                .map_or_else(
+                    || crate::fl!("control-option", number = number.to_f64()),
+                    str::to_owned,
+                )
         } else {
             selector.unit.show(number).to_string()
         };

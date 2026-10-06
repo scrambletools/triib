@@ -222,7 +222,7 @@ impl Failure {
             format!("sudo setcap cap_net_raw+ep {program}")
         });
         let message = match fix {
-            Some(_) => "triib needs permission to send and receive raw Ethernet frames.".to_owned(),
+            Some(_) => crate::fl!("network-permission"),
             None => error.to_string(),
         };
         Self { message, fix }

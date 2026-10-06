@@ -1,0 +1,6 @@
+# Where triib's text lives, for i18n-embed and its fl! macro, which checks
+# every key against the fallback language when triib is compiled.
+fallback_language = "en"
+
+[fluent]
+assets_dir = "../../i18n"

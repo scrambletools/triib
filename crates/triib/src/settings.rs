@@ -156,28 +156,28 @@ impl EntityField {
     ];
 
     /// The column's heading.
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Group => "Group",
-            Self::Product => "Product",
-            Self::Vendor => "Vendor",
-            Self::Model => "Model",
-            Self::Firmware => "Firmware",
-            Self::SerialNumber => "Serial number",
-            Self::Milan => "Milan",
-            Self::Roles => "Roles",
-            Self::MediaClock => "Media clock",
-            Self::SamplingRate => "Sampling rate",
-            Self::Btc => "BTC",
-            Self::State => "State",
-            Self::EntityId => "Entity ID",
-            Self::MacAddress => "MAC address",
-            Self::EntityModelId => "Entity model ID",
-            Self::Configuration => "Configuration",
-            Self::TalkerStreams => "Talker streams",
-            Self::ListenerStreams => "Listener streams",
-            Self::AvbLite => "AVB Lite",
-            Self::Egress => "Egress",
+            Self::Group => crate::fl!("entity-group"),
+            Self::Product => crate::fl!("entity-product"),
+            Self::Vendor => crate::fl!("column-vendor"),
+            Self::Model => crate::fl!("column-model"),
+            Self::Firmware => crate::fl!("entity-firmware"),
+            Self::SerialNumber => crate::fl!("entity-serial-number"),
+            Self::Milan => crate::fl!("entity-milan"),
+            Self::Roles => crate::fl!("advert-roles"),
+            Self::MediaClock => crate::fl!("entity-media-clock"),
+            Self::SamplingRate => crate::fl!("entity-sampling-rate"),
+            Self::Btc => crate::fl!("advert-btc"),
+            Self::State => crate::fl!("column-state"),
+            Self::EntityId => crate::fl!("advert-entity-id"),
+            Self::MacAddress => crate::fl!("common-mac-address"),
+            Self::EntityModelId => crate::fl!("column-entity-model-id"),
+            Self::Configuration => crate::fl!("entity-configuration"),
+            Self::TalkerStreams => crate::fl!("column-talker-streams"),
+            Self::ListenerStreams => crate::fl!("column-listener-streams"),
+            Self::AvbLite => crate::fl!("column-avb-lite"),
+            Self::Egress => crate::fl!("column-egress"),
         }
     }
 }
@@ -218,13 +218,17 @@ impl Settings {
             return (Self::default(), None);
         }
         let Some(path) = triib_store::paths::config_file() else {
-            return (Self::default(), Some(NO_PLACE.to_owned()));
+            return (Self::default(), Some(crate::fl!("settings-no-place")));
         };
         match triib_store::load_or_create::<Self>(&path) {
             Ok(settings) => (settings.tidied(), None),
             Err(error) => (
                 Self::default(),
-                Some(format!("Could not use {}: {error}.", path.display())),
+                Some(crate::fl!(
+                    "settings-unusable",
+                    path = path.display().to_string(),
+                    error = error.to_string()
+                )),
             ),
         }
     }
@@ -238,20 +242,28 @@ impl Settings {
     }
 
     /// Saves the settings, or says why they could not be saved.
+    /// The language picked in Settings, or none to follow the system's.
+    pub fn chosen_language(&self) -> Option<&str> {
+        (self.language != SYSTEM_LANGUAGE).then_some(self.language.as_str())
+    }
+
     pub fn save(&self) -> Result<(), String> {
         // Tests drive the app, which saves as it goes; never over the
         // user's own settings.
         if cfg!(test) {
             return Ok(());
         }
-        let path = triib_store::paths::config_file().ok_or(NO_PLACE)?;
-        triib_store::save(&path, self)
-            .map_err(|error| format!("Could not save {}: {error}.", path.display()))
+        let path =
+            triib_store::paths::config_file().ok_or_else(|| crate::fl!("settings-no-place"))?;
+        triib_store::save(&path, self).map_err(|error| {
+            crate::fl!(
+                "settings-unsaved",
+                path = path.display().to_string(),
+                error = error.to_string()
+            )
+        })
     }
 }
-
-/// Why there is no settings file to read or write.
-const NO_PLACE: &str = "There is nowhere to keep the settings: the home folder is not known.";
 
 #[cfg(test)]
 mod tests {

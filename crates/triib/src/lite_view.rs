@@ -14,6 +14,7 @@ use scramble_ui::font::{Type, styled};
 use scramble_ui::{Scheme, component, shape, style};
 
 use crate::app::{Message, Triib};
+use crate::fl;
 
 /// The PTP offset past which the profile calls for an alarm (9).
 const OFFSET_ALARM: i32 = 50_000;
@@ -106,37 +107,33 @@ pub fn mode(model: &EntityModel) -> String {
         .find(|status| status.flags.contains(LiteFlags::ACTIVE))
     {
         return match active.media_vlan_id {
-            0 => "Active, untagged".to_owned(),
-            vlan => format!("Active, VLAN {vlan}"),
+            0 => fl!("lite-active-untagged"),
+            vlan => fl!("lite-active-vlan", vlan = vlan),
         };
     }
     if model.cvu_talkers().next().is_some() {
-        return "Active".to_owned();
+        return fl!("lite-active");
     }
     if statuses
         .iter()
         .any(|status| status.flags.contains(LiteFlags::CAPABLE))
     {
-        return "Capable".to_owned();
+        return fl!("lite-capable");
     }
     match model.lite_supported {
-        Some(false) => "No".to_owned(),
+        Some(false) => fl!("milan-no"),
         _ => String::new(),
     }
 }
 
-fn fallback(reason: FallbackReason) -> &'static str {
+fn fallback(reason: FallbackReason) -> String {
     match reason {
-        FallbackReason::NONE => "no reason given",
-        FallbackReason::ENDPOINT_TLV => {
-            "another endpoint's declaration came through, so no AVB bridge is between them"
-        }
-        FallbackReason::PDELAY_UNANSWERED => "nine peer delay requests went unanswered",
-        FallbackReason::MULTIPLE_RESPONDERS => {
-            "two or more answered one peer delay request, so the switch is not an AVB bridge"
-        }
-        FallbackReason::CONFIGURED => "the operator or a controller set it",
-        _ => "a reason the profile does not name",
+        FallbackReason::NONE => fl!("lite-fallback-none"),
+        FallbackReason::ENDPOINT_TLV => fl!("lite-fallback-endpoint"),
+        FallbackReason::PDELAY_UNANSWERED => fl!("lite-fallback-unanswered"),
+        FallbackReason::MULTIPLE_RESPONDERS => fl!("lite-fallback-responders"),
+        FallbackReason::CONFIGURED => fl!("lite-fallback-configured"),
+        _ => fl!("lite-fallback-other"),
     }
 }
 
@@ -149,62 +146,68 @@ pub fn entity_section<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
             continue;
         };
         if items.is_empty() {
-            items.push(component::section("AVB Lite"));
+            items.push(component::section(fl!("column-avb-lite")));
         }
         let active = status.flags.contains(LiteFlags::ACTIVE);
         let capable = status.flags.contains(LiteFlags::CAPABLE);
         let mode = match (active, capable) {
-            (true, _) => "AVB Lite".to_owned(),
-            (false, true) => "AVB, AVB Lite capable".to_owned(),
+            (true, _) => fl!("column-avb-lite"),
+            (false, true) => fl!("lite-mode-capable"),
             (false, false) => "AVB".to_owned(),
         };
-        items.push(property("Mode", mode, false));
+        items.push(property(&fl!("lite-mode"), mode, false));
         if active {
             items.push(property(
-                "Because",
-                fallback(status.fallback_reason).to_owned(),
+                &fl!("lite-because"),
+                fallback(status.fallback_reason),
                 false,
             ));
         }
         let profile = match status.ptp_profile {
-            PtpProfile::GPTP => "gPTP (802.1AS)",
-            PtpProfile::AVB_LITE_PTP => "AVB Lite PTP",
-            _ => "Another profile",
+            PtpProfile::GPTP => "gPTP (802.1AS)".to_owned(),
+            PtpProfile::AVB_LITE_PTP => "AVB Lite PTP".to_owned(),
+            _ => fl!("lite-other-profile"),
         };
         items.push(property(
             "PTP",
-            format!("{profile}, domain {}", status.ptp_domain),
+            fl!(
+                "lite-ptp-domain",
+                profile = profile,
+                domain = status.ptp_domain
+            ),
             false,
         ));
         if let Some(offset) = status.offset() {
             items.push(property(
-                "Offset",
-                format!("{} from {}", duration(offset), status.grandmaster),
+                &fl!("lite-offset"),
+                fl!(
+                    "lite-offset-from",
+                    offset = duration(offset),
+                    grandmaster = status.grandmaster.to_string()
+                ),
                 offset.abs() > OFFSET_ALARM,
             ));
         }
         if active {
             items.push(property(
-                "Media VLAN",
+                &fl!("lite-media-vlan"),
                 match status.media_vlan_id {
-                    0 => "Untagged".to_owned(),
+                    0 => fl!("lite-untagged"),
                     vlan => vlan.to_string(),
                 },
                 false,
             ));
             if status.unicast_fanout_limit > 0 {
-                let limit = status.unicast_fanout_limit;
-                let plural = if limit == 1 { "listener" } else { "listeners" };
                 items.push(property(
-                    "Unicast",
-                    format!("Up to {limit} {plural} a stream, then multicast"),
+                    &fl!("lite-unicast"),
+                    fl!("lite-fanout", count = status.unicast_fanout_limit),
                     false,
                 ));
             }
         }
         if status.link_speed > 0 {
             items.push(property(
-                "Link",
+                &fl!("lite-link"),
                 rate(u64::from(status.link_speed) * 1_000_000),
                 false,
             ));
@@ -238,28 +241,32 @@ pub fn bandwidth<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
             continue;
         };
         if items.is_empty() {
-            items.push(component::section("Bandwidth"));
+            items.push(component::section(fl!("lite-bandwidth")));
         }
         let share = egress.share();
-        let mut text = format!(
-            "{} of {}, {:.1}%",
-            rate(egress.used),
-            rate(egress.link),
-            share * 100.0
-        );
-        if !egress.link_reported {
-            text.push_str(", a gigabit link assumed");
-        }
+        let used = rate(egress.used);
+        let link = rate(egress.link);
+        let percent = fl!("common-percent", value = format!("{:.1}", share * 100.0));
+        let text = if egress.link_reported {
+            fl!("lite-egress-of", used = used, link = link, share = percent)
+        } else {
+            fl!(
+                "lite-egress-of-assumed",
+                used = used,
+                link = link,
+                share = percent
+            )
+        };
         let over = egress.over();
         let line = styled(text, Type::BodySmall);
         let note = if egress.used_reported {
-            "As the entity counts its admitted streams."
+            fl!("lite-egress-reported")
         } else {
-            "From the formats of its connected stream outputs."
+            fl!("lite-egress-worked-out")
         };
         items.push(
             column![
-                styled("Egress", Type::BodyMedium),
+                styled(fl!("column-egress"), Type::BodyMedium),
                 meter(share.min(1.0) as f32, over),
                 if over {
                     line.style(style::error_text)
@@ -323,18 +330,19 @@ pub fn alarms(triib: &Triib) -> Vec<Alarm> {
             {
                 alarms.push(Alarm {
                     entity,
-                    text: format!(
-                        "PTP offset {}, past the 50 µs AVB Lite allows",
-                        duration(offset)
-                    ),
+                    text: fl!("lite-alarm-offset", offset = duration(offset)),
                 });
             }
             if let Some(egress) = egress(model, interface).filter(Egress::over) {
                 alarms.push(Alarm {
                     entity,
-                    text: format!(
-                        "Egress at {:.0}% of the link, past the 75% streams may take",
-                        egress.share() * 100.0
+                    text: fl!(
+                        "lite-alarm-egress",
+                        share = fl!(
+                            "common-percent",
+                            value = format!("{:.0}", egress.share() * 100.0)
+                        ),
+                        limit = fl!("common-percent", value = "75")
                     ),
                 });
             }

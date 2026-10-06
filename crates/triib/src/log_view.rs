@@ -26,6 +26,7 @@ use scramble_ui::{component, resize, style};
 
 use crate::app::{Message, Triib};
 use crate::describe;
+use crate::fl;
 
 /// The most frames kept, the oldest dropped past it.
 pub const LIMIT: usize = 5000;
@@ -208,14 +209,14 @@ pub fn describe(triib: &Triib, frame: &Frame) -> Line {
         warnings: Vec::new(),
     };
     if let Some(missing) = pdu::missing_octets(&frame.bytes).filter(|&missing| missing > 0) {
-        line.warnings.push(format!(
-            "Its control_data_length claims {missing} octets past the end of the frame."
-        ));
+        line.warnings
+            .push(fl!("log-warning-short", missing = missing));
     }
     match pdu::decode(&frame.bytes) {
         Err(error) => {
-            line.summary = "Not decoded".to_owned();
-            line.warnings.push(format!("It does not decode: {error}."));
+            line.summary = fl!("log-not-decoded");
+            line.warnings
+                .push(fl!("log-warning-undecodable", error = error.to_string()));
         }
         Ok(Pdu::Adp(adpdu)) => {
             line.protocol = Some(Protocol::Adp);
@@ -416,11 +417,7 @@ fn describe_acmp(triib: &Triib, frame: &Frame, acmpdu: &Acmpdu, line: &mut Line)
             .get(&sender)
             .is_some_and(|model| model.milan.is_some());
         if milan {
-            line.warnings.push(
-                "It is in the long ACMP form, which a Milan entity may not send (Milan 1.3, \
-                 5.5.2.2)."
-                    .to_owned(),
-            );
+            line.warnings.push(fl!("log-warning-long-acmp"));
         }
     }
 }
@@ -436,7 +433,7 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
         .rev()
         .filter(|entry| entry.line.shown_by(log.filter))
         .collect();
-    let filter = |label: &'static str, value: LogFilter| {
+    let filter = |label: String, value: LogFilter| {
         button::button(Kind::Filled, label)
             .size(Size::ExtraSmall)
             .selected(log.filter == value)
@@ -445,9 +442,9 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
     let wide = width >= HEADER_IN_ONE_ROW;
     let pause_message = Message::Log(LogMessage::Paused(!log.paused));
     let (pause_icon, pause_label) = if log.paused {
-        (Icon::ProgressActivity, "Resume")
+        (Icon::ProgressActivity, fl!("log-resume"))
     } else {
-        (Icon::Stop, "Pause")
+        (Icon::Stop, fl!("log-pause"))
     };
     let clear_message = (log.len() > 0).then_some(Message::Log(LogMessage::Cleared));
     // On a narrow window the buttons give up their labels.
@@ -459,7 +456,7 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
         };
         (
             pause.size(Size::ExtraSmall).on_press(pause_message).into(),
-            button::with_icon(Kind::Text, Icon::Delete, "Clear")
+            button::with_icon(Kind::Text, Icon::Delete, fl!("log-clear"))
                 .size(Size::ExtraSmall)
                 .on_press_maybe(clear_message)
                 .into(),
@@ -474,21 +471,21 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
             ),
             component::tip(
                 button::icon_button(Icon::Delete).on_press_maybe(clear_message),
-                "Clear",
+                fl!("log-clear"),
             ),
         )
     };
     let count = match (lines.len(), log.len()) {
         (shown, all) if shown == all => frames(all),
-        (shown, all) => format!("{} of {}", frames(shown), all),
+        (shown, all) => fl!("log-shown-of", shown = shown, all = all),
     };
-    let title = styled("Log", Type::TitleLarge);
+    let title = styled(fl!("toolbar-log"), Type::TitleLarge);
     let filters = component::connected(vec![
-        filter("All", LogFilter::All),
-        filter("Warnings", LogFilter::Warnings),
-        filter("ADP", LogFilter::Adp),
-        filter("AECP", LogFilter::Aecp),
-        filter("ACMP", LogFilter::Acmp),
+        filter(fl!("log-all"), LogFilter::All),
+        filter(fl!("log-warnings"), LogFilter::Warnings),
+        filter("ADP".to_owned(), LogFilter::Adp),
+        filter("AECP".to_owned(), LogFilter::Aecp),
+        filter("ACMP".to_owned(), LogFilter::Acmp),
     ]);
     let count = styled(count, Type::BodyMedium)
         .style(style::on_surface_variant)
@@ -523,9 +520,9 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
         container(
             styled(
                 if log.len() == 0 {
-                    "Every ATDECC frame triib sends and hears appears here, newest first."
+                    fl!("log-empty")
                 } else {
-                    "No frame kept matches the filter."
+                    fl!("log-none-match")
                 },
                 Type::BodyMedium,
             )
@@ -560,11 +557,7 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
 }
 
 fn frames(count: usize) -> String {
-    if count == 1 {
-        "1 frame".to_owned()
-    } else {
-        format!("{count} frames")
-    }
+    fl!("log-frames", count = count)
 }
 
 /// A frame's line: when, which way, the entity and what it says, then
@@ -575,9 +568,9 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, M
     let log = &triib.log;
     let opened = log.open == Some(entry.number);
     let (glyph, way) = if entry.frame.sent {
-        (Icon::ArrowForward, "Sent")
+        (Icon::ArrowForward, fl!("log-sent"))
     } else {
-        (Icon::ArrowBack, "Heard")
+        (Icon::ArrowBack, fl!("log-heard"))
     };
     // The entity's name with the tag the matrix gives it, telling apart
     // entities of the same name.

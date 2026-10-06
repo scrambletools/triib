@@ -15,10 +15,9 @@ use scramble_ui::style;
 use scramble_ui::{button, component, dropdown};
 
 use crate::app::{Message, Triib};
+use crate::fl;
 use crate::network::Action;
 use crate::view::stacked;
-
-const NOT_MAPPED: &str = "Not mapped";
 
 /// The width of a channel's number beside its picker, room for three
 /// digits.
@@ -83,7 +82,7 @@ fn streams(model: &EntityModel, input: bool) -> Vec<Channels> {
                 at: stream.index,
                 name: model
                     .name_of(stream.descriptor_type, stream.index)
-                    .map_or_else(|| format!("Stream {}", stream.index + 1), str::to_owned),
+                    .map_or_else(|| source_name(true, stream.index), str::to_owned),
                 count: stream.current_format.channels()?,
             })
         })
@@ -101,7 +100,7 @@ fn clusters(model: &EntityModel, port: &StreamPortDescriptor) -> Vec<Channels> {
                     DescriptorType::AUDIO_CLUSTER,
                     port.base_cluster.saturating_add(offset),
                 )
-                .map_or_else(|| format!("Cluster {}", offset + 1), str::to_owned),
+                .map_or_else(|| source_name(false, offset), str::to_owned),
             count: cluster.channel_count,
         })
         .collect()
@@ -145,7 +144,7 @@ fn numbered<'a>(channel: u16, picker: impl Into<Element<'a, Message>>) -> Elemen
     .into()
 }
 
-fn note<'a>(text: &'static str) -> Element<'a, Message> {
+fn note<'a>(text: String) -> Element<'a, Message> {
     styled(text, Type::BodySmall)
         .style(style::on_surface_variant)
         .into()
@@ -166,17 +165,20 @@ pub fn mapping_details<'a>(
         return Vec::new();
     }
     let several = |input: bool| ports.iter().filter(|port| port.is_input() == input).count() > 1;
-    let mut items = vec![component::section("Channel mappings")];
+    let mut items = vec![component::section(fl!("mapping-section"))];
     for port in &ports {
-        let side = if port.is_input() { "Inputs" } else { "Outputs" };
-        let mut title = if several(port.is_input()) {
-            format!("{side}, port {}", port.index + 1)
+        let mut title = vec![if port.is_input() {
+            fl!("mapping-inputs")
         } else {
-            side.to_owned()
-        };
-        if !port.has_dynamic_mappings() {
-            title.push_str(", fixed");
+            fl!("mapping-outputs")
+        }];
+        if several(port.is_input()) {
+            title.push(fl!("mapping-port", number = (port.index + 1)));
         }
+        if !port.has_dynamic_mappings() {
+            title.push(fl!("mapping-fixed"));
+        }
+        let title = crate::i18n::list(title);
         items.push(
             styled(title, Type::LabelLarge)
                 .style(style::on_surface_variant)
@@ -201,7 +203,7 @@ fn dynamic_mappings<'a>(
     port: &StreamPortDescriptor,
 ) -> Vec<Element<'a, Message>> {
     let Some(mappings) = model.dynamic_mappings(port.descriptor_type, port.index) else {
-        return vec![note("Not read yet.")];
+        return vec![note(fl!("mapping-not-read"))];
     };
     let mappings: Vec<AudioMapping> = mappings.collect();
     let input = port.is_input();
@@ -212,14 +214,14 @@ fn dynamic_mappings<'a>(
     };
     if rows.is_empty() {
         return vec![note(if input {
-            "No clusters."
+            fl!("mapping-no-clusters")
         } else {
-            "No audio streams."
+            fl!("mapping-no-streams")
         })];
     }
     let mut choices = vec![Choice {
         at: None,
-        label: NOT_MAPPED.to_owned(),
+        label: fl!("mapping-not-mapped"),
     }];
     choices.extend(sources.iter().flat_map(Channels::choices));
     let port_id = (port.descriptor_type, port.index);
@@ -257,10 +259,8 @@ fn dynamic_mappings<'a>(
                 .unwrap_or_else(|| Choice {
                     at: shown_at,
                     label: shown_at.map_or_else(
-                        || NOT_MAPPED.to_owned(),
-                        |(at, channel)| {
-                            format!("{} {} · {}", source_kind(input), at + 1, channel + 1)
-                        },
+                        || fl!("mapping-not-mapped"),
+                        |(at, channel)| format!("{} · {}", source_name(input, at), channel + 1),
                     ),
                 });
             let busy = pending.is_some();
@@ -328,9 +328,13 @@ impl Row {
     }
 }
 
-/// What a port's rows pick from, for a channel without a name.
-fn source_kind(input: bool) -> &'static str {
-    if input { "Stream" } else { "Cluster" }
+/// A stream, or a port's cluster, without a name, counted from 1.
+fn source_name(stream: bool, at: u16) -> String {
+    if stream {
+        fl!("stream-numbered", index = (at + 1))
+    } else {
+        fl!("mapping-cluster-numbered", index = (at + 1))
+    }
 }
 
 /// A port's fixed mappings, a run of consecutive channels to a line, in
@@ -342,11 +346,11 @@ fn fixed_mappings<'a>(
     let input = port.is_input();
     let streams = streams(model, input);
     let clusters = clusters(model, port);
-    let find = |known: &[Channels], at: u16, kind: &str| {
+    let find = |known: &[Channels], at: u16, stream: bool| {
         known
             .iter()
             .find(|item| item.at == at)
-            .map_or_else(|| format!("{kind} {}", at + 1), |item| item.name.clone())
+            .map_or_else(|| source_name(stream, at), |item| item.name.clone())
     };
     let counts = |known: &[Channels], at: u16| {
         known
@@ -356,7 +360,7 @@ fn fixed_mappings<'a>(
     };
     let mut mappings: Vec<AudioMapping> = model.static_mappings(port).collect();
     if mappings.is_empty() {
-        return vec![note("No mappings.")];
+        return vec![note(fl!("mapping-none"))];
     }
     mappings.sort_by_key(|mapping| ends(input, mapping));
     // Runs of mappings whose channels both go up by one.
@@ -377,13 +381,13 @@ fn fixed_mappings<'a>(
         .map(|(first, last)| {
             let stream = Channels {
                 at: first.stream_index,
-                name: find(&streams, first.stream_index, "Stream"),
+                name: find(&streams, first.stream_index, true),
                 count: counts(&streams, first.stream_index),
             }
             .range(first.stream_channel, last.stream_channel);
             let cluster = Channels {
                 at: first.cluster_offset,
-                name: find(&clusters, first.cluster_offset, "Cluster"),
+                name: find(&clusters, first.cluster_offset, false),
                 count: counts(&clusters, first.cluster_offset),
             }
             .range(first.cluster_channel, last.cluster_channel);

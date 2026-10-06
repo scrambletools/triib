@@ -18,6 +18,7 @@ use scramble_ui::icon::{self, Icon};
 use scramble_ui::{Scheme, faded, shape, style};
 
 use crate::app::{self, Message, Triib};
+use crate::fl;
 use crate::network::Action;
 use crate::settings::Streams;
 
@@ -222,16 +223,11 @@ pub fn view(triib: &Triib) -> Element<'_, Message> {
         if filtered {
             component::empty_state(
                 Icon::FilterAlt,
-                "No streams to show",
-                "Change the search or the filters to see more streams.",
+                fl!("matrix-nothing-shown"),
+                fl!("matrix-nothing-shown-note"),
             )
         } else {
-            component::empty_state(
-                Icon::GridOn,
-                "No streams to connect",
-                "Talker streams and listener streams meet here once entities with them have \
-                 been read.",
-            )
+            component::empty_state(Icon::GridOn, fl!("matrix-empty"), fl!("matrix-empty-note"))
         }
     } else {
         let grid = grid(triib, &talkers, &listeners);
@@ -263,7 +259,7 @@ pub fn view(triib: &Triib) -> Element<'_, Message> {
 /// many that hides.
 fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
     let streams = triib.settings.matrix_streams;
-    let choice = |label: &'static str, value: Streams| {
+    let choice = |label: String, value: Streams| {
         button::button(Kind::Filled, label)
             .size(Size::ExtraSmall)
             .selected(streams == value)
@@ -271,17 +267,21 @@ fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
     };
     let mut filters = row![
         component::connected(vec![
-            choice("All streams", Streams::All),
-            choice("Audio", Streams::Audio),
-            choice("Media clock", Streams::Clock),
+            choice(fl!("matrix-all-streams"), Streams::All),
+            choice(fl!("netmap-audio"), Streams::Audio),
+            choice(fl!("entity-media-clock"), Streams::Clock),
         ]),
         // A secondary option, so a quiet tonal fill when on rather than
         // the stream choices' strong one.
         if hidden.is_some() {
-            button::with_icon(Kind::Tonal, Icon::FilterAlt, "Hide what cannot connect")
+            button::with_icon(Kind::Tonal, Icon::FilterAlt, fl!("matrix-connectable-only"))
         } else {
-            button::with_icon(Kind::Filled, Icon::FilterAlt, "Hide what cannot connect")
-                .selected(false)
+            button::with_icon(
+                Kind::Filled,
+                Icon::FilterAlt,
+                fl!("matrix-connectable-only"),
+            )
+            .selected(false)
         }
         .size(Size::ExtraSmall)
         .on_press(Message::MatrixConnectableOnlyToggled),
@@ -290,9 +290,8 @@ fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
         filters = filters.push(
             styled(
                 match hidden {
-                    0 => "Every stream shown can connect".to_owned(),
-                    1 => "1 stream hidden".to_owned(),
-                    hidden => format!("{hidden} streams hidden"),
+                    0 => fl!("matrix-none-hidden"),
+                    hidden => fl!("matrix-hidden", count = hidden),
                 },
                 Type::BodyMedium,
             )
@@ -334,7 +333,10 @@ fn groups(triib: &Triib, side: Side) -> Vec<Group<'_>> {
                     index: stream.index,
                     name: model
                         .name_of(stream.descriptor_type, stream.index)
-                        .map_or_else(|| format!("Stream {}", stream.index), str::to_owned),
+                        .map_or_else(
+                            || fl!("stream-numbered", index = stream.index),
+                            str::to_owned,
+                        ),
                     format: stream.current_format,
                     supported: if input {
                         stream.formats().collect()
@@ -629,9 +631,6 @@ fn status<'a>(
     .into()
 }
 
-/// What pointing at an entity's outputs against its own inputs says.
-const OWN: &str = "An entity's outputs do not connect to its own inputs.";
-
 fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>]) -> Said {
     let scheme = Scheme::of(&triib.theme());
     let info = |title: String, detail: String| Said {
@@ -658,42 +657,30 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
                 input.name
             );
             if input.own(output) {
-                return info(route, OWN.to_owned());
+                return info(route, fl!("matrix-own"));
             }
             let (state, action) = assess(triib, output, input);
+            let (sent, set) = (output.format.to_string(), input.format.to_string());
             let detail = match state {
-                State::Working => "Working on it.".to_owned(),
+                State::Working => fl!("matrix-working"),
                 _ if action.is_none() && state != State::Incompatible => {
-                    "Waiting for the last change to this input.".to_owned()
+                    fl!("matrix-waiting-change")
                 }
-                State::Connected => "Connected and receiving. Click to disconnect.".to_owned(),
-                State::Waiting => {
-                    "Bound, waiting for the talker's stream. Click to disconnect.".to_owned()
-                }
+                State::Connected => fl!("matrix-connected"),
+                State::Waiting => fl!("matrix-bound-waiting"),
                 State::Trouble => match input
                     .model
                     .stream_info(DescriptorType::STREAM_INPUT, input.index)
                 {
-                    Some(info) if info.talker_failed() => format!(
-                        "Bound, but the talker's reservation failed: {}. Click to disconnect.",
-                        crate::describe::reservation_failure(info)
+                    Some(info) if info.talker_failed() => fl!(
+                        "matrix-bound-failed",
+                        reason = crate::describe::reservation_failure(info)
                     ),
-                    _ => format!(
-                        "Bound, but the formats differ: the talker sends {}, the input is set \
-                         to {}. Click to disconnect.",
-                        output.format, input.format
-                    ),
+                    _ => fl!("matrix-bound-formats-differ", sent = sent, set = set),
                 },
-                State::Open => format!("Formats match ({}). Click to connect.", output.format),
-                State::Change => format!(
-                    "The input takes {} but is set to {}, so it may not play until its format \
-                     changes. Click to connect anyway.",
-                    output.format, input.format
-                ),
-                State::Incompatible => format!(
-                    "The input does not take {}. It is set to {}.",
-                    output.format, input.format
-                ),
+                State::Open => fl!("matrix-formats-match", format = sent),
+                State::Change => fl!("matrix-format-must-change", sent = sent, set = set),
+                State::Incompatible => fl!("matrix-incompatible", sent = sent, set = set),
             };
             Said {
                 glyph: state.icon(),
@@ -704,14 +691,14 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
         }
         (Some(column), Some(row), Some(Cell::Own)) => info(
             format!("{}  →  {}", column.label(), row.label()),
-            OWN.to_owned(),
+            fl!("matrix-own"),
         ),
         (Some(column), Some(row), Some(Cell::Count(count))) => info(
             format!("{}  →  {}", column.label(), row.label()),
             if count == 0 {
-                "Not connected. Expand to connect streams one by one.".to_owned()
+                fl!("matrix-group-none")
             } else {
-                format!("{count} connected. Expand to see each one.")
+                fl!("matrix-group-connected", count = count)
             },
         ),
         (column, row, _) => {
@@ -726,23 +713,24 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
             match heading {
                 Some((Found::Group(group), side)) => {
                     let count = group.streams.len();
-                    let kind = match (side, count) {
-                        (Side::Talker, 1) => "stream output",
-                        (Side::Talker, _) => "stream outputs",
-                        (Side::Listener, 1) => "stream input",
-                        (Side::Listener, _) => "stream inputs",
-                    };
                     let collapsed = triib.collapsed.contains(&(side, group.entity_id));
                     info(
                         group.label(),
-                        format!(
-                            "{count} {kind}. Click the arrow to {}, the name to inspect it.",
-                            if collapsed { "expand" } else { "collapse" }
-                        ),
+                        match (side, collapsed) {
+                            (Side::Talker, true) => fl!("matrix-outputs-expand", count = count),
+                            (Side::Talker, false) => {
+                                fl!("matrix-outputs-collapse", count = count)
+                            }
+                            (Side::Listener, true) => fl!("matrix-inputs-expand", count = count),
+                            (Side::Listener, false) => {
+                                fl!("matrix-inputs-collapse", count = count)
+                            }
+                        },
                     )
                 }
                 Some((Found::Stream(group, stream), side)) => {
-                    let mut detail = format!("{}.", stream.format);
+                    let format = stream.format.to_string();
+                    let mut detail = fl!("matrix-stream-format", format = format.as_str());
                     if side == Side::Listener
                         && let Some(state) = stream
                             .model
@@ -752,17 +740,22 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
                                 crate::describe::stream_state(triib, stream.model, &descriptor)
                             })
                     {
-                        detail = format!("{detail} {state}.");
+                        detail = fl!(
+                            "matrix-stream-format-state",
+                            format = format.as_str(),
+                            state = state
+                        );
                     }
                     info(
                         format!("{}, {}", group.label(), stream.name),
-                        format!("{detail} Click to inspect {}.", group.name),
+                        fl!(
+                            "matrix-stream-inspect",
+                            detail = detail,
+                            entity = group.name.clone()
+                        ),
                     )
                 }
-                None => info(
-                    "Point at a cell".to_owned(),
-                    "to see its talker and listener and whether their formats meet.".to_owned(),
-                ),
+                None => info(fl!("matrix-point"), fl!("matrix-point-note")),
             }
         }
     }
@@ -770,7 +763,7 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
 
 /// What each cell icon means.
 fn legend<'a>() -> Element<'a, Message> {
-    let entry = |state: State, label: &'static str| -> Element<'a, Message> {
+    let entry = |state: State, label: String| -> Element<'a, Message> {
         let (glyph, filled) = state.icon();
         let glyph = if filled {
             icon::filled(glyph, 20)
@@ -788,12 +781,12 @@ fn legend<'a>() -> Element<'a, Message> {
         .into()
     };
     row![
-        entry(State::Connected, "Connected"),
-        entry(State::Waiting, "Bound, waiting for the stream"),
-        entry(State::Trouble, "Bound, something is wrong"),
-        entry(State::Open, "Can connect"),
-        entry(State::Change, "Input format must change first"),
-        entry(State::Incompatible, "Formats cannot meet"),
+        entry(State::Connected, fl!("netmap-connected")),
+        entry(State::Waiting, fl!("matrix-legend-waiting")),
+        entry(State::Trouble, fl!("matrix-legend-trouble")),
+        entry(State::Open, fl!("matrix-legend-open")),
+        entry(State::Change, fl!("matrix-legend-change")),
+        entry(State::Incompatible, fl!("matrix-legend-incompatible")),
     ]
     .spacing(20)
     .wrap()

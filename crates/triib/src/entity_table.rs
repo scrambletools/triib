@@ -17,6 +17,7 @@ use scramble_ui::{component, style};
 use crate::app::{Message, Triib};
 use crate::column_resize::{MIN_WIDTH, resizable};
 use crate::describe;
+use crate::fl;
 use crate::header_band::header_band;
 use crate::settings::EntityField;
 use crate::text::{fit, measure};
@@ -103,7 +104,10 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
                 crate::lite_view::egress(model, interface)
             })
             .map_or_else(String::new, |egress| {
-                format!("{:.1}%", egress.share() * 100.0)
+                fl!(
+                    "common-percent",
+                    value = format!("{:.1}", egress.share() * 100.0)
+                )
             }),
     }
 }
@@ -195,7 +199,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     };
     let mut natural = vec![
         widest(
-            measure("Name", MEDIUM, 14.0),
+            measure(&fl!("entity-name"), MEDIUM, 14.0),
             &mut rows.iter().map(|row| &row.name),
         ) + NAME_ROOM,
     ];
@@ -208,7 +212,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         };
         natural.push(
             widest(
-                measure(field.label(), MEDIUM, 14.0) + MENU_ROOM - picker,
+                measure(&field.label(), MEDIUM, 14.0) + MENU_ROOM - picker,
                 &mut rows.iter().map(|row| &row.values[index]),
             ) + picker,
         );
@@ -270,10 +274,13 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let mut table_columns = vec![
         table::column(
             heading(
-                styled(fit("Name", MEDIUM, 14.0, name_width).name, Type::LabelLarge)
-                    .style(style::on_surface_variant)
-                    .wrapping(Wrapping::None)
-                    .into(),
+                styled(
+                    fit(&fl!("entity-name"), MEDIUM, 14.0, name_width).name,
+                    Type::LabelLarge,
+                )
+                .style(style::on_surface_variant)
+                .wrapping(Wrapping::None)
+                .into(),
                 Column::Name,
                 name_width,
             ),
@@ -305,18 +312,24 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         let width = widths[index + 1];
         // The column's own actions, then the fields it could show instead.
         let mut entries = vec![
-            Entry::item("Remove column", Message::EntityColumn(index, None)).icon(Icon::Close),
+            Entry::item(fl!("column-remove"), Message::EntityColumn(index, None)).icon(Icon::Close),
         ];
         if index > 0 {
             entries.push(
-                Entry::item("Move left", Message::EntityColumnMoved(index, false))
-                    .icon(Icon::ArrowBack),
+                Entry::item(
+                    fl!("column-move-left"),
+                    Message::EntityColumnMoved(index, false),
+                )
+                .icon(Icon::ArrowBack),
             );
         }
         if index < last {
             entries.push(
-                Entry::item("Move right", Message::EntityColumnMoved(index, true))
-                    .icon(Icon::ArrowForward),
+                Entry::item(
+                    fl!("column-move-right"),
+                    Message::EntityColumnMoved(index, true),
+                )
+                .icon(Icon::ArrowForward),
             );
         }
         if can_add {
@@ -349,7 +362,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                     .map(|field| Entry::item(field.label(), Message::EntityColumnAdded(field)))
                     .collect(),
             ),
-            "Add a column",
+            fl!("column-add"),
         );
         let add_width = widths[columns.len() + 1];
         table_columns.push(

@@ -20,6 +20,7 @@ use scramble_ui::{Scheme, shape, style};
 
 use crate::app::{Message, NetworkState, Triib};
 use crate::describe;
+use crate::fl;
 use crate::settings::NetworkShows;
 use crate::topology::{
     Apart, EntityReport, InterfaceReport, Kind as NodeKind, NodeId, Route, Topology,
@@ -190,12 +191,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     if topology.nodes.is_empty() {
         return column![
             header,
-            component::empty_state(
-                Icon::Hub,
-                "No network to show yet",
-                "Entities appear here once they have been read and have said where they sit in \
-                 the gPTP tree.",
-            )
+            component::empty_state(Icon::Hub, fl!("netmap-empty"), fl!("netmap-empty-note"),)
         ]
         .spacing(16)
         .padding(padding)
@@ -267,16 +263,16 @@ fn header<'a>(
     list_open: bool,
 ) -> Element<'a, Message> {
     let wide = width >= WIDE;
-    let choice = |glyph: Icon, label: &'static str, value: NetworkShows| {
+    let choice = |glyph: Icon, label: String, value: NetworkShows| {
         button::with_icon(Kind::Filled, glyph, label)
             .size(Size::ExtraSmall)
             .selected(shows == value)
             .on_press(Message::NetworkShows(value))
     };
     let choices = component::connected(vec![
-        choice(Icon::Schedule, "gPTP", NetworkShows::Clock),
-        choice(Icon::GraphicEq, "Audio", NetworkShows::Audio),
-        choice(Icon::Timer, "CRF", NetworkShows::MediaClock),
+        choice(Icon::Schedule, "gPTP".to_owned(), NetworkShows::Clock),
+        choice(Icon::GraphicEq, fl!("netmap-audio"), NetworkShows::Audio),
+        choice(Icon::Timer, "CRF".to_owned(), NetworkShows::MediaClock),
     ]);
     let focused = focus.map(|focus| {
         let what = match focus {
@@ -290,18 +286,22 @@ fn header<'a>(
                     .map(|node| node_name(topology, node))
                     .unwrap_or_default();
                 match shows {
-                    NetworkShows::Clock => format!("{name}’s clock path"),
-                    _ => format!("{name}’s streams"),
+                    NetworkShows::Clock => fl!("netmap-focus-clock-path", name = name),
+                    _ => fl!("netmap-focus-streams", name = name),
                 }
             }
         };
-        button::with_icon(Kind::Outlined, Icon::Close, format!("Showing {what}"))
-            .size(Size::ExtraSmall)
-            .on_press(Message::NetworkFocused(None))
+        button::with_icon(
+            Kind::Outlined,
+            Icon::Close,
+            fl!("netmap-showing", what = what),
+        )
+        .size(Size::ExtraSmall)
+        .on_press(Message::NetworkFocused(None))
     });
     let mut header = row![].spacing(12).align_y(Center);
     if width >= TITLED {
-        header = header.push(styled("Network", Type::TitleLarge));
+        header = header.push(styled(fl!("toolbar-network"), Type::TitleLarge));
     }
     header = header.push(choices);
     if width >= TITLED {
@@ -323,11 +323,10 @@ fn header<'a>(
         let devices = entities.len();
         header = header.push(
             styled(
-                format!(
-                    "{devices} {}, {bridges} {}",
-                    if devices == 1 { "device" } else { "devices" },
-                    if bridges == 1 { "bridge" } else { "bridges" }
-                ),
+                crate::i18n::list([
+                    fl!("netmap-devices", count = devices),
+                    fl!("netmap-bridges", count = bridges),
+                ]),
                 Type::BodyMedium,
             )
             .style(style::on_surface_variant),
@@ -343,9 +342,9 @@ fn header<'a>(
     header = header.push(component::toggle_tool(
         Icon::ViewList,
         if list_open {
-            "Show the map"
+            fl!("netmap-show-map")
         } else {
-            "Show the details"
+            fl!("netmap-show-details")
         },
         list_open,
         Message::NetworkListToggled,
@@ -417,7 +416,7 @@ fn tag(entity: &DiscoveredEntity) -> String {
 fn stream_name(model: Option<&EntityModel>, descriptor_type: DescriptorType, index: u16) -> String {
     model
         .and_then(|model| model.name_of(descriptor_type, index))
-        .map_or_else(|| format!("Stream {index}"), str::to_owned)
+        .map_or_else(|| fl!("stream-numbered", index = index), str::to_owned)
 }
 
 /// A node's name on its card and in the details: a bridge's vendor, else
@@ -429,8 +428,8 @@ fn node_name(topology: &Topology, node: NodeId) -> String {
             .clock
             .and_then(crate::topology::mac_of)
             .and_then(|mac| crate::vendor::name([mac[0], mac[1], mac[2]]))
-            .unwrap_or_else(|| "Bridge".to_owned()),
-        NodeKind::Host => "This computer".to_owned(),
+            .unwrap_or_else(|| fl!("netmap-bridge")),
+        NodeKind::Host => fl!("netmap-this-computer"),
         NodeKind::Entity { .. } => entry.name.clone(),
     }
 }
@@ -469,17 +468,17 @@ fn streams(triib: &Triib, topology: &Topology) -> Vec<Stream> {
             let (route, reason) = match status {
                 Status::Flowing | Status::Unsynced => (
                     topology.route(talker_id, listener_id),
-                    "Connected".to_owned(),
+                    fl!("netmap-connected"),
                 ),
                 Status::Advertised => (
                     talker_leg,
                     if topology.placed(listener_id).is_none() {
-                        format!(
-                            "Advertised, no listener ready ({listener_name} is not on the gPTP \
-                             tree)"
+                        fl!(
+                            "netmap-advertised-off-tree",
+                            listener = listener_name.clone()
                         )
                     } else {
-                        "Advertised, no listener ready".to_owned()
+                        fl!("netmap-advertised")
                     },
                 ),
                 Status::Failed => {
@@ -495,15 +494,15 @@ fn streams(triib: &Triib, topology: &Topology) -> Vec<Stream> {
                             } else {
                                 talker_leg
                             },
-                            format!(
-                                "Reservation failed at {}: {}",
-                                node_name(topology, bridge),
-                                describe::msrp_failure(code)
+                            fl!(
+                                "netmap-failed-at",
+                                bridge = node_name(topology, bridge),
+                                reason = describe::msrp_failure(code)
                             ),
                         ),
                         None => (
                             talker_leg,
-                            format!("Reservation failed: {}", describe::msrp_failure(code)),
+                            fl!("netmap-failed", reason = describe::msrp_failure(code)),
                         ),
                     }
                 }
@@ -722,42 +721,43 @@ fn cards(
             };
             let mut border = Paint::Plain;
             let (subtitle, subtitle_paint) = match (shows, entry.apart, entry.kind) {
-                (_, Some(Apart::NoNeighbor), _) => {
-                    (format!("No bridge heard on {interface}"), Paint::Muted)
-                }
+                (_, Some(Apart::NoNeighbor), _) => (
+                    fl!("netmap-no-bridge-on", interface = interface),
+                    Paint::Muted,
+                ),
                 (_, Some(apart), _) => (
                     match apart {
-                        Apart::NoPath(_) => "Path not reported",
-                        Apart::Unreported => "gPTP not reported",
-                        _ => "Not on the gPTP tree",
-                    }
-                    .to_owned(),
+                        Apart::NoPath(_) => fl!("netmap-path-not-reported"),
+                        Apart::Unreported => fl!("netmap-gptp-not-reported"),
+                        _ => fl!("netmap-off-tree"),
+                    },
                     Paint::Failed,
                 ),
                 (NetworkShows::Clock, None, _) if entry.parent.is_none() => {
                     border = Paint::Clock;
-                    ("Grandmaster".to_owned(), Paint::Clock)
+                    (fl!("avb-interface-grandmaster"), Paint::Clock)
                 }
                 (NetworkShows::Clock, None, NodeKind::Host) => (
                     if entry.link.synced {
-                        "Synced"
+                        fl!("netmap-synced")
                     } else {
-                        "Not synced"
-                    }
-                    .to_owned(),
+                        fl!("netmap-not-synced")
+                    },
                     Paint::Muted,
                 ),
                 (NetworkShows::Clock, None, _) if entry.link.synced => {
-                    ("Synced".to_owned(), Paint::Muted)
+                    (fl!("netmap-synced"), Paint::Muted)
                 }
-                (NetworkShows::Clock, None, _) => ("Not synced".to_owned(), Paint::Failed),
-                (_, None, NodeKind::Host) => (format!("triib on {interface}"), Paint::Muted),
+                (NetworkShows::Clock, None, _) => (fl!("netmap-not-synced"), Paint::Failed),
+                (_, None, NodeKind::Host) => {
+                    (fl!("netmap-triib-on", interface = interface), Paint::Muted)
+                }
                 (_, None, _) if entity.is_none() || !entry.children.is_empty() => {
                     let through = streams
                         .iter()
                         .filter(|stream| via(topology, &stream.route).contains(&node))
                         .count();
-                    (format!("{through} through"), Paint::Muted)
+                    (fl!("netmap-through-count", count = through), Paint::Muted)
                 }
                 (_, None, _) => {
                     let sending = streams
@@ -776,18 +776,20 @@ fn cards(
                         .count();
                     let mut counts = Vec::new();
                     if sending > 0 {
-                        counts.push(format!("{sending} out"));
+                        counts.push(fl!("netmap-out", count = sending));
                     }
                     if receiving > 0 {
-                        counts.push(format!("{receiving} in"));
+                        counts.push(fl!("netmap-in", count = receiving));
                     }
-                    let mut text = if counts.is_empty() {
-                        "None".to_owned()
+                    if failed > 0 {
+                        counts.push(fl!("netmap-failed-count", count = failed));
+                    }
+                    let text = if counts.is_empty() {
+                        fl!("common-none")
                     } else {
-                        counts.join(", ")
+                        crate::i18n::list(counts)
                     };
                     if failed > 0 {
-                        text.push_str(&format!(", {failed} failed"));
                         border = Paint::Failed;
                         (text, Paint::Failed)
                     } else {
@@ -851,7 +853,7 @@ struct Item {
 
 /// What the details show.
 struct Page {
-    kicker: &'static str,
+    kicker: String,
     title: String,
     swatch: Option<Paint>,
     state: String,
@@ -862,8 +864,6 @@ struct Page {
     sections: Vec<(String, Vec<Item>)>,
     help: String,
 }
-
-const BACK: &str = "Click the background to go back to the overview.";
 
 /// The panel beside the map: an overview, or the details of the stream or
 /// node brought forward.
@@ -896,15 +896,17 @@ fn details(
 
 fn stream_item(stream: &Stream, paint: Paint) -> Item {
     let (state, detail_paint) = match stream.status {
-        Status::Flowing | Status::Unsynced => ("Connected", Paint::Muted),
-        Status::Advertised => ("Advertised only", Paint::Soft),
-        Status::Failed => ("Failed", Paint::Failed),
+        Status::Flowing | Status::Unsynced => (fl!("netmap-connected"), Paint::Muted),
+        Status::Advertised => (fl!("netmap-advertised-only"), Paint::Soft),
+        Status::Failed => (fl!("netmap-failed-state"), Paint::Failed),
     };
     Item {
         name: stream.name.clone(),
-        detail: format!(
-            "{} → {} · {state}",
-            stream.talker_name, stream.listener_name
+        detail: fl!(
+            "netmap-stream-item",
+            talker = stream.talker_name.clone(),
+            listener = stream.listener_name.clone(),
+            state = state
         ),
         detail_paint,
         swatch: paint,
@@ -922,7 +924,11 @@ fn clock_item(topology: &Topology, node: NodeId) -> Item {
     let ok = synced(topology, node);
     Item {
         name: node_name(topology, node),
-        detail: if ok { "Synced" } else { "Not synced" }.to_owned(),
+        detail: if ok {
+            fl!("netmap-synced")
+        } else {
+            fl!("netmap-not-synced")
+        },
         detail_paint: if ok { Paint::Muted } else { Paint::Failed },
         swatch: if ok { Paint::Clock } else { Paint::Unsynced },
         focus: Focus::Node(key_of(topology, node)),
@@ -932,12 +938,13 @@ fn clock_item(topology: &Topology, node: NodeId) -> Item {
 /// Why a node is not on a tree, in words.
 fn apart_reason(apart: Apart) -> String {
     match apart {
-        Apart::OwnGrandmaster => "Not on the gPTP tree: it is its own grandmaster".to_owned(),
-        Apart::NoPath(grandmaster) => {
-            format!("Its path was not reported; it follows grandmaster {grandmaster}")
-        }
-        Apart::Unreported => "It has not reported its gPTP state".to_owned(),
-        Apart::NoNeighbor => "No bridge heard on this computer's interface".to_owned(),
+        Apart::OwnGrandmaster => fl!("netmap-apart-own-grandmaster"),
+        Apart::NoPath(grandmaster) => fl!(
+            "netmap-apart-no-path",
+            grandmaster = grandmaster.to_string()
+        ),
+        Apart::Unreported => fl!("netmap-apart-unreported"),
+        Apart::NoNeighbor => fl!("netmap-apart-no-neighbor"),
     }
 }
 
@@ -952,42 +959,42 @@ fn clock_overview(topology: &Topology) -> Page {
         .map(|&root| node_name(topology, root))
         .collect();
     Page {
-        kicker: "gPTP",
-        title: "Clock tree".to_owned(),
+        kicker: "gPTP".to_owned(),
+        title: fl!("netmap-clock-tree"),
         swatch: Some(Paint::Clock),
         state: if grandmasters.is_empty() {
-            "No grandmaster heard".to_owned()
+            fl!("netmap-no-grandmaster")
         } else {
-            format!("Grandmaster: {}", grandmasters.join(", "))
+            fl!(
+                "netmap-grandmaster-is",
+                grandmaster = crate::i18n::list(grandmasters)
+            )
         },
         state_icon: Icon::Schedule,
         state_filled: false,
         state_paint: Paint::Soft,
         facts: vec![
             (
-                "Synced".to_owned(),
+                fl!("netmap-synced"),
                 (topology.nodes.len() - unsynced.len()).to_string(),
             ),
-            ("Not synced".to_owned(), unsynced.len().to_string()),
+            (fl!("netmap-not-synced"), unsynced.len().to_string()),
         ],
         sections: if unsynced.is_empty() {
             Vec::new()
         } else {
-            vec![("Needs attention".to_owned(), unsynced)]
+            vec![(fl!("netmap-needs-attention"), unsynced)]
         },
-        help: "The clock flows from the grandmaster through each bridge to every node on the \
-               tree. A broken grey line is a link gPTP does not run on. Click a device or its \
-               wire to inspect its clock path; click the background to clear."
-            .to_owned(),
+        help: fl!("netmap-help-clock"),
     }
 }
 
 fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
     let entry = &topology.nodes[node];
     let kicker = if entry.kind == NodeKind::Bridge {
-        "Bridge"
+        fl!("netmap-bridge")
     } else {
-        "Device"
+        fl!("netmap-device")
     };
     let title = node_name(topology, node);
     let below_here: Vec<NodeId> = (0..topology.nodes.len())
@@ -1005,7 +1012,7 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
             .collect();
         let (heading, items) = if bridges.is_empty() {
             (
-                "Nodes below",
+                fl!("netmap-nodes-below"),
                 entry
                     .children
                     .iter()
@@ -1013,25 +1020,25 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
                     .collect(),
             )
         } else {
-            ("Bridges below", bridges)
+            (fl!("netmap-bridges-below"), bridges)
         };
         return Page {
             kicker,
             title,
             swatch: Some(Paint::Clock),
-            state: "Grandmaster".to_owned(),
+            state: fl!("avb-interface-grandmaster"),
             state_icon: Icon::Schedule,
             state_filled: false,
             state_paint: Paint::Clock,
             facts: vec![
                 (
-                    "Synced".to_owned(),
+                    fl!("netmap-synced"),
                     (below_here.len() - unsynced).to_string(),
                 ),
-                ("Not synced".to_owned(), unsynced.to_string()),
+                (fl!("netmap-not-synced"), unsynced.to_string()),
             ],
-            sections: vec![(heading.to_owned(), items)],
-            help: BACK.to_owned(),
+            sections: vec![(heading, items)],
+            help: fl!("netmap-help-back"),
         };
     }
     let mut facts = Vec::new();
@@ -1043,17 +1050,14 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
             at = topology.nodes[parent].parent;
         }
         path.reverse();
-        facts.push(("Clock path".to_owned(), path.join(" → ")));
-        facts.push((
-            "Hops from grandmaster".to_owned(),
-            (path.len() - 1).to_string(),
-        ));
+        facts.push((fl!("netmap-clock-path"), path.join(" → ")));
+        facts.push((fl!("netmap-hops"), (path.len() - 1).to_string()));
     }
     if let Some(delay) = entry.link.delay {
-        facts.push(("Link delay".to_owned(), format!("{delay} ns")));
+        facts.push((fl!("netmap-link-delay"), format!("{delay} ns")));
     }
     if let Some(port) = entry.link.port {
-        facts.push(("Bridge port".to_owned(), port.to_string()));
+        facts.push((fl!("netmap-bridge-port"), port.to_string()));
     }
     if let NodeKind::Entity {
         entity_id,
@@ -1066,23 +1070,24 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
             .and_then(|counters| counters.avb_interface())
     {
         if let Some(downs) = counters.link_down {
-            facts.push(("Link drops".to_owned(), downs.to_string()));
+            facts.push((fl!("netmap-link-drops"), downs.to_string()));
         }
         if let Some(changes) = counters.gptp_gm_changed {
-            facts.push(("Grandmaster changes".to_owned(), changes.to_string()));
+            facts.push((
+                fl!("avb-interface-grandmaster-changes"),
+                changes.to_string(),
+            ));
         }
     }
     if let Some(clock) = entry.clock {
-        facts.push(("Clock identity".to_owned(), clock.to_string()));
+        facts.push((fl!("avb-interface-clock-identity"), clock.to_string()));
     }
     let ok = synced(topology, node);
     let state = match entry.apart {
         Some(apart) => apart_reason(apart),
-        None if ok => "Synced to the grandmaster".to_owned(),
-        None if entry.kind == NodeKind::Host => {
-            "Not synced: this computer does not run gPTP".to_owned()
-        }
-        None => "Not synced: gPTP does not run on its link".to_owned(),
+        None if ok => fl!("netmap-synced-to-grandmaster"),
+        None if entry.kind == NodeKind::Host => fl!("netmap-host-no-gptp"),
+        None => fl!("netmap-link-no-gptp"),
     };
     Page {
         kicker,
@@ -1101,14 +1106,14 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
             Vec::new()
         } else {
             vec![(
-                "Nodes below".to_owned(),
+                fl!("netmap-nodes-below"),
                 below_here
                     .iter()
                     .map(|&other| clock_item(topology, other))
                     .collect(),
             )]
         },
-        help: BACK.to_owned(),
+        help: fl!("netmap-help-back"),
     }
 }
 
@@ -1127,15 +1132,18 @@ fn stream_overview(shows: NetworkShows, streams: &[Stream], paints: &[Paint]) ->
         .collect();
     let media_clock = shows == NetworkShows::MediaClock;
     Page {
-        kicker: if media_clock { "CRF" } else { "Audio" },
-        title: if media_clock {
-            "Media clock streams"
+        kicker: if media_clock {
+            "CRF".to_owned()
         } else {
-            "Audio streams"
-        }
-        .to_owned(),
+            fl!("netmap-audio")
+        },
+        title: if media_clock {
+            fl!("netmap-media-clock-streams")
+        } else {
+            fl!("netmap-audio-streams")
+        },
         swatch: None,
-        state: format!("{} bound", streams.len()),
+        state: fl!("netmap-bound", count = streams.len()),
         state_icon: if media_clock {
             Icon::Timer
         } else {
@@ -1144,32 +1152,26 @@ fn stream_overview(shows: NetworkShows, streams: &[Stream], paints: &[Paint]) ->
         state_filled: false,
         state_paint: Paint::Soft,
         facts: vec![
-            ("Flowing".to_owned(), count(Status::Flowing).to_string()),
+            (fl!("netmap-flowing"), count(Status::Flowing).to_string()),
             (
-                "Advertised".to_owned(),
+                fl!("netmap-advertised-state"),
                 count(Status::Advertised).to_string(),
             ),
-            ("Failed".to_owned(), count(Status::Failed).to_string()),
+            (
+                fl!("netmap-failed-state"),
+                count(Status::Failed).to_string(),
+            ),
         ],
         sections: if attention.is_empty() {
             Vec::new()
         } else {
-            vec![("Needs attention".to_owned(), attention)]
+            vec![(fl!("netmap-needs-attention"), attention)]
         },
         help: if media_clock {
-            "Media clock (CRF) streams only, drawn the same way as audio: one wire per stream, \
-             coloured by talker. Click a wire to inspect its stream, or a device to see its \
-             streams; click the background to clear."
+            fl!("netmap-help-media-clock")
         } else {
-            "Each stream has its own wire, entering and leaving every bridge it crosses. Colour \
-             is by talker: each talker has a hue, and its streams are shades of it. Moving dots \
-             mean audio is flowing; a still red line is a failed reservation and a still grey \
-             line is advertised with no listener ready; both stop where the reservation stops. \
-             Devices in the middle column connect straight to the grandmaster's bridge. Click a \
-             wire to inspect its stream, or a device to see its streams; click the background \
-             to clear."
-        }
-        .to_owned(),
+            fl!("netmap-help-audio")
+        },
     }
 }
 
@@ -1193,9 +1195,9 @@ fn stream_details(topology: &Topology, shows: NetworkShows, stream: &Stream, pai
     };
     Page {
         kicker: if shows == NetworkShows::MediaClock {
-            "Media clock stream"
+            fl!("netmap-media-clock-stream")
         } else {
-            "Audio stream"
+            fl!("netmap-audio-stream")
         },
         title: stream.name.clone(),
         swatch: Some(paint),
@@ -1204,20 +1206,19 @@ fn stream_details(topology: &Topology, shows: NetworkShows, stream: &Stream, pai
         state_filled,
         state_paint,
         facts: vec![
-            ("Talker".to_owned(), stream.talker_name.clone()),
-            ("Listener".to_owned(), stream.listener_name.clone()),
+            (fl!("advert-talker"), stream.talker_name.clone()),
+            (fl!("advert-listener"), stream.listener_name.clone()),
             (
                 if stream.status == Status::Flowing {
-                    "Path"
+                    fl!("avb-interface-path")
                 } else {
-                    "Reaches"
-                }
-                .to_owned(),
+                    fl!("netmap-reaches")
+                },
                 names.join(" → "),
             ),
         ],
         sections: Vec::new(),
-        help: BACK.to_owned(),
+        help: fl!("netmap-help-back"),
     }
 }
 
@@ -1241,21 +1242,20 @@ fn node_details(topology: &Topology, streams: &[Stream], paints: &[Paint], node:
     if bridge && entry.kind != NodeKind::Host {
         let through = items(&|stream| via(topology, &stream.route).contains(&node));
         return Page {
-            kicker: "Bridge",
+            kicker: fl!("netmap-bridge"),
             title: node_name(topology, node),
             swatch: None,
-            state: format!("{} streams passing through", through.len()),
+            state: fl!("netmap-passing-count", count = through.len()),
             state_icon: glyph,
             state_filled: false,
             state_paint: Paint::Soft,
-            facts: vec![("Through".to_owned(), through.len().to_string())],
+            facts: vec![(fl!("netmap-through"), through.len().to_string())],
             sections: if through.is_empty() {
                 Vec::new()
             } else {
-                vec![("Passing through".to_owned(), through)]
+                vec![(fl!("netmap-passing-through"), through)]
             },
-            help: "Click a stream to inspect it, or the background to go back to the overview."
-                .to_owned(),
+            help: fl!("netmap-help-stream"),
         };
     }
     let sending = items(&|stream| entity.is_some() && entity == Some(stream.talker));
@@ -1268,19 +1268,20 @@ fn node_details(topology: &Topology, streams: &[Stream], paints: &[Paint], node:
                 && stream.status != Status::Flowing
         })
         .count();
-    let counts = [(sending.len(), "out"), (receiving.len(), "in")]
-        .iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, what)| format!("{count} {what}"))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let mut counts = Vec::new();
+    if !sending.is_empty() {
+        counts.push(fl!("netmap-out", count = sending.len()));
+    }
+    if !receiving.is_empty() {
+        counts.push(fl!("netmap-in", count = receiving.len()));
+    }
     let (state, state_icon, state_paint) = match entry.apart {
         Some(apart) => (apart_reason(apart), Icon::Error, Paint::Failed),
-        None if counts.is_empty() => ("None".to_owned(), glyph, Paint::Soft),
-        None => (counts, glyph, Paint::Soft),
+        None if counts.is_empty() => (fl!("common-none"), glyph, Paint::Soft),
+        None => (crate::i18n::list(counts), glyph, Paint::Soft),
     };
     Page {
-        kicker: "Device",
+        kicker: fl!("netmap-device"),
         title: node_name(topology, node),
         swatch: None,
         state,
@@ -1288,17 +1289,18 @@ fn node_details(topology: &Topology, streams: &[Stream], paints: &[Paint], node:
         state_filled: false,
         state_paint,
         facts: vec![
-            ("Sending".to_owned(), sending.len().to_string()),
-            ("Receiving".to_owned(), receiving.len().to_string()),
-            ("Problems".to_owned(), problems.to_string()),
+            (fl!("netmap-sending"), sending.len().to_string()),
+            (fl!("netmap-receiving"), receiving.len().to_string()),
+            (fl!("netmap-problems"), problems.to_string()),
         ],
-        sections: [("Sending", sending), ("Receiving", receiving)]
-            .into_iter()
-            .filter(|(_, items)| !items.is_empty())
-            .map(|(title, items)| (title.to_owned(), items))
-            .collect(),
-        help: "Click a stream to inspect it, or the background to go back to the overview."
-            .to_owned(),
+        sections: [
+            (fl!("netmap-sending"), sending),
+            (fl!("netmap-receiving"), receiving),
+        ]
+        .into_iter()
+        .filter(|(_, items)| !items.is_empty())
+        .collect(),
+        help: fl!("netmap-help-stream"),
     }
 }
 

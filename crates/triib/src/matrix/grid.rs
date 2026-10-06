@@ -812,12 +812,20 @@ impl Matrix {
         }
         let right = parts.headings_x() + parts.heading - 12.0;
         for (center, glyph, label) in [
-            (HEADER - 42.0, Icon::West, "Talker outputs"),
-            (HEADER - 20.0, Icon::South, "Listener inputs"),
+            (
+                HEADER - 42.0,
+                Icon::West,
+                crate::fl!("matrix-talker-outputs"),
+            ),
+            (
+                HEADER - 20.0,
+                Icon::South,
+                crate::fl!("matrix-listener-inputs"),
+            ),
         ] {
-            let width = measure(label, TEXT, 12.0);
+            let width = measure(&label, TEXT, 12.0);
             frame.fill_text(Text {
-                content: label.to_owned(),
+                content: label,
                 position: Point::new(right, center),
                 color: colors.detail,
                 size: Pixels(12.0),

@@ -8,6 +8,7 @@ use atdecc::controller::{Outcome, Refusal};
 use atdecc::model::{EntityModel, EnumerationFailure, EnumerationState};
 
 use crate::app::Triib;
+use crate::fl;
 use crate::network::Action;
 use atdecc::{
     Adpdu, ControllerCapabilities, EntityCapabilities, ListenerCapabilities, TalkerCapabilities,
@@ -44,32 +45,32 @@ pub fn glyph(adp: &Adpdu) -> Icon {
 pub fn roles(adp: &Adpdu) -> String {
     let mut roles = Vec::new();
     if is_talker(adp) {
-        roles.push(format!("talker {}", adp.talker_stream_sources));
+        roles.push(fl!("role-talker", count = adp.talker_stream_sources));
     }
     if is_listener(adp) {
-        roles.push(format!("listener {}", adp.listener_stream_sinks));
+        roles.push(fl!("role-listener", count = adp.listener_stream_sinks));
     }
     if is_controller(adp) {
-        roles.push("controller".to_owned());
+        roles.push(fl!("role-controller"));
     }
     capitalized(&if roles.is_empty() {
-        "no roles".to_owned()
+        fl!("role-none")
     } else {
-        roles.join(", ")
+        crate::i18n::list(roles)
     })
 }
 
 /// The SR classes it supports.
-pub fn classes(adp: &Adpdu) -> &'static str {
+pub fn classes(adp: &Adpdu) -> String {
     let capabilities = adp.entity_capabilities;
     match (
         capabilities.contains(EntityCapabilities::CLASS_A_SUPPORTED),
         capabilities.contains(EntityCapabilities::CLASS_B_SUPPORTED),
     ) {
-        (true, true) => "A and B",
-        (true, false) => "A",
-        (false, true) => "B",
-        (false, false) => "None",
+        (true, true) => fl!("classes-a-and-b"),
+        (true, false) => "A".to_owned(),
+        (false, true) => "B".to_owned(),
+        (false, false) => fl!("common-none"),
     }
 }
 
@@ -81,7 +82,7 @@ pub fn clock(adp: &Adpdu) -> String {
     {
         adp.gptp_grandmaster_id.to_string()
     } else {
-        "No gPTP".to_owned()
+        fl!("clock-no-gptp")
     }
 }
 
@@ -95,7 +96,7 @@ pub fn media_clock(model: &EntityModel) -> String {
             model
                 .name_of(DescriptorType::CLOCK_SOURCE, domain.clock_source_index)
                 .map_or_else(
-                    || format!("Source {}", domain.clock_source_index),
+                    || fl!("clock-source-numbered", index = domain.clock_source_index),
                     str::to_owned,
                 )
         })
@@ -113,17 +114,17 @@ pub fn milliseconds(nanoseconds: u64) -> String {
 /// How far reading an entity's model got, in a few words.
 pub fn read_state(model: Option<&EntityModel>) -> String {
     let Some(model) = model else {
-        return "Not read".to_owned();
+        return fl!("read-not-read");
     };
     match model.state {
-        EnumerationState::NotRead => "Not read".to_owned(),
-        EnumerationState::Reading => format!("Reading, {} so far", model.descriptor_count()),
+        EnumerationState::NotRead => fl!("read-not-read"),
+        EnumerationState::Reading => fl!("read-reading", count = model.descriptor_count()),
         EnumerationState::Complete if model.failed_reads > 0 => {
-            format!("Ready, {} unreadable", model.failed_reads)
+            fl!("read-ready-unreadable", count = model.failed_reads)
         }
-        EnumerationState::Complete if model.from_cache => "Ready, from cache".to_owned(),
-        EnumerationState::Complete => "Ready".to_owned(),
-        EnumerationState::Failed(why) => format!("Failed: {}", failure(why)),
+        EnumerationState::Complete if model.from_cache => fl!("read-ready-cached"),
+        EnumerationState::Complete => fl!("read-ready"),
+        EnumerationState::Failed(why) => fl!("read-failed", reason = failure(why)),
     }
 }
 
@@ -146,7 +147,7 @@ pub fn product(model: &EntityModel) -> String {
 /// Milan support: the specification version and certification, or "No".
 pub fn milan(model: &EntityModel) -> String {
     let Some(milan) = model.milan else {
-        return "No".to_owned();
+        return fl!("milan-no");
     };
     let dotted = |version: [u8; 4]| {
         let mut parts: Vec<String> = version.iter().map(u8::to_string).collect();
@@ -157,14 +158,15 @@ pub fn milan(model: &EntityModel) -> String {
     };
     let version = milan
         .specification_version
-        .map_or_else(|| "before 1.3".to_owned(), dotted);
+        .map_or_else(|| fl!("milan-before-1-3"), dotted);
     if milan.is_certified() {
-        format!(
-            "{version}, certified {}",
-            dotted(milan.certification_version)
+        fl!(
+            "milan-certified",
+            version = version,
+            certification = dotted(milan.certification_version)
         )
     } else {
-        format!("{version}, not certified")
+        fl!("milan-not-certified", version = version)
     }
 }
 
@@ -174,85 +176,111 @@ pub fn outcome(triib: &Triib, action: Action, outcome: Outcome) -> Option<String
         Outcome::Done => return None,
         Outcome::Refused(Refusal::Acmp(status)) => status
             .name()
-            .map_or_else(|| format!("status {}", status.0), flag_name),
+            .map_or_else(|| fl!("outcome-status", status = status.0), flag_name),
         Outcome::Refused(Refusal::Aem(status)) => status
             .name()
-            .map_or_else(|| format!("status {}", status.0), flag_name),
-        Outcome::NoResponse => "no response".to_owned(),
-        Outcome::NotPossible => "not possible".to_owned(),
+            .map_or_else(|| fl!("outcome-status", status = status.0), flag_name),
+        Outcome::NoResponse => fl!("outcome-no-response"),
+        Outcome::NotPossible => fl!("outcome-not-possible"),
     };
     Some(match action {
-        Action::Connect { talker, listener } => format!(
-            "Could not connect {} to {}: {reason}.",
-            triib.stream_name(talker.0, DescriptorType::STREAM_OUTPUT, talker.1),
-            triib.stream_name(listener.0, DescriptorType::STREAM_INPUT, listener.1),
+        Action::Connect { talker, listener } => fl!(
+            "outcome-connect",
+            talker = triib.stream_name(talker.0, DescriptorType::STREAM_OUTPUT, talker.1),
+            listener = triib.stream_name(listener.0, DescriptorType::STREAM_INPUT, listener.1),
+            reason = reason
         ),
-        Action::Disconnect { listener } => format!(
-            "Could not disconnect {}: {reason}.",
-            triib.stream_name(listener.0, DescriptorType::STREAM_INPUT, listener.1),
+        Action::Disconnect { listener } => fl!(
+            "outcome-disconnect",
+            listener = triib.stream_name(listener.0, DescriptorType::STREAM_INPUT, listener.1),
+            reason = reason
         ),
-        Action::Identify(entity_id) => format!(
-            "Could not identify {}: {reason}.",
-            triib.entity_name_of(entity_id)
+        Action::Identify(entity_id) => fl!(
+            "outcome-identify",
+            entity = triib.entity_name_of(entity_id),
+            reason = reason
         ),
-        Action::Rename { target, name } => format!(
-            "Could not rename {} to \"{}\": {reason}.",
-            match (target.descriptor_type, target.name_index) {
-                (DescriptorType::ENTITY, 0) => triib.entity_name_of(target.entity),
-                (DescriptorType::ENTITY, _) =>
-                    format!("{}'s group", triib.entity_name_of(target.entity)),
-                (descriptor_type, _) =>
-                    triib.stream_name(target.entity, descriptor_type, target.index),
-            },
-            name.as_str()
+        Action::Rename { target, name } => match (target.descriptor_type, target.name_index) {
+            (DescriptorType::ENTITY, 1) => fl!(
+                "outcome-rename-group",
+                entity = triib.entity_name_of(target.entity),
+                name = name.as_str(),
+                reason = reason
+            ),
+            (descriptor_type, _) => fl!(
+                "outcome-rename",
+                what = match descriptor_type {
+                    DescriptorType::ENTITY => triib.entity_name_of(target.entity),
+                    _ => triib.stream_name(target.entity, descriptor_type, target.index),
+                },
+                name = name.as_str(),
+                reason = reason
+            ),
+        },
+        Action::SetStreamFormat {
+            entity,
+            descriptor_type,
+            index,
+            ..
+        } if outcome == Outcome::Refused(Refusal::Aem(AemStatus::STREAM_IS_RUNNING)) => fl!(
+            "outcome-format-streaming",
+            stream = triib.stream_name(entity, descriptor_type, index)
         ),
         Action::SetStreamFormat {
             entity,
             descriptor_type,
             index,
             ..
-        } if outcome == Outcome::Refused(Refusal::Aem(AemStatus::STREAM_IS_RUNNING)) => format!(
-            "Could not change the format of {}: it is streaming. Disconnect it first.",
-            triib.stream_name(entity, descriptor_type, index)
+        } => fl!(
+            "outcome-format",
+            stream = triib.stream_name(entity, descriptor_type, index),
+            reason = reason
         ),
-        Action::SetStreamFormat {
-            entity,
-            descriptor_type,
-            index,
-            ..
-        } => format!(
-            "Could not change the format of {}: {reason}.",
-            triib.stream_name(entity, descriptor_type, index)
+        Action::SetSamplingRate { entity, .. } => fl!(
+            "outcome-sampling-rate",
+            entity = triib.entity_name_of(entity),
+            reason = reason
         ),
-        Action::SetSamplingRate { entity, .. } => format!(
-            "Could not change the sampling rate of {}: {reason}.",
-            triib.entity_name_of(entity)
-        ),
-        Action::SetClockSource { entity, .. } => format!(
-            "Could not change the clock source of {}: {reason}.",
-            triib.entity_name_of(entity)
+        Action::SetClockSource { entity, .. } => fl!(
+            "outcome-clock-source",
+            entity = triib.entity_name_of(entity),
+            reason = reason
         ),
         Action::Map {
             entity,
             change: MappingChange::Add,
             ..
-        } => format!(
-            "Could not map the channel on {}: {reason}.",
-            triib.entity_name_of(entity)
+        } => fl!(
+            "outcome-map",
+            entity = triib.entity_name_of(entity),
+            reason = reason
         ),
-        Action::Map { entity, .. } => format!(
-            "Could not unmap the channel on {}: {reason}.",
-            triib.entity_name_of(entity)
+        Action::Map { entity, .. } => fl!(
+            "outcome-unmap",
+            entity = triib.entity_name_of(entity),
+            reason = reason
         ),
-        Action::SetControl { entity, index, .. } => format!(
-            "Could not set {} on {}: {reason}.",
-            triib
+        Action::SetControl { entity, index, .. } => {
+            let entity_name = triib.entity_name_of(entity);
+            match triib
                 .models
                 .get(&entity)
                 .and_then(|model| model.name_of(DescriptorType::CONTROL, index))
-                .map_or_else(|| format!("control {index}"), |name| format!("\"{name}\"")),
-            triib.entity_name_of(entity)
-        ),
+            {
+                Some(control) => fl!(
+                    "outcome-control",
+                    control = control,
+                    entity = entity_name,
+                    reason = reason
+                ),
+                None => fl!(
+                    "outcome-control-numbered",
+                    index = index,
+                    entity = entity_name,
+                    reason = reason
+                ),
+            }
+        }
     })
 }
 
@@ -267,42 +295,41 @@ pub fn stream_state(
     if stream.is_input() {
         let binding = model.binding(stream.index)?;
         let Some((talker, output)) = binding.talker_stream() else {
-            return Some("Not connected".to_owned());
+            return Some(fl!("stream-not-connected"));
         };
-        let mut text = format!(
-            "From {}",
-            triib.stream_name(talker, DescriptorType::STREAM_OUTPUT, output)
-        );
-        match info {
-            Some(info) if info.talker_failed() => {
-                text.push_str(&format!(
-                    ", the talker's reservation failed: {}",
-                    reservation_failure(info)
-                ));
-            }
-            Some(info) if info.settled() => text.push_str(", receiving"),
-            Some(_) => text.push_str(", waiting for the talker"),
-            None => {}
-        }
-        Some(text)
+        let stream = triib.stream_name(talker, DescriptorType::STREAM_OUTPUT, output);
+        Some(match info {
+            Some(info) if info.talker_failed() => fl!(
+                "stream-from-failed",
+                stream = stream,
+                reason = reservation_failure(info)
+            ),
+            Some(info) if info.settled() => fl!("stream-from-receiving", stream = stream),
+            Some(_) => fl!("stream-from-waiting", stream = stream),
+            None => fl!("stream-from", stream = stream),
+        })
     } else {
         let info = info?;
-        info.settled()
-            .then(|| format!("Sending to {}", info.stream_dest_mac))
+        info.settled().then(|| {
+            fl!(
+                "stream-sending-to",
+                destination = info.stream_dest_mac.to_string()
+            )
+        })
     }
 }
 
 /// Why reading an entity model failed, in words.
 pub fn failure(failure: EnumerationFailure) -> String {
     match failure {
-        EnumerationFailure::NoResponse => "it did not respond".to_owned(),
-        EnumerationFailure::Refused(status) => format!(
-            "it refused with {}",
-            status
+        EnumerationFailure::NoResponse => fl!("failure-no-response"),
+        EnumerationFailure::Refused(status) => fl!(
+            "failure-refused",
+            status = status
                 .name()
                 .map_or_else(|| status.0.to_string(), flag_name)
         ),
-        EnumerationFailure::Malformed => "its response did not decode".to_owned(),
+        EnumerationFailure::Malformed => fl!("failure-malformed"),
     }
 }
 
@@ -350,28 +377,28 @@ fn capitalized(text: &str) -> String {
 }
 
 /// What an MSRP failure code means (IEEE 802.1Q, 35.2.2.8.7).
-pub fn msrp_failure(code: u8) -> &'static str {
+pub fn msrp_failure(code: u8) -> String {
     match code {
-        1 => "insufficient bandwidth",
-        2 => "insufficient bridge resources",
-        3 => "insufficient bandwidth for the traffic class",
-        4 => "stream ID in use by another talker",
-        5 => "destination address already in use",
-        6 => "pre-empted by a stream of higher rank",
-        7 => "reported latency has changed",
-        8 => "egress port is not AVB capable",
-        9 => "use a different destination address",
-        10 => "out of MSRP resources",
-        11 => "out of MMRP resources",
-        12 => "cannot store the destination address",
-        13 => "priority is not an SR class priority",
-        14 => "frames too large for the medium",
-        15 => "fan-in port limit reached",
-        16 => "first value changed for a registered stream",
-        17 => "VLAN blocked on the egress port",
-        18 => "VLAN tagging disabled on the egress port",
-        19 => "SR class priority mismatch",
-        _ => "unknown reason",
+        1 => fl!("msrp-failure-1"),
+        2 => fl!("msrp-failure-2"),
+        3 => fl!("msrp-failure-3"),
+        4 => fl!("msrp-failure-4"),
+        5 => fl!("msrp-failure-5"),
+        6 => fl!("msrp-failure-6"),
+        7 => fl!("msrp-failure-7"),
+        8 => fl!("msrp-failure-8"),
+        9 => fl!("msrp-failure-9"),
+        10 => fl!("msrp-failure-10"),
+        11 => fl!("msrp-failure-11"),
+        12 => fl!("msrp-failure-12"),
+        13 => fl!("msrp-failure-13"),
+        14 => fl!("msrp-failure-14"),
+        15 => fl!("msrp-failure-15"),
+        16 => fl!("msrp-failure-16"),
+        17 => fl!("msrp-failure-17"),
+        18 => fl!("msrp-failure-18"),
+        19 => fl!("msrp-failure-19"),
+        _ => fl!("msrp-failure-unknown"),
     }
 }
 
@@ -381,9 +408,13 @@ pub fn reservation_failure(info: &atdecc::aem::StreamInfo) -> String {
     let reason = msrp_failure(info.msrp_failure_code);
     let [_, _, mac @ ..] = info.msrp_failure_bridge_id.to_be_bytes();
     if mac == [0; 6] {
-        reason.to_owned()
+        reason
     } else {
-        format!("{reason}, at the bridge {}", avb_net::MacAddress(mac))
+        fl!(
+            "msrp-failure-at",
+            reason = reason,
+            bridge = avb_net::MacAddress(mac).to_string()
+        )
     }
 }
 

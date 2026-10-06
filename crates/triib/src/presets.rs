@@ -19,6 +19,7 @@ use scramble_ui::{component, enter, style};
 use serde::{Deserialize, Serialize};
 
 use crate::app::{Message, Triib};
+use crate::fl;
 use crate::network::{Action, ControlValues};
 
 const WIDTH: f32 = 560.0;
@@ -369,10 +370,15 @@ pub fn save(preset: &Preset) -> Result<(), String> {
         return Ok(());
     }
     let path = folder()
-        .ok_or("There is nowhere to keep presets: the home folder is not known.")?
+        .ok_or_else(|| fl!("presets-no-place"))?
         .join(file_name(&preset.name));
-    triib_store::save(&path, preset)
-        .map_err(|error| format!("Could not save {}: {error}.", path.display()))
+    triib_store::save(&path, preset).map_err(|error| {
+        fl!(
+            "settings-unsaved",
+            path = path.display().to_string(),
+            error = error.to_string()
+        )
+    })
 }
 
 pub fn delete(name: &str) -> Result<(), String> {
@@ -385,7 +391,11 @@ pub fn delete(name: &str) -> Result<(), String> {
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!("Could not delete {}: {error}.", path.display())),
+        Err(error) => Err(fl!(
+            "presets-undeletable",
+            path = path.display().to_string(),
+            error = error.to_string()
+        )),
     }
 }
 
@@ -395,30 +405,24 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
     let name = triib.preset_name.trim();
     let save = (!name.is_empty()).then_some(Message::PresetSaved);
     let header = row![
-        styled("Presets", Type::HeadlineSmall).width(Fill),
+        styled(fl!("toolbar-presets"), Type::HeadlineSmall).width(Fill),
         component::tip(
             button::icon_button(Icon::Close).on_press(Message::PresetsClosed),
-            "Close",
+            fl!("common-close"),
         ),
     ]
     .align_y(Center);
     let mut content = column![
-        aligned(
-            styled(
-                "A preset keeps each entity's clock sources, sampling rates, stream formats, \
-                 controls and connections. Recalling it changes what differs.",
-                Type::BodyMedium,
-            )
-            .style(style::on_surface_variant),
-        ),
+        aligned(styled(fl!("presets-note"), Type::BodyMedium).style(style::on_surface_variant),),
         row![
-            text_input("Name", &triib.preset_name)
+            text_input(&fl!("inspector-name"), &triib.preset_name)
                 .on_input(Message::PresetNameChanged)
                 .on_submit_maybe(save.clone())
                 .padding([8, 12])
                 .style(style::outlined_field)
                 .width(Fill),
-            button::with_icon(Kind::Filled, Icon::BookmarkAdd, "Save").on_press_maybe(save),
+            button::with_icon(Kind::Filled, Icon::BookmarkAdd, fl!("common-save"))
+                .on_press_maybe(save),
         ]
         .spacing(8)
         .align_y(Center),
@@ -428,38 +432,33 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
         content = content.push(aligned(styled(report.as_str(), Type::BodyMedium)));
     }
     if triib.presets.is_empty() {
-        content = content.push(
-            styled("No presets saved yet.", Type::BodyMedium).style(style::on_surface_variant),
-        );
+        content = content
+            .push(styled(fl!("presets-none"), Type::BodyMedium).style(style::on_surface_variant));
     }
     for preset in &triib.presets {
         let entities = preset.entities.len();
         let connections = preset.connections();
-        let plural = |count: usize, one: &str, many: &str| {
-            format!("{count} {}", if count == 1 { one } else { many })
-        };
         content = content.push(
             row![
                 column![
                     styled(preset.name.clone(), Type::BodyLarge),
                     styled(
-                        format!(
-                            "{}, {}",
-                            plural(entities, "entity", "entities"),
-                            plural(connections, "connection", "connections")
-                        ),
+                        crate::i18n::list([
+                            fl!("status-entities", count = entities),
+                            fl!("presets-connections", count = connections),
+                        ]),
                         Type::BodySmall,
                     )
                     .style(style::on_surface_variant),
                 ]
                 .spacing(2)
                 .width(Fill),
-                button::button(Kind::Tonal, "Recall")
+                button::button(Kind::Tonal, fl!("presets-recall"))
                     .on_press(Message::PresetRecalled(preset.name.clone())),
                 component::tip(
                     button::icon_button(Icon::Delete)
                         .on_press(Message::PresetDeleted(preset.name.clone())),
-                    "Delete",
+                    fl!("presets-delete"),
                 ),
             ]
             .spacing(8)

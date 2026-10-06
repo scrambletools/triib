@@ -24,6 +24,7 @@ use scramble_ui::{Scheme, dropdown, style};
 
 use crate::app::{Message, NetworkState, Triib};
 use crate::describe;
+use crate::fl;
 use crate::mapping_view;
 use crate::network::{Action, Failure, NameTarget};
 use crate::settings::View;
@@ -108,28 +109,28 @@ impl Choice {
     /// The interface with its link, speed and kind, or only its link when
     /// `brief`.
     fn new(interface: &Interface, brief: bool) -> Self {
-        let mut label = interface.name.clone();
+        let mut parts = vec![interface.name.clone()];
         if !interface.up {
-            label.push_str(", link down");
+            parts.push(fl!("interface-link-down"));
         } else if brief {
             return Self {
                 name: interface.name.clone(),
-                label,
+                label: crate::i18n::list(parts),
             };
         } else if let Some(speed) = interface.speed {
-            label.push_str(&format!(", {}", speed_text(speed)));
+            parts.push(speed_text(speed));
         }
         if interface.wireless {
-            label.push_str(", wireless");
+            parts.push(fl!("interface-wireless"));
         } else if interface.hardware_clock.is_some() {
-            label.push_str(", hardware clock");
+            parts.push(fl!("interface-hardware-clock"));
         }
         if !interface.physical {
-            label.push_str(", virtual");
+            parts.push(fl!("interface-virtual"));
         }
         Self {
             name: interface.name.clone(),
-            label,
+            label: crate::i18n::list(parts),
         }
     }
 }
@@ -169,7 +170,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let picker = dropdown::pick(choices, selected, |choice: Choice| {
         Message::InterfacePicked(choice.name)
     })
-    .placeholder("Choose an interface")
+    .placeholder(fl!("toolbar-choose-interface"))
     .size(button::Size::ExtraSmall)
     .width(picker_width);
 
@@ -182,7 +183,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     // first), and whether a divider goes before it in the bar.
     let mut slots: Vec<(Element<'_, Message>, f32, Option<u8>, bool)> = vec![
         (
-            component::tip(picker, "Network interface"),
+            component::tip(picker, fl!("toolbar-interface")),
             picker_width,
             None,
             false,
@@ -191,9 +192,9 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
             component::toggle_tool(
                 Icon::FilterList,
                 if triib.settings.hide_virtual_interfaces {
-                    "Show virtual interfaces"
+                    fl!("toolbar-show-virtual")
                 } else {
-                    "Hide virtual interfaces"
+                    fl!("toolbar-hide-virtual")
                 },
                 triib.settings.hide_virtual_interfaces,
                 Message::VirtualInterfacesToggled,
@@ -204,9 +205,9 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         ),
         (
             component::group([
-                view_tool(Icon::GridOn, "Connections", View::Matrix),
-                view_tool(Icon::Hub, "Network", View::Network),
-                view_tool(Icon::ViewList, "Entities", View::Entities),
+                view_tool(Icon::GridOn, fl!("toolbar-connections"), View::Matrix),
+                view_tool(Icon::Hub, fl!("toolbar-network"), View::Network),
+                view_tool(Icon::ViewList, fl!("toolbar-entities"), View::Entities),
             ]),
             DIVIDER_WIDTH + TOOLBAR_GAP + tools(3.0),
             Some(3),
@@ -215,7 +216,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         (
             component::tool(
                 Icon::Refresh,
-                "Ask every entity to announce itself",
+                fl!("toolbar-rediscover"),
                 matches!(triib.network_state, NetworkState::Running { .. })
                     .then_some(Message::Rediscover),
             ),
@@ -227,8 +228,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let right = slots.len();
     slots.push((
         component::search_bar(
-            text_input("Search entities and streams", &triib.search)
-                .on_input(Message::SearchChanged),
+            text_input(&fl!("toolbar-search"), &triib.search).on_input(Message::SearchChanged),
             Vec::new(),
             SEARCH_WIDTH,
         ),
@@ -237,7 +237,11 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         false,
     ));
     slots.push((
-        component::tool(Icon::Bookmarks, "Presets", Some(Message::PresetsOpened)),
+        component::tool(
+            Icon::Bookmarks,
+            fl!("toolbar-presets"),
+            Some(Message::PresetsOpened),
+        ),
         TOOL_WIDTH,
         Some(1),
         false,
@@ -245,7 +249,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     slots.push((
         component::toggle_tool(
             Icon::History,
-            "Log",
+            fl!("toolbar-log"),
             triib.settings.log,
             Message::LogToggled,
         ),
@@ -256,7 +260,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     slots.push((
         component::toggle_tool(
             Icon::Info,
-            "Inspector",
+            fl!("toolbar-inspector"),
             triib.settings.inspector,
             Message::InspectorToggled,
         ),
@@ -265,7 +269,11 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         false,
     ));
     slots.push((
-        component::tool(Icon::Settings, "Settings", Some(Message::SettingsOpened)),
+        component::tool(
+            Icon::Settings,
+            fl!("toolbar-settings"),
+            Some(Message::SettingsOpened),
+        ),
         TOOL_WIDTH,
         Some(4),
         false,
@@ -313,16 +321,18 @@ fn network_state_view<'a>(triib: &'a Triib, state: &'a NetworkState) -> Element<
     match state {
         NetworkState::Idle => component::empty_state(
             Icon::Lan,
-            "No interface",
-            "Choose the interface on the AVB network to discover entities.",
+            fl!("state-no-interface"),
+            fl!("state-no-interface-note"),
         ),
-        NetworkState::Starting => {
-            component::empty_state(Icon::Lan, "Starting", format!("Opening {interface}."))
-        }
+        NetworkState::Starting => component::empty_state(
+            Icon::Lan,
+            fl!("state-starting"),
+            fl!("state-starting-note", interface = interface),
+        ),
         NetworkState::Running { .. } => component::empty_state(
             Icon::WifiTethering,
-            "Listening",
-            format!("Entities on {interface} appear here as they announce themselves."),
+            fl!("state-listening"),
+            fl!("state-listening-note", interface = interface),
         ),
         NetworkState::Failed(failure) => failure_view(interface, failure),
     }
@@ -331,13 +341,13 @@ fn network_state_view<'a>(triib: &'a Triib, state: &'a NetworkState) -> Element<
 fn failure_view<'a>(interface: &str, failure: &'a Failure) -> Element<'a, Message> {
     let (headline, action) = match &failure.fix {
         Some(fix) => (
-            "Permission needed".to_owned(),
-            button::with_icon(Kind::Tonal, Icon::ContentCopy, "Copy the command")
+            fl!("state-permission-needed"),
+            button::with_icon(Kind::Tonal, Icon::ContentCopy, fl!("state-copy-command"))
                 .on_press(Message::Copy(fix.clone())),
         ),
         None => (
-            format!("Cannot use {interface}"),
-            button::with_icon(Kind::Tonal, Icon::Refresh, "Try again")
+            fl!("state-cannot-use", interface = interface),
+            button::with_icon(Kind::Tonal, Icon::Refresh, fl!("state-try-again"))
                 .on_press(Message::RetryNetwork),
         ),
     };
@@ -381,8 +391,8 @@ fn content(triib: &Triib) -> Element<'_, Message> {
         View::Entities => match &triib.network_state {
             NetworkState::Running { .. } | NetworkState::Starting => component::empty_state(
                 Icon::ViewList,
-                "No entities yet",
-                "Every entity on the network, with its roles, SR classes and clock.",
+                fl!("entities-none-yet"),
+                fl!("entities-none-yet-note"),
             ),
             state => network_state_view(triib, state),
         },
@@ -396,26 +406,48 @@ fn content(triib: &Triib) -> Element<'_, Message> {
 fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
     let open = triib.inspector_tab;
     let body: Element<'_, Message> = match triib.selected {
-        None => note("Select an entity to see its details."),
+        None => note(fl!("inspector-select")),
         Some(entity_id) => match triib.entities.get(&entity_id) {
-            None => note(format!("{entity_id} is offline.")),
+            None => note(fl!("inspector-offline", entity = entity_id.to_string())),
             Some(entity) => entity_details(triib, entity, triib.models.get(&entity_id), open),
         },
     };
-    let tab = |label, glyph, tab: InspectorTab| component::Tab {
-        label,
+    let tab = |label: String, glyph, tab: InspectorTab| component::Tab {
+        label: crate::i18n::lasting(label),
         icon: Some(glyph),
         selected: open == tab,
         on_press: Message::InspectorTab(tab),
     };
     let tabs = component::tabs(vec![
-        tab("Entity", Icon::Info, InspectorTab::Entity),
-        tab("Streams", Icon::GraphicEq, InspectorTab::Streams),
-        tab("Controls", Icon::Tune, InspectorTab::Controls),
-        tab("Diagnostics", Icon::MonitorHeart, InspectorTab::Diagnostics),
-        tab("Descriptors", Icon::AccountTree, InspectorTab::Descriptors),
+        tab(fl!("inspector-entity"), Icon::Info, InspectorTab::Entity),
+        tab(
+            fl!("inspector-streams"),
+            Icon::GraphicEq,
+            InspectorTab::Streams,
+        ),
+        tab(
+            fl!("inspector-controls"),
+            Icon::Tune,
+            InspectorTab::Controls,
+        ),
+        tab(
+            fl!("inspector-diagnostics"),
+            Icon::MonitorHeart,
+            InspectorTab::Diagnostics,
+        ),
+        tab(
+            fl!("inspector-descriptors"),
+            Icon::AccountTree,
+            InspectorTab::Descriptors,
+        ),
     ]);
-    component::side_sheet_tabbed("Inspector", Message::InspectorToggled, tabs, body, width)
+    component::side_sheet_tabbed(
+        fl!("inspector-title"),
+        Message::InspectorToggled,
+        tabs,
+        body,
+        width,
+    )
 }
 
 /// A label and its value, in the inspector.
@@ -456,11 +488,7 @@ pub(crate) fn stacked<'a>(
 
 /// A name the entity holds with a button to edit it, or while it is
 /// edited a field to type it in.
-fn name_property<'a>(
-    triib: &'a Triib,
-    label: &'static str,
-    target: NameTarget,
-) -> Element<'a, Message> {
+fn name_property<'a>(triib: &'a Triib, label: String, target: NameTarget) -> Element<'a, Message> {
     if let Some((editing, text)) = &triib.editing
         && *editing == target
     {
@@ -471,34 +499,26 @@ fn name_property<'a>(
         .spacing(4)
         .into();
     }
-    labelled(label, name_line(triib, target, "Not set"))
+    labelled(label, name_line(triib, target, fl!("common-not-set")))
 }
 
 /// A name with a button to edit it, `unset` standing in for none, or
 /// while it is edited a field to type it in.
-fn name_line<'a>(
-    triib: &'a Triib,
-    target: NameTarget,
-    unset: &'static str,
-) -> Element<'a, Message> {
+fn name_line<'a>(triib: &'a Triib, target: NameTarget, unset: String) -> Element<'a, Message> {
     if let Some((editing, text)) = &triib.editing
         && *editing == target
     {
         return name_field(text);
     }
     let name = triib.current_name(target);
-    let shown = if name.is_empty() {
-        unset.to_owned()
-    } else {
-        name
-    };
+    let shown = if name.is_empty() { unset } else { name };
     iced::widget::row![
         styled(shown, Type::BodyMedium).width(Fill),
         component::tip(
             button::icon_button(Icon::Edit)
                 .size(Size::ExtraSmall)
                 .on_press(Message::EditName(target)),
-            "Rename",
+            fl!("inspector-rename"),
         ),
     ]
     .spacing(4)
@@ -509,7 +529,7 @@ fn name_line<'a>(
 /// The field a name is typed in, with buttons to save and cancel; Enter
 /// saves too.
 fn name_field<'a>(text: &str) -> Element<'a, Message> {
-    let icon = |glyph, label, message| {
+    let icon = |glyph, label: String, message| {
         component::tip(
             button::icon_button(glyph)
                 .size(Size::ExtraSmall)
@@ -518,15 +538,15 @@ fn name_field<'a>(text: &str) -> Element<'a, Message> {
         )
     };
     iced::widget::row![
-        text_input("Name", text)
+        text_input(&fl!("inspector-name"), text)
             .id(iced::widget::Id::new(NAME_FIELD))
             .on_input(Message::EditChanged)
             .on_submit(Message::EditSubmitted)
             .padding([6, 10])
             .style(style::outlined_field)
             .width(Fill),
-        icon(Icon::Check, "Save", Message::EditSubmitted),
-        icon(Icon::Close, "Cancel", Message::EditCancelled),
+        icon(Icon::Check, fl!("common-save"), Message::EditSubmitted),
+        icon(Icon::Close, fl!("common-cancel"), Message::EditCancelled),
     ]
     .spacing(4)
     .align_y(Center)
@@ -613,7 +633,7 @@ impl fmt::Display for Rate {
             3 => formatter.write_str(" × 24/25"),
             4 => formatter.write_str(" × 25/24"),
             5 => formatter.write_str(" × 1/8"),
-            pull => write!(formatter, ", pull {pull}"),
+            pull => write!(formatter, " {}", fl!("rate-pull", pull = pull)),
         }
     }
 }
@@ -679,7 +699,10 @@ pub(crate) fn source_picker<'a>(
         index,
         name: model
             .name_of(DescriptorType::CLOCK_SOURCE, index)
-            .map_or_else(|| format!("Source {index}"), str::to_owned),
+            .map_or_else(
+                || fl!("clock-source-numbered", index = index),
+                str::to_owned,
+            ),
     };
     let changing = triib
         .changing(|action| {
@@ -755,14 +778,14 @@ fn entity_details<'a>(
         let action = Action::Identify(entity_id);
         let busy = triib.pending.contains(&action);
         column = column.push(
-            button::with_icon(Kind::Tonal, Icon::Lightbulb, "Identify")
+            button::with_icon(Kind::Tonal, Icon::Lightbulb, fl!("inspector-identify"))
                 .on_press_maybe((!busy).then_some(Message::Act(action))),
         );
     }
     let Some(model) = model else {
         return match tab {
             InspectorTab::Entity => column.extend(advertisement_details(entity)).into(),
-            _ => column.push(note("Its entity model is not read.")).into(),
+            _ => column.push(note(fl!("inspector-model-not-read"))).into(),
         };
     };
     column = column.extend(model_state(model));
@@ -772,17 +795,20 @@ fn entity_details<'a>(
             items.extend(advertisement_details(entity));
             items
         }
-        InspectorTab::Streams => or_note(stream_sections(triib, entity_id, model), "No streams."),
+        InspectorTab::Streams => or_note(
+            stream_sections(triib, entity_id, model),
+            fl!("inspector-no-streams"),
+        ),
         InspectorTab::Controls => or_note(
             crate::controls_view::controls(triib, entity_id, model),
-            "No controls to show.",
+            fl!("inspector-no-controls"),
         ),
         InspectorTab::Diagnostics => {
             let mut items = crate::lite_view::entity_alarms(triib, entity_id);
             items.extend(interface_sections(model));
             items.extend(crate::lite_view::bandwidth(model));
             items.extend(crate::diagnostics_view::diagnostics(model));
-            or_note(items, "No interfaces or counters reported.")
+            or_note(items, fl!("inspector-no-diagnostics"))
         }
         InspectorTab::Descriptors => descriptor_tree(triib, entity_id, model),
     };
@@ -790,7 +816,7 @@ fn entity_details<'a>(
 }
 
 /// `items`, or `text` when there are none.
-fn or_note<'a>(items: Vec<Element<'a, Message>>, text: &'static str) -> Vec<Element<'a, Message>> {
+fn or_note<'a>(items: Vec<Element<'a, Message>>, text: String) -> Vec<Element<'a, Message>> {
     if items.is_empty() {
         vec![note(text)]
     } else {
@@ -810,7 +836,7 @@ fn model_state<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
     match model.state {
         EnumerationState::Reading => items.push(
             styled(
-                format!("Reading descriptors, {} so far.", model.descriptor_count()),
+                fl!("inspector-reading", count = model.descriptor_count()),
                 Type::BodyMedium,
             )
             .style(style::on_surface_variant)
@@ -818,10 +844,7 @@ fn model_state<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
         ),
         EnumerationState::Failed(failure) => items.push(
             styled(
-                format!(
-                    "Could not read the entity model: {}.",
-                    describe::failure(failure)
-                ),
+                fl!("inspector-read-failed", reason = describe::failure(failure)),
                 Type::BodyMedium,
             )
             .style(style::error_text)
@@ -843,7 +866,7 @@ fn entity_sections<'a>(
     let mut items = Vec::new();
     let or_unset = |text: &str| {
         if text.is_empty() {
-            "Not set".to_owned()
+            fl!("common-not-set")
         } else {
             text.to_owned()
         }
@@ -855,13 +878,16 @@ fn entity_sections<'a>(
         name_index,
     };
     if let Some(descriptor) = model.entity() {
-        items.push(component::section("Entity"));
-        items.push(name_property(triib, "Name", entity_name(0)));
-        items.push(name_property(triib, "Group", entity_name(1)));
-        items.push(property("Product", describe::product(model)));
-        items.push(property("Firmware", or_unset(descriptor.firmware_version)));
+        items.push(component::section(fl!("entity-section")));
+        items.push(name_property(triib, fl!("entity-name"), entity_name(0)));
+        items.push(name_property(triib, fl!("entity-group"), entity_name(1)));
+        items.push(property(fl!("entity-product"), describe::product(model)));
         items.push(property(
-            "Serial number",
+            fl!("entity-firmware"),
+            or_unset(descriptor.firmware_version),
+        ));
+        items.push(property(
+            fl!("entity-serial-number"),
             or_unset(descriptor.serial_number),
         ));
         let configuration = model
@@ -870,24 +896,24 @@ fn entity_sections<'a>(
                 descriptor.current_configuration,
             )
             .map(|name| {
-                format!(
-                    "{name} ({} of {})",
-                    descriptor.current_configuration + 1,
-                    descriptor.configurations_count
+                fl!(
+                    "entity-configuration-of",
+                    name = name,
+                    number = (descriptor.current_configuration + 1),
+                    count = descriptor.configurations_count
                 )
             })
             .unwrap_or_else(|| (descriptor.current_configuration + 1).to_string());
-        items.push(property("Configuration", configuration));
-        items.push(property("Milan", describe::milan(model)));
+        items.push(property(fl!("entity-configuration"), configuration));
+        items.push(property(fl!("entity-milan"), describe::milan(model)));
     }
     let domains: Vec<_> = model.clock_domains().collect();
     if !domains.is_empty() {
-        items.push(component::section("Media clock"));
+        items.push(component::section(fl!("entity-media-clock")));
         for domain in domains {
             let name = model
                 .name_of(DescriptorType::CLOCK_DOMAIN, domain.index)
-                .unwrap_or("Clock domain")
-                .to_owned();
+                .map_or_else(|| fl!("entity-clock-domain"), str::to_owned);
             items.push(stacked(
                 name,
                 source_picker(triib, entity_id, model, &domain)
@@ -896,7 +922,7 @@ fn entity_sections<'a>(
         }
         for unit in model.audio_units() {
             items.push(stacked(
-                "Sampling rate",
+                fl!("entity-sampling-rate"),
                 rate_picker(triib, entity_id, &unit),
             ));
         }
@@ -913,7 +939,7 @@ fn stream_sections<'a>(
     model: &'a EntityModel,
 ) -> Vec<Element<'a, Message>> {
     let mut items = Vec::new();
-    for (input, title) in [(true, "Stream inputs"), (false, "Stream outputs")] {
+    for (input, title) in [(true, fl!("stream-inputs")), (false, fl!("stream-outputs"))] {
         let streams: Vec<_> = model.streams(input).collect();
         if streams.is_empty() {
             continue;
@@ -927,7 +953,7 @@ fn stream_sections<'a>(
                 name_index: 0,
             };
             let mut lines = iced::widget::column![
-                name_line(triib, target, "Unnamed"),
+                name_line(triib, target, fl!("common-unnamed")),
                 format_picker(triib, entity_id, &stream),
             ]
             .spacing(2);
@@ -940,7 +966,10 @@ fn stream_sections<'a>(
             {
                 lines = lines.push(
                     styled(
-                        format!("Max transit time {}", describe::milliseconds(nanoseconds)),
+                        fl!(
+                            "stream-max-transit-time",
+                            time = describe::milliseconds(nanoseconds)
+                        ),
                         Type::BodySmall,
                     )
                     .style(style::on_surface_variant),
@@ -958,7 +987,7 @@ fn interface_sections<'a>(model: &'a EntityModel) -> Vec<Element<'a, Message>> {
     let mut items = Vec::new();
     let interfaces: Vec<_> = model.avb_interfaces().collect();
     if !interfaces.is_empty() {
-        items.push(component::section("AVB interfaces"));
+        items.push(component::section(fl!("avb-interfaces")));
         for interface in interfaces {
             items.extend(interface_details(model, &interface));
         }
@@ -974,23 +1003,26 @@ fn interface_details<'a>(
 ) -> Vec<Element<'a, Message>> {
     let name = model
         .name_of(DescriptorType::AVB_INTERFACE, interface.index)
-        .unwrap_or("Interface")
-        .to_owned();
+        .map_or_else(|| fl!("avb-interface"), str::to_owned);
     let mut items = vec![
         styled(name, Type::TitleSmall).into(),
-        property("MAC address", interface.mac_address.to_string()),
-        property("Clock identity", interface.clock_identity.to_string()),
+        property(fl!("common-mac-address"), interface.mac_address.to_string()),
+        property(
+            fl!("avb-interface-clock-identity"),
+            interface.clock_identity.to_string(),
+        ),
     ];
     if let Some(info) = model.avb_info(interface.index) {
         items.push(property(
-            "Grandmaster",
-            format!(
-                "{}, domain {}",
-                info.gptp_grandmaster_id, info.gptp_domain_number
+            fl!("avb-interface-grandmaster"),
+            fl!(
+                "avb-interface-grandmaster-domain",
+                grandmaster = info.gptp_grandmaster_id.to_string(),
+                domain = info.gptp_domain_number
             ),
         ));
         items.push(property(
-            "Peer delay",
+            fl!("avb-interface-peer-delay"),
             format!("{} ns", info.propagation_delay),
         ));
         let flags: Vec<String> = [
@@ -1003,22 +1035,21 @@ fn interface_details<'a>(
         .map(|(_, name)| name.to_owned())
         .collect();
         items.push(property(
-            "Running",
+            fl!("avb-interface-running"),
             if flags.is_empty() {
-                "None reported".to_owned()
+                fl!("avb-interface-none-reported")
             } else {
-                flags.join(", ")
+                crate::i18n::list(flags)
             },
         ));
     }
     if let Some(path) = model.as_path(interface.index) {
         let hops = path.len().saturating_sub(1);
         items.push(property(
-            "Path",
+            fl!("avb-interface-path"),
             match hops {
-                0 => "Its own grandmaster".to_owned(),
-                1 => "1 hop from the grandmaster".to_owned(),
-                hops => format!("{hops} hops from the grandmaster"),
+                0 => fl!("avb-interface-own-grandmaster"),
+                hops => fl!("avb-interface-hops", count = hops),
             },
         ));
     }
@@ -1027,12 +1058,15 @@ fn interface_details<'a>(
         .and_then(|counters| counters.avb_interface())
     {
         for (label, value) in [
-            ("Link up", counters.link_up),
-            ("Link down", counters.link_down),
-            ("Grandmaster changes", counters.gptp_gm_changed),
-            ("Frames sent", counters.frames_tx),
-            ("Frames received", counters.frames_rx),
-            ("CRC errors", counters.rx_crc_error),
+            (fl!("avb-interface-link-up"), counters.link_up),
+            (fl!("avb-interface-link-down"), counters.link_down),
+            (
+                fl!("avb-interface-grandmaster-changes"),
+                counters.gptp_gm_changed,
+            ),
+            (fl!("avb-interface-frames-sent"), counters.frames_tx),
+            (fl!("avb-interface-frames-received"), counters.frames_rx),
+            (fl!("avb-interface-crc-errors"), counters.rx_crc_error),
         ] {
             if let Some(value) = value {
                 items.push(property(label, value.to_string()));
@@ -1115,7 +1149,7 @@ fn descriptor_tree<'a>(
             let (title, detail) = match (name, detail) {
                 (Some(name), detail) => (name, detail),
                 (None, Some(detail)) if !descriptor_type.has_object_name() => (detail, None),
-                (None, detail) => ("Unnamed".to_owned(), detail),
+                (None, detail) => (fl!("common-unnamed"), detail),
             };
             let mut lines = iced::widget::column![styled(title, Type::BodyMedium)];
             if let Some(detail) = detail {
@@ -1150,13 +1184,13 @@ fn descriptor_detail(
     match descriptor_type {
         DescriptorType::ENTITY => EntityDescriptor::decode(bytes)
             .ok()
-            .map(|entity| format!("Firmware {}", entity.firmware_version)),
+            .map(|entity| fl!("tree-firmware", version = entity.firmware_version)),
         DescriptorType::CONFIGURATION => {
             ConfigurationDescriptor::decode(bytes)
                 .ok()
                 .map(|configuration| {
                     let types = configuration.descriptor_counts().count();
-                    format!("{types} descriptor types")
+                    fl!("tree-descriptor-types", count = types)
                 })
         }
         DescriptorType::AUDIO_UNIT => AudioUnitDescriptor::decode(bytes)
@@ -1174,16 +1208,16 @@ fn descriptor_detail(
             let kind = source
                 .clock_source_type
                 .name()
-                .map_or_else(|| "Clock".to_owned(), describe::flag_name);
+                .map_or_else(|| fl!("tree-clock"), describe::flag_name);
             match source.location_type {
                 DescriptorType::ENTITY => kind,
-                location => format!(
-                    "{kind}, from {} {}",
-                    location
+                location => fl!(
+                    "tree-clock-source-from",
+                    kind = kind,
+                    location = location
                         .name()
-                        .map_or_else(|| format!("{location:?}"), describe::flag_name)
-                        .to_lowercase(),
-                    source.location_index
+                        .map_or_else(|| format!("{location:?}"), describe::flag_name),
+                    index = source.location_index
                 ),
             }
         }),
@@ -1191,10 +1225,10 @@ fn descriptor_detail(
             let source = model
                 .name_of(DescriptorType::CLOCK_SOURCE, domain.clock_source_index)
                 .map_or_else(
-                    || format!("source {}", domain.clock_source_index),
+                    || fl!("clock-source-numbered", index = domain.clock_source_index),
                     str::to_owned,
                 );
-            format!("Using {source}")
+            fl!("tree-clock-domain-using", source = source)
         }),
         DescriptorType::LOCALE => LocaleDescriptor::decode(bytes)
             .ok()
@@ -1206,18 +1240,14 @@ fn descriptor_detail(
                 .copied()
                 .filter(|text| !text.is_empty())
                 .collect();
-            used.join(", ")
+            crate::i18n::list(used.into_iter().map(str::to_owned))
         }),
         DescriptorType::STREAM_PORT_INPUT | DescriptorType::STREAM_PORT_OUTPUT => {
             StreamPortDescriptor::decode(bytes).ok().map(|port| {
-                let count = |count: u16, one: &str, many: &str| {
-                    format!("{count} {}", if count == 1 { one } else { many })
-                };
-                format!(
-                    "{}, {}",
-                    count(port.number_of_clusters, "cluster", "clusters"),
-                    count(port.number_of_maps, "map", "maps")
-                )
+                crate::i18n::list([
+                    fl!("tree-clusters", count = port.number_of_clusters),
+                    fl!("tree-maps", count = port.number_of_maps),
+                ])
             })
         }
         _ => None,
@@ -1232,56 +1262,71 @@ fn advertisement_details(entity: &DiscoveredEntity) -> Vec<Element<'_, Message>>
         if capabilities.contains(flag) {
             index.to_string()
         } else {
-            "Not advertised".to_owned()
+            fl!("advert-not-advertised")
         }
     };
     let mut items = vec![
-        component::section("Identity"),
-        property("Entity ID", adp.entity_id.to_string()),
-        property("MAC address", entity.mac.to_string()),
-        property("Entity model", adp.entity_model_id.to_string()),
-        component::section("Roles"),
-        property("Roles", describe::roles(adp)),
-        property("Talker", flags_text(adp.talker_capabilities.names())),
-        property("Listener", flags_text(adp.listener_capabilities.names())),
-        component::section("Clock"),
-        property("BTC", describe::clock(adp)),
-        property("gPTP domain", adp.gptp_domain_number.to_string()),
-        property("SR classes", describe::classes(adp).to_owned()),
-        component::section("Entity model indexes"),
+        component::section(fl!("advert-identity")),
+        property(fl!("advert-entity-id"), adp.entity_id.to_string()),
+        property(fl!("common-mac-address"), entity.mac.to_string()),
+        property(fl!("advert-entity-model"), adp.entity_model_id.to_string()),
+        component::section(fl!("advert-roles")),
+        property(fl!("advert-roles"), describe::roles(adp)),
         property(
-            "Configuration",
+            fl!("advert-talker"),
+            flags_text(adp.talker_capabilities.names()),
+        ),
+        property(
+            fl!("advert-listener"),
+            flags_text(adp.listener_capabilities.names()),
+        ),
+        component::section(fl!("advert-clock")),
+        property(fl!("advert-btc"), describe::clock(adp)),
+        property(
+            fl!("advert-gptp-domain"),
+            adp.gptp_domain_number.to_string(),
+        ),
+        property(fl!("advert-sr-classes"), describe::classes(adp)),
+        component::section(fl!("advert-indexes")),
+        property(
+            fl!("entity-configuration"),
             indexed(
                 EntityCapabilities::AEM_CONFIGURATION_INDEX_VALID,
                 adp.current_configuration_index,
             ),
         ),
         property(
-            "Identify control",
+            fl!("advert-identify-control"),
             indexed(
                 EntityCapabilities::AEM_IDENTIFY_CONTROL_INDEX_VALID,
                 adp.identify_control_index,
             ),
         ),
         property(
-            "AVB interface",
+            fl!("advert-avb-interface"),
             indexed(
                 EntityCapabilities::AEM_INTERFACE_INDEX_VALID,
                 adp.interface_index,
             ),
         ),
-        component::section("Advertising"),
-        property("Valid time", format!("{} s", adp.valid_seconds())),
-        property("Available index", adp.available_index.to_string()),
+        component::section(fl!("advert-advertising")),
         property(
-            "Association",
+            fl!("advert-valid-time"),
+            format!("{} s", adp.valid_seconds()),
+        ),
+        property(
+            fl!("advert-available-index"),
+            adp.available_index.to_string(),
+        ),
+        property(
+            fl!("advert-association"),
             if capabilities.contains(EntityCapabilities::ASSOCIATION_ID_VALID) {
                 format!("0x{:016x}", adp.association_id)
             } else {
-                "None".to_owned()
+                fl!("common-none")
             },
         ),
-        component::section("Capabilities"),
+        component::section(fl!("advert-capabilities")),
     ];
     for name in capabilities.names() {
         items.push(styled(describe::flag_name(name), Type::BodyMedium).into());
@@ -1296,9 +1341,9 @@ fn flags_text<'a>(names: impl Iterator<Item = &'a str>) -> String {
         .map(describe::flag_name)
         .collect();
     if words.is_empty() {
-        "None".to_owned()
+        fl!("common-none")
     } else {
-        words.join(", ")
+        crate::i18n::list(words)
     }
 }
 
@@ -1314,27 +1359,38 @@ fn status_bar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let full = width >= STATUS_FULL;
     let link = match triib.interface() {
         Some(interface) => {
-            let mut text = interface.name.clone();
-            text.push_str(if interface.up { ", up" } else { ", link down" });
+            let mut parts = vec![
+                interface.name.clone(),
+                if interface.up {
+                    fl!("interface-up")
+                } else {
+                    fl!("interface-link-down")
+                },
+            ];
             if let Some(clock) = interface.hardware_clock {
-                text.push_str(&format!(", hardware clock ptp{clock}"));
+                parts.push(fl!(
+                    "interface-hardware-clock-named",
+                    clock = format!("ptp{clock}")
+                ));
             }
-            text
+            crate::i18n::list(parts)
         }
-        None => "No interface".to_owned(),
+        None => fl!("state-no-interface"),
     };
     let label =
         |content: String| styled(content, Type::LabelMedium).style(style::on_surface_variant);
     let count = triib.entities.len();
-    let entities = format!("{count} {}", if count == 1 { "entity" } else { "entities" });
+    let entities = fl!("status-entities", count = count);
     let notice = triib.notice.clone();
     let state = match &triib.network_state {
-        NetworkState::Idle => "Not discovering".to_owned(),
-        NetworkState::Starting => "Starting".to_owned(),
-        NetworkState::Running { controller } if full => format!("Discovering as {controller}"),
-        NetworkState::Running { .. } => "Discovering".to_owned(),
-        NetworkState::Failed(failure) if failure.fix.is_some() => "Permission needed".to_owned(),
-        NetworkState::Failed(_) => "Stopped by an error".to_owned(),
+        NetworkState::Idle => fl!("status-not-discovering"),
+        NetworkState::Starting => fl!("state-starting"),
+        NetworkState::Running { controller } if full => {
+            fl!("status-discovering-as", controller = controller.to_string())
+        }
+        NetworkState::Running { .. } => fl!("status-discovering"),
+        NetworkState::Failed(failure) if failure.fix.is_some() => fl!("state-permission-needed"),
+        NetworkState::Failed(_) => fl!("status-stopped"),
     };
     container(
         iced::widget::row![
@@ -1382,12 +1438,20 @@ fn alarm_line(triib: &Triib, full: bool) -> Element<'_, Message> {
         return space().into();
     };
     let mut text = if full {
-        format!("{}: {}", triib.entity_name_of(first.entity), first.text)
+        fl!(
+            "status-alarm-of",
+            entity = triib.entity_name_of(first.entity),
+            alarm = first.text.clone()
+        )
     } else {
-        "Alarm".to_owned()
+        fl!("status-alarm")
     };
     if alarms.len() > 1 {
-        text.push_str(&format!(" and {} more", alarms.len() - 1));
+        text = fl!(
+            "status-alarm-more",
+            alarm = text,
+            count = (alarms.len() - 1)
+        );
     }
     iced::widget::mouse_area(
         iced::widget::row![

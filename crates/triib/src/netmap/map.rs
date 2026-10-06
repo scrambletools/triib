@@ -1207,7 +1207,7 @@ impl NetMap {
                     .dashed(&[5.0, 4.0]),
             );
             frame.fill_text(Text {
-                content: "NOT ON THE gPTP TREE".to_owned(),
+                content: crate::fl!("netmap-off-tree-band"),
                 position: Point::new(band.x + BAND_PADDING, band.y + BAND_LABEL / 2.0),
                 color: colors.muted,
                 size: Pixels(11.0),
