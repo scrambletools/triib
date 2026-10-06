@@ -108,7 +108,7 @@ pub fn media_clock(model: &EntityModel) -> String {
 pub fn milliseconds(nanoseconds: u64) -> String {
     let text = format!("{:.3}", nanoseconds as f64 / 1e6);
     let text = text.trim_end_matches('0').trim_end_matches('.');
-    format!("{text} ms")
+    format!("{} ms", crate::i18n::decimal(text.to_owned()))
 }
 
 /// How far reading an entity's model got, in a few words.
@@ -369,11 +369,7 @@ pub fn name_words(name: &str, capital: bool) -> String {
 }
 
 fn capitalized(text: &str) -> String {
-    let mut characters = text.chars();
-    match characters.next() {
-        Some(first) => first.to_uppercase().chain(characters).collect(),
-        None => String::new(),
-    }
+    crate::i18n::capitalized(text)
 }
 
 /// What an MSRP failure code means (IEEE 802.1Q, 35.2.2.8.7).

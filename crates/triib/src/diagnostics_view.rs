@@ -206,11 +206,7 @@ fn item<'a>(name: &str, facts: Facts) -> Option<Element<'a, Message>> {
 }
 
 fn capitalized(text: &str) -> String {
-    let mut characters = text.chars();
-    characters
-        .next()
-        .map(|first| first.to_uppercase().chain(characters).collect())
-        .unwrap_or_default()
+    crate::i18n::capitalized(text)
 }
 
 #[cfg(test)]

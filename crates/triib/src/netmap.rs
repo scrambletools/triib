@@ -1327,7 +1327,8 @@ impl Page {
             color: Some(map::text_color(&Scheme::of(theme), state_paint)),
         };
         let mut body = column![
-            styled(self.kicker.to_uppercase(), Type::LabelSmall).style(style::on_surface_variant),
+            styled(crate::i18n::uppercase(&self.kicker), Type::LabelSmall)
+                .style(style::on_surface_variant),
             row![
                 swatch(self.swatch),
                 column![

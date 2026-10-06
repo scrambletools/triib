@@ -45,14 +45,15 @@ fn select(loader: &FluentLanguageLoader) {
 /// language tag such as `he` or `pt-BR`, for trying translations), then
 /// the one chosen in Settings, then the system's.
 fn requested_languages() -> Vec<LanguageIdentifier> {
-    // Tests compare English text, whatever the machine's language.
-    if cfg!(test) {
-        return vec!["en".parse().expect("a language tag")];
-    }
     let chosen = CHOSEN
         .read()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
+    // Tests compare English text, whatever the machine's language, unless
+    // one picks a language, as the pictures do.
+    if cfg!(test) {
+        return vec![chosen.unwrap_or_else(|| "en".parse().expect("a language tag"))];
+    }
     let mut languages: Vec<LanguageIdentifier> = std::env::var("TRIIB_LANG")
         .ok()
         .and_then(|tag| tag.parse().ok())
@@ -139,6 +140,61 @@ pub fn lasting(text: String) -> &'static str {
     let text: &'static str = Box::leak(text.into_boxed_str());
     kept.insert(text);
     text
+}
+
+/// `text` in capitals as the interface's language writes them.
+pub fn uppercase(text: &str) -> String {
+    uppercase_in(LOADER.current_language().language.as_str(), text)
+}
+
+/// `text` with a capital first letter, as the interface's language writes
+/// it.
+pub fn capitalized(text: &str) -> String {
+    let mut characters = text.chars();
+    match characters.next() {
+        Some(first) => {
+            uppercase_in(
+                LOADER.current_language().language.as_str(),
+                &first.to_string(),
+            ) + characters.as_str()
+        }
+        None => String::new(),
+    }
+}
+
+/// `text` in capitals in the language with code `language`: Turkish and
+/// Azerbaijani capitalize i as İ, and Greek drops its accents in capitals.
+fn uppercase_in(language: &str, text: &str) -> String {
+    match language {
+        "tr" | "az" => text.replace('i', "İ").to_uppercase(),
+        "el" => text
+            .to_uppercase()
+            .chars()
+            .filter(|&character| character != '\u{301}')
+            .map(|character| match character {
+                'Ά' => 'Α',
+                'Έ' => 'Ε',
+                'Ή' => 'Η',
+                'Ί' => 'Ι',
+                'Ό' => 'Ο',
+                'Ύ' => 'Υ',
+                'Ώ' => 'Ω',
+                other => other,
+            })
+            .collect(),
+        _ => text.to_uppercase(),
+    }
+}
+
+/// A number formatted with a point, written with the language's decimal
+/// mark: "44.1" as "44,1" in German.
+pub fn decimal(text: String) -> String {
+    let mark = crate::fl!("common-decimal-separator");
+    if mark == "." {
+        text
+    } else {
+        text.replace('.', &mark)
+    }
 }
 
 /// Parts of a description joined as the language lists them, such as
@@ -236,8 +292,9 @@ mod tests {
 
     /// The words of the standards, the names and the units in a message,
     /// which every language keeps as written: AVB, gPTP, CRF, AECP, Milan,
-    /// kHz, Mb/s. They are the words with two capitals or a capital after a
-    /// small letter, the names and the units; Fluent's selector lines are
+    /// kHz, Mb/s. They are the Latin words with two capitals or a capital
+    /// after a small letter, the names and the units, each ending where
+    /// another script starts, as in "triibは"; Fluent's selector lines are
     /// left out.
     fn kept_words(text: &str) -> BTreeSet<String> {
         const NAMES: [&str; 2] = ["Milan", "triib"];
@@ -247,7 +304,9 @@ mod tests {
                 let line = line.trim_start();
                 !(line.starts_with('[') || line.starts_with("*["))
             })
-            .flat_map(|line| line.split(|c: char| !(c.is_alphanumeric() || c == '/' || c == '.')))
+            .flat_map(|line| {
+                line.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | 'µ')))
+            })
             .map(|word| word.trim_matches(|c| c == '.' || c == '/'))
             .filter(|word| {
                 let capitals = word.chars().filter(char::is_ascii_uppercase).count();
@@ -339,14 +398,62 @@ mod tests {
         }
     }
 
+    /// Count messages render in every language and pick the forms their
+    /// plural rules give: in Russian, 2 and 3 take one form and 5 another.
+    /// Larger counts show their number; small ones may say it in words,
+    /// as Arabic says one and two.
+    #[test]
+    fn counts_pick_their_plural_forms() {
+        let render = |language: &str, key: &str, count: i64| {
+            let loader = fluent_language_loader!();
+            let id: LanguageIdentifier = language.parse().unwrap();
+            loader.load_languages(&Localizations, &[id]).unwrap();
+            loader.set_use_isolating(false);
+            let mut args = std::collections::HashMap::new();
+            args.insert("count", count);
+            loader.get_args(key, args)
+        };
+        for language in languages() {
+            for key in [
+                "status-entities",
+                "matrix-hidden",
+                "netmap-passing-count",
+                "presets-connections",
+            ] {
+                for count in [0, 1, 2, 5, 21] {
+                    let text = render(&language, key, count);
+                    assert!(
+                        (count < 3 || text.contains(&count.to_string()))
+                            && !text.trim().is_empty()
+                            && !text.contains("No localization"),
+                        "{language}: `{key}` with {count} gave {text:?}"
+                    );
+                }
+            }
+        }
+        let russian = |count| render("ru", "status-entities", count);
+        assert_eq!(russian(2).replace('2', "3"), russian(3));
+        assert_ne!(russian(2).replace('2', "5"), russian(5));
+    }
+
+    #[test]
+    fn capitals_follow_the_language() {
+        assert_eq!(uppercase_in("tr", "gPTP ağacı içinde"), "GPTP AĞACI İÇİNDE");
+        assert_eq!(uppercase_in("el", "εκτός δέντρου"), "ΕΚΤΟΣ ΔΕΝΤΡΟΥ");
+        assert_eq!(uppercase_in("en", "not on the tree"), "NOT ON THE TREE");
+        assert_eq!(capitalized("talker 2"), "Talker 2");
+    }
+
     #[test]
     fn the_standards_words_and_units_are_found() {
-        let words =
-            kept_words("Milan 1.3 over AVB with gPTP, 48 kHz at 100 Mb/s, 3 µs; AECP said so");
-        let expected: BTreeSet<String> = ["Milan", "AVB", "gPTP", "kHz", "Mb/s", "µs", "AECP"]
-            .into_iter()
-            .map(str::to_owned)
-            .collect();
+        let words = kept_words(
+            "Milan 1.3 over AVB with gPTP, 48 kHz at 100 Mb/s, 3 µs; AECP said so in triibで",
+        );
+        let expected: BTreeSet<String> =
+            ["Milan", "AVB", "gPTP", "kHz", "Mb/s", "µs", "AECP", "triib"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
         assert_eq!(words, expected);
     }
 }

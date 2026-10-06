@@ -1,0 +1,661 @@
+# triib's interface text in Spanish. The source is i18n/en/triib.ftl; term
+# choices are in docs/glossary/es.md.
+
+## Language
+
+language-name = Español
+
+## Common
+
+common-close = Cerrar
+common-more = Más
+common-keep-toolbar-shown = Mantener visible la barra de herramientas
+common-auto-hide-toolbar = Ocultar la barra de herramientas automáticamente
+
+## Settings
+
+settings-title = Ajustes
+settings-general = General
+settings-appearance = Apariencia
+settings-language = Idioma
+settings-language-system = Predeterminado del sistema: { $language }
+settings-language-note = En los campos de texto se escribe con el idioma de entrada del sistema.
+settings-appearance-system = Sistema
+settings-appearance-light = Claro
+settings-appearance-dark = Oscuro
+settings-colors = Colores
+settings-system-accent = Usar el color de énfasis del sistema
+settings-accent-picked = Los colores de triib parten del color de abajo.
+settings-accent-omarchy = Del tema de Omarchy, { $theme }.
+settings-accent-desktop = Del color de énfasis del escritorio.
+settings-accent-none = El escritorio no tiene color de énfasis, así que se usa el color de abajo.
+settings-motion = Movimiento
+settings-animations = Animaciones
+settings-animations-note = Rebotes y deslizamientos cuando algo cambia.
+settings-animations-reduced = El escritorio pide movimiento reducido, así que triib se queda quieto.
+
+common-cancel = Cancelar
+common-save = Guardar
+common-not-set = Sin definir
+common-unnamed = Sin nombre
+common-none = Ninguno
+common-mac-address = Dirección MAC
+common-list-separator = {", "}
+
+## Network interfaces
+
+interface-up = activa
+interface-link-down = enlace caído
+interface-wireless = inalámbrica
+interface-hardware-clock = reloj de hardware
+interface-hardware-clock-named = reloj de hardware { $clock }
+interface-virtual = virtual
+
+## Toolbar
+
+toolbar-choose-interface = Elegir una interfaz
+toolbar-interface = Interfaz de red
+toolbar-show-virtual = Mostrar interfaces virtuales
+toolbar-hide-virtual = Ocultar interfaces virtuales
+toolbar-connections = Conexiones
+toolbar-network = Red
+toolbar-entities = Entidades
+toolbar-rediscover = Pedir a todas las entidades que se anuncien
+toolbar-search = Buscar entidades y flujos
+toolbar-presets = Presets
+toolbar-log = Registro
+toolbar-inspector = Inspector
+toolbar-settings = Ajustes
+
+## The network's state, in place of a view
+
+state-no-interface = Sin interfaz
+state-no-interface-note = Elige la interfaz de la red AVB para descubrir entidades.
+state-starting = Iniciando
+state-starting-note = Abriendo { $interface }.
+state-listening = Escuchando
+state-listening-note = Las entidades de { $interface } aparecen aquí a medida que se anuncian.
+state-permission-needed = Se necesita permiso
+state-copy-command = Copiar el comando
+state-cannot-use = No se puede usar { $interface }
+state-try-again = Reintentar
+
+## Entity list
+
+entities-none-yet = Aún no hay entidades
+entities-none-yet-note = Todas las entidades de la red, con sus roles, clases SR y reloj.
+
+## Inspector
+
+inspector-title = Inspector
+inspector-entity = Entidad
+inspector-streams = Flujos
+inspector-controls = Controles
+inspector-diagnostics = Diagnóstico
+inspector-descriptors = Descriptores
+inspector-select = Selecciona una entidad para ver sus detalles.
+inspector-offline = { $entity } está fuera de línea.
+inspector-rename = Cambiar nombre
+inspector-name = Nombre
+inspector-identify = Identificar
+inspector-model-not-read = Su modelo de entidad no se ha leído.
+inspector-no-streams = Sin flujos.
+inspector-no-controls = No hay controles que mostrar.
+inspector-no-diagnostics = No informa de interfaces ni de contadores.
+inspector-reading = Leyendo descriptores, { $count } hasta ahora.
+inspector-read-failed = No se pudo leer el modelo de entidad: { $reason }.
+
+entity-section = Entidad
+entity-name = Nombre
+entity-group = Grupo
+entity-product = Producto
+entity-firmware = Firmware
+entity-serial-number = Número de serie
+entity-configuration = Configuración
+entity-configuration-of = { $name } ({ $number } de { $count })
+entity-milan = Milan
+entity-media-clock = Reloj de medios
+entity-clock-domain = Dominio de reloj
+entity-sampling-rate = Frecuencia de muestreo
+clock-source-numbered = Fuente { $index }
+rate-pull = pull { $pull }
+
+stream-inputs = Entradas de flujo
+stream-outputs = Salidas de flujo
+stream-max-transit-time = Tiempo de tránsito máx. { $time }
+
+avb-interfaces = Interfaces AVB
+avb-interface = Interfaz
+avb-interface-clock-identity = Identidad del reloj
+avb-interface-grandmaster = Grandmaster
+avb-interface-grandmaster-domain = { $grandmaster }, dominio { $domain }
+avb-interface-peer-delay = Peer delay
+avb-interface-running = En ejecución
+avb-interface-none-reported = No informa ninguno
+avb-interface-path = Ruta
+avb-interface-own-grandmaster = Es su propio grandmaster
+avb-interface-hops = { $count ->
+    [one] A { $count } salto del grandmaster
+    [many] A { $count } saltos del grandmaster
+   *[other] A { $count } saltos del grandmaster
+}
+avb-interface-link-up = Enlace activo
+avb-interface-link-down = Enlace caído
+avb-interface-grandmaster-changes = Cambios de grandmaster
+avb-interface-frames-sent = Tramas enviadas
+avb-interface-frames-received = Tramas recibidas
+avb-interface-crc-errors = Errores CRC
+
+tree-firmware = Firmware { $version }
+tree-descriptor-types = { $count ->
+    [one] { $count } tipo de descriptor
+    [many] { $count } tipos de descriptor
+   *[other] { $count } tipos de descriptor
+}
+tree-clock = Reloj
+tree-clock-source-from = { $kind }, desde { $location } { $index }
+tree-clock-domain-using = Usa { $source }
+tree-clusters = { $count ->
+    [one] { $count } clúster
+    [many] { $count } clústeres
+   *[other] { $count } clústeres
+}
+tree-maps = { $count ->
+    [one] { $count } mapa
+    [many] { $count } mapas
+   *[other] { $count } mapas
+}
+
+advert-not-advertised = Sin anunciar
+advert-identity = Identidad
+advert-entity-id = ID de entidad
+advert-entity-model = Modelo de entidad
+advert-roles = Roles
+advert-talker = Talker
+advert-listener = Listener
+advert-clock = Reloj
+advert-btc = BTC
+advert-gptp-domain = Dominio gPTP
+advert-sr-classes = Clases SR
+advert-indexes = Índices del modelo de entidad
+advert-identify-control = Control de identificación
+advert-avb-interface = Interfaz AVB
+advert-advertising = Anuncio
+advert-valid-time = Tiempo de validez
+advert-available-index = Índice de disponibilidad
+advert-association = Asociación
+advert-capabilities = Capacidades
+
+## Status bar
+
+status-entities = { $count ->
+    [one] { $count } entidad
+    [many] { $count } entidades
+   *[other] { $count } entidades
+}
+status-not-discovering = Descubrimiento inactivo
+status-discovering = Descubriendo
+status-discovering-as = Descubriendo como { $controller }
+status-stopped = Detenido por un error
+status-alarm = Alarma
+status-alarm-of = { $entity }: { $alarm }
+status-alarm-more = { $alarm } y { $count } más
+
+## Descriptions of entities, shared by the views
+
+role-talker = talker { $count }
+role-listener = listener { $count }
+role-controller = controlador
+role-none = sin roles
+classes-a-and-b = A y B
+clock-no-gptp = Sin gPTP
+
+read-not-read = Sin leer
+read-reading = Leyendo, { $count } hasta ahora
+read-ready-unreadable = { $count ->
+    [one] Listo, { $count } ilegible
+    [many] Listo, { $count } ilegibles
+   *[other] Listo, { $count } ilegibles
+}
+read-ready-cached = Listo, desde la caché
+read-ready = Listo
+read-failed = Error: { $reason }
+
+milan-no = No
+milan-before-1-3 = anterior a 1.3
+milan-certified = { $version }, certificado { $certification }
+milan-not-certified = { $version }, sin certificar
+
+outcome-status = estado { $status }
+outcome-no-response = sin respuesta
+outcome-not-possible = no es posible
+outcome-connect = No se pudo conectar { $talker } a { $listener }: { $reason }.
+outcome-disconnect = No se pudo desconectar { $listener }: { $reason }.
+outcome-identify = No se pudo identificar { $entity }: { $reason }.
+outcome-rename = No se pudo cambiar el nombre de { $what } a «{ $name }»: { $reason }.
+outcome-rename-group = No se pudo cambiar el nombre del grupo de { $entity } a «{ $name }»: { $reason }.
+outcome-format-streaming = No se pudo cambiar el formato de { $stream }: está transmitiendo. Desconéctalo primero.
+outcome-format = No se pudo cambiar el formato de { $stream }: { $reason }.
+outcome-sampling-rate = No se pudo cambiar la frecuencia de muestreo de { $entity }: { $reason }.
+outcome-clock-source = No se pudo cambiar la fuente de reloj de { $entity }: { $reason }.
+outcome-map = No se pudo mapear el canal en { $entity }: { $reason }.
+outcome-unmap = No se pudo quitar el mapeo del canal en { $entity }: { $reason }.
+outcome-control = No se pudo ajustar «{ $control }» en { $entity }: { $reason }.
+outcome-control-numbered = No se pudo ajustar el control { $index } en { $entity }: { $reason }.
+
+stream-not-connected = Sin conectar
+stream-from = De { $stream }
+stream-from-receiving = De { $stream }, recibiendo
+stream-from-waiting = De { $stream }, esperando al talker
+stream-from-failed = De { $stream }, falló la reserva del talker: { $reason }
+stream-sending-to = Enviando a { $destination }
+
+failure-no-response = no respondió
+failure-refused = rechazó la petición con { $status }
+failure-malformed = no se pudo decodificar su respuesta
+
+msrp-failure-1 = ancho de banda insuficiente
+msrp-failure-2 = recursos insuficientes en el switch
+msrp-failure-3 = ancho de banda insuficiente para la clase de tráfico
+msrp-failure-4 = ID de flujo en uso por otro talker
+msrp-failure-5 = dirección de destino ya en uso
+msrp-failure-6 = desplazado por un flujo de mayor rango
+msrp-failure-7 = la latencia informada ha cambiado
+msrp-failure-8 = el puerto de salida no es compatible con AVB
+msrp-failure-9 = usar otra dirección de destino
+msrp-failure-10 = sin recursos MSRP
+msrp-failure-11 = sin recursos MMRP
+msrp-failure-12 = no se puede almacenar la dirección de destino
+msrp-failure-13 = la prioridad no es la de una clase SR
+msrp-failure-14 = tramas demasiado grandes para el medio
+msrp-failure-15 = alcanzado el límite de fan-in del puerto
+msrp-failure-16 = cambió el primer valor de un flujo registrado
+msrp-failure-17 = VLAN bloqueada en el puerto de salida
+msrp-failure-18 = etiquetado VLAN desactivado en el puerto de salida
+msrp-failure-19 = la prioridad de la clase SR no coincide
+msrp-failure-unknown = motivo desconocido
+msrp-failure-at = { $reason }, en el switch { $bridge }
+
+## Entity list columns
+
+column-vendor = Fabricante
+column-model = Modelo
+column-state = Estado
+column-entity-model-id = ID del modelo de entidad
+column-talker-streams = Flujos de talker
+column-listener-streams = Flujos de listener
+column-avb-lite = AVB Lite
+column-egress = Tráfico de salida
+
+## Settings file
+
+settings-no-place = No hay dónde guardar los ajustes: no se conoce la carpeta personal.
+settings-unusable = No se pudo usar { $path }: { $error }.
+settings-unsaved = No se pudo guardar { $path }: { $error }.
+
+column-remove = Quitar columna
+column-move-left = Mover a la izquierda
+column-move-right = Mover a la derecha
+column-add = Añadir una columna
+common-percent = { $value } %
+
+## Network view
+
+netmap-empty = Aún no hay red que mostrar
+netmap-empty-note = Las entidades aparecen aquí cuando se han leído y han indicado dónde están en el árbol gPTP.
+netmap-focus-clock-path = la ruta del reloj de { $name }
+netmap-focus-streams = los flujos de { $name }
+netmap-showing = Mostrando { $what }
+netmap-devices = { $count ->
+    [one] { $count } dispositivo
+    [many] { $count } dispositivos
+   *[other] { $count } dispositivos
+}
+netmap-bridges = { $count ->
+    [one] { $count } switch
+    [many] { $count } switches
+   *[other] { $count } switches
+}
+netmap-show-map = Mostrar el mapa
+netmap-show-details = Mostrar los detalles
+stream-numbered = Flujo { $index }
+netmap-bridge = Switch
+netmap-device = Dispositivo
+netmap-this-computer = Este equipo
+netmap-connected = Conectado
+netmap-advertised = Anunciado, ningún listener listo
+netmap-advertised-off-tree = Anunciado, ningún listener listo ({ $listener } no está en el árbol gPTP)
+netmap-failed-at = La reserva falló en { $bridge }: { $reason }
+netmap-failed = La reserva falló: { $reason }
+netmap-no-bridge-on = Ningún switch detectado en { $interface }
+netmap-path-not-reported = Ruta no informada
+netmap-gptp-not-reported = gPTP no informado
+netmap-off-tree = Fuera del árbol gPTP
+netmap-synced = Sincronizado
+netmap-not-synced = No sincronizado
+netmap-triib-on = triib en { $interface }
+netmap-through-count = { $count } en tránsito
+netmap-out = { $count } de salida
+netmap-in = { $count } de entrada
+netmap-failed-count = { $count } con fallo
+netmap-advertised-only = Solo anunciado
+netmap-failed-state = Fallido
+netmap-stream-item = { $talker } → { $listener } · { $state }
+netmap-apart-own-grandmaster = Fuera del árbol gPTP: es su propio grandmaster
+netmap-apart-no-path = No ha informado de su ruta; sigue al grandmaster { $grandmaster }
+netmap-apart-unreported = No ha informado de su estado gPTP
+netmap-apart-no-neighbor = Ningún switch detectado en la interfaz de este equipo
+netmap-clock-tree = Árbol de reloj
+netmap-no-grandmaster = Ningún grandmaster detectado
+netmap-grandmaster-is = Grandmaster: { $grandmaster }
+netmap-needs-attention = Requiere atención
+netmap-nodes-below = Nodos por debajo
+netmap-bridges-below = Switches por debajo
+netmap-clock-path = Ruta del reloj
+netmap-hops = Saltos hasta el grandmaster
+netmap-link-delay = Retardo del enlace
+netmap-bridge-port = Puerto del switch
+netmap-link-drops = Caídas del enlace
+netmap-synced-to-grandmaster = Sincronizado con el grandmaster
+netmap-host-no-gptp = No sincronizado: este equipo no ejecuta gPTP
+netmap-link-no-gptp = No sincronizado: gPTP no funciona en su enlace
+netmap-audio = Audio
+netmap-media-clock-streams = Flujos de reloj de medios
+netmap-audio-streams = Flujos de audio
+netmap-bound = { $count ->
+    [one] { $count } vinculado
+    [many] { $count } vinculados
+   *[other] { $count } vinculados
+}
+netmap-flowing = Fluyendo
+netmap-advertised-state = Anunciado
+netmap-media-clock-stream = Flujo de reloj de medios
+netmap-audio-stream = Flujo de audio
+netmap-reaches = Llega hasta
+netmap-passing-count = { $count ->
+    [one] { $count } flujo en tránsito
+    [many] { $count } flujos en tránsito
+   *[other] { $count } flujos en tránsito
+}
+netmap-through = En tránsito
+netmap-passing-through = Flujos en tránsito
+netmap-sending = Enviando
+netmap-receiving = Recibiendo
+netmap-problems = Problemas
+netmap-help-back = Haz clic en el fondo para volver a la vista general.
+netmap-help-stream = Haz clic en un flujo para inspeccionarlo, o en el fondo para volver a la vista general.
+netmap-help-clock = El reloj fluye desde el grandmaster, a través de cada switch, hasta todos los nodos del árbol. Una línea gris discontinua es un enlace en el que no funciona gPTP. Haz clic en un dispositivo o en su cable para inspeccionar su ruta del reloj; haz clic en el fondo para quitar la selección.
+netmap-help-media-clock = Solo flujos de reloj de medios (CRF), dibujados igual que los de audio: un cable por flujo, con el color de su talker. Haz clic en un cable para inspeccionar su flujo, o en un dispositivo para ver sus flujos; haz clic en el fondo para quitar la selección.
+netmap-help-audio = Cada flujo tiene su propio cable, que entra y sale de cada switch que atraviesa. El color depende del talker: cada talker tiene un tono y sus flujos son matices de ese tono. Los puntos en movimiento indican que el audio fluye; una línea roja fija es una reserva fallida y una línea gris fija es un flujo anunciado sin ningún listener listo; ambas terminan donde termina la reserva. Los dispositivos de la columna central se conectan directamente al switch del grandmaster. Haz clic en un cable para inspeccionar su flujo, o en un dispositivo para ver sus flujos; haz clic en el fondo para quitar la selección.
+
+## Connections
+
+matrix-nothing-shown = No hay flujos que mostrar
+matrix-nothing-shown-note = Cambia la búsqueda o los filtros para ver más flujos.
+matrix-empty = No hay flujos que conectar
+matrix-empty-note = Los flujos de talker y de listener se encuentran aquí cuando se han leído las entidades que los tienen.
+matrix-all-streams = Todos los flujos
+matrix-connectable-only = Ocultar lo que no puede conectarse
+matrix-none-hidden = Todos los flujos mostrados pueden conectarse
+matrix-hidden = { $count ->
+    [one] { $count } flujo oculto
+    [many] { $count } flujos ocultos
+   *[other] { $count } flujos ocultos
+}
+matrix-own = Las salidas de una entidad no se conectan a sus propias entradas.
+matrix-working = En curso.
+matrix-waiting-change = Esperando el último cambio de esta entrada.
+matrix-connected = Conectada y recibiendo. Haz clic para desconectar.
+matrix-bound-waiting = Vinculada, esperando el flujo del talker. Haz clic para desconectar.
+matrix-bound-failed = Vinculada, pero falló la reserva del talker: { $reason }. Haz clic para desconectar.
+matrix-bound-formats-differ = Vinculada, pero los formatos difieren: el talker envía { $sent } y la entrada está configurada en { $set }. Haz clic para desconectar.
+matrix-formats-match = Los formatos coinciden ({ $format }). Haz clic para conectar.
+matrix-format-must-change = La entrada admite { $sent }, pero está configurada en { $set }, así que puede no sonar hasta que cambie su formato. Haz clic para conectar de todos modos.
+matrix-incompatible = La entrada no admite { $sent }. Está configurada en { $set }.
+matrix-group-none = Sin conectar. Expande para conectar los flujos uno a uno.
+matrix-group-connected = { $count ->
+    [one] { $count } conectado. Expande para verlo.
+    [many] { $count } conectados. Expande para ver cada uno.
+   *[other] { $count } conectados. Expande para ver cada uno.
+}
+matrix-outputs-expand = { $count ->
+    [one] { $count } salida de flujo. Haz clic en la flecha para expandir o en el nombre para inspeccionarla.
+    [many] { $count } salidas de flujo. Haz clic en la flecha para expandir o en el nombre para inspeccionarla.
+   *[other] { $count } salidas de flujo. Haz clic en la flecha para expandir o en el nombre para inspeccionarla.
+}
+matrix-outputs-collapse = { $count ->
+    [one] { $count } salida de flujo. Haz clic en la flecha para contraer o en el nombre para inspeccionarla.
+    [many] { $count } salidas de flujo. Haz clic en la flecha para contraer o en el nombre para inspeccionarla.
+   *[other] { $count } salidas de flujo. Haz clic en la flecha para contraer o en el nombre para inspeccionarla.
+}
+matrix-inputs-expand = { $count ->
+    [one] { $count } entrada de flujo. Haz clic en la flecha para expandir o en el nombre para inspeccionarla.
+    [many] { $count } entradas de flujo. Haz clic en la flecha para expandir o en el nombre para inspeccionarla.
+   *[other] { $count } entradas de flujo. Haz clic en la flecha para expandir o en el nombre para inspeccionarla.
+}
+matrix-inputs-collapse = { $count ->
+    [one] { $count } entrada de flujo. Haz clic en la flecha para contraer o en el nombre para inspeccionarla.
+    [many] { $count } entradas de flujo. Haz clic en la flecha para contraer o en el nombre para inspeccionarla.
+   *[other] { $count } entradas de flujo. Haz clic en la flecha para contraer o en el nombre para inspeccionarla.
+}
+matrix-stream-inspect = { $detail } Haz clic para inspeccionar { $entity }.
+matrix-point = Señala una celda
+matrix-point-note = para ver su talker y su listener y si sus formatos son compatibles.
+matrix-legend-waiting = Vinculada, esperando el flujo
+matrix-legend-trouble = Vinculada, algo falla
+matrix-legend-open = Conexión posible
+matrix-legend-change = Antes hay que cambiar el formato de la entrada
+matrix-legend-incompatible = Formatos incompatibles
+matrix-talker-outputs = Salidas de talker
+matrix-listener-inputs = Entradas de listener
+
+common-thousands-separator = {" "}
+common-decimal-separator = {","}
+
+## Diagnostics
+
+diag-since-start = Contado desde que se inició la entidad.
+diag-stream-input = Entrada de flujo
+diag-stream-output = Salida de flujo
+diag-locked = { $count ->
+    [0] no se enganchó
+    [one] se enganchó una vez
+    [many] se enganchó { $number } veces
+   *[other] se enganchó { $number } veces
+}
+diag-lost-lock = { $count ->
+    [0] no perdió el enganche
+    [one] perdió el enganche una vez
+    [many] perdió el enganche { $number } veces
+   *[other] perdió el enganche { $number } veces
+}
+diag-frames-in = { $count ->
+    [one] { $number } trama recibida
+    [many] { $number } tramas recibidas
+   *[other] { $number } tramas recibidas
+}
+diag-frames-out = { $count ->
+    [one] { $number } trama enviada
+    [many] { $number } tramas enviadas
+   *[other] { $number } tramas enviadas
+}
+diag-media-locked = { $count ->
+    [0] no se enganchó al reloj de medios
+    [one] se enganchó al reloj de medios una vez
+    [many] se enganchó al reloj de medios { $number } veces
+   *[other] se enganchó al reloj de medios { $number } veces
+}
+diag-lost-media-lock = { $count ->
+    [0] no perdió el enganche al reloj de medios
+    [one] perdió el enganche al reloj de medios una vez
+    [many] perdió el enganche al reloj de medios { $number } veces
+   *[other] perdió el enganche al reloj de medios { $number } veces
+}
+diag-interrupted = { $count ->
+    [0] no se interrumpió
+    [one] se interrumpió una vez
+    [many] se interrumpió { $number } veces
+   *[other] se interrumpió { $number } veces
+}
+diag-out-of-sequence = { $count ->
+    [one] { $number } trama fuera de secuencia
+    [many] { $number } tramas fuera de secuencia
+   *[other] { $number } tramas fuera de secuencia
+}
+diag-media-resets = { $count ->
+    [one] { $number } reinicio de medios
+    [many] { $number } reinicios de medios
+   *[other] { $number } reinicios de medios
+}
+diag-timestamps-uncertain = { $count ->
+    [0] sin marcas de tiempo inciertas
+    [one] marcas de tiempo inciertas una vez
+    [many] marcas de tiempo inciertas { $number } veces
+   *[other] marcas de tiempo inciertas { $number } veces
+}
+diag-no-timestamp = { $count ->
+    [one] { $number } trama sin marca de tiempo
+    [many] { $number } tramas sin marca de tiempo
+   *[other] { $number } tramas sin marca de tiempo
+}
+diag-unsupported-format = { $count ->
+    [one] { $number } trama en un formato no admitido
+    [many] { $number } tramas en un formato no admitido
+   *[other] { $number } tramas en un formato no admitido
+}
+diag-late = { $count ->
+    [one] { $number } trama con retraso
+    [many] { $number } tramas con retraso
+   *[other] { $number } tramas con retraso
+}
+diag-early = { $count ->
+    [one] { $number } trama con adelanto
+    [many] { $number } tramas con adelanto
+   *[other] { $number } tramas con adelanto
+}
+diag-started = { $count ->
+    [0] no se inició
+    [one] se inició una vez
+    [many] se inició { $number } veces
+   *[other] se inició { $number } veces
+}
+diag-stopped = { $count ->
+    [0] no se detuvo
+    [one] se detuvo una vez
+    [many] se detuvo { $number } veces
+   *[other] se detuvo { $number } veces
+}
+diag-reservation-failed = falló la reserva del talker: { $reason }
+diag-latency = { $microseconds } µs de latencia acumulada
+
+## AVB Lite
+
+lite-active = Activo
+lite-active-untagged = Activo, sin etiquetar
+lite-active-vlan = Activo, VLAN { $vlan }
+lite-capable = Compatible
+lite-mode = Modo
+lite-mode-capable = AVB, compatible con AVB Lite
+lite-because = Motivo
+lite-fallback-none = sin especificar
+lite-fallback-endpoint = llegó la declaración de otro endpoint, así que no hay ningún switch AVB entre ambos
+lite-fallback-unanswered = nueve solicitudes de peer delay quedaron sin respuesta
+lite-fallback-responders = respondieron dos o más a una misma solicitud de peer delay, así que el switch no es AVB
+lite-fallback-configured = configurado por el operador o por un controlador
+lite-fallback-other = un motivo que el perfil no define
+lite-other-profile = Otro perfil
+lite-ptp-domain = { $profile }, dominio { $domain }
+lite-offset = Offset
+lite-offset-from = { $offset } respecto a { $grandmaster }
+lite-media-vlan = VLAN de medios
+lite-untagged = Sin etiquetar
+lite-unicast = Unicast
+lite-fanout = { $count ->
+    [one] Hasta { $count } listener por flujo, luego multicast
+    [many] Hasta { $count } listeners por flujo, luego multicast
+   *[other] Hasta { $count } listeners por flujo, luego multicast
+}
+lite-link = Enlace
+lite-bandwidth = Ancho de banda
+lite-egress-of = { $used } de { $link }, { $share }
+lite-egress-of-assumed = { $used } de { $link }, { $share }, suponiendo un enlace de gigabit
+lite-egress-reported = Según la cuenta de flujos admitidos que lleva la entidad.
+lite-egress-worked-out = A partir de los formatos de sus salidas de flujo conectadas.
+lite-alarm-offset = Offset PTP de { $offset }, por encima de los 50 µs que admite AVB Lite
+lite-alarm-egress = Tráfico de salida al { $share } del enlace, por encima del { $limit } que pueden ocupar los flujos
+
+## Log
+
+log-all = Todo
+log-warnings = Advertencias
+log-pause = Pausar
+log-resume = Reanudar
+log-clear = Borrar
+log-empty = Aquí aparecen todas las tramas ATDECC que triib envía y recibe, de la más reciente a la más antigua.
+log-none-match = Ninguna trama guardada coincide con el filtro.
+log-frames = { $count ->
+    [one] { $count } trama
+    [many] { $count } tramas
+   *[other] { $count } tramas
+}
+log-shown-of = { $shown } de { $all } tramas
+log-sent = Enviada
+log-heard = Recibida
+log-not-decoded = Sin decodificar
+log-warning-short = Su control_data_length indica { $missing } octetos más allá del final de la trama.
+log-warning-undecodable = No se puede decodificar: { $error }.
+log-warning-long-acmp = Está en la forma larga de ACMP, que una entidad Milan no puede enviar (Milan 1.3, 5.5.2.2).
+
+## Channel mappings
+
+mapping-section = Mapeo de canales
+mapping-inputs = Entradas
+mapping-outputs = Salidas
+mapping-port = puerto { $number }
+mapping-fixed = fijo
+mapping-not-read = Aún sin leer.
+mapping-no-clusters = Sin clústeres.
+mapping-no-streams = Sin flujos de audio.
+mapping-none = Sin mapeos.
+mapping-not-mapped = Sin mapear
+mapping-cluster-numbered = Clúster { $index }
+
+## Presets
+
+presets-note = Un preset guarda las fuentes de reloj, las frecuencias de muestreo, los formatos de flujo, los controles y las conexiones de cada entidad. Al recuperarlo se cambia lo que difiera.
+presets-none = Aún no hay presets guardados.
+presets-connections = { $count ->
+    [one] { $count } conexión
+    [many] { $count } conexiones
+   *[other] { $count } conexiones
+}
+presets-recall = Recuperar
+presets-delete = Eliminar
+presets-no-place = No hay dónde guardar los presets: no se conoce la carpeta personal.
+presets-undeletable = No se pudo eliminar { $path }: { $error }.
+presets-saved = { $count ->
+    [one] Se guardó «{ $name }» con { $count } entidad.
+    [many] Se guardó «{ $name }» con { $count } entidades.
+   *[other] Se guardó «{ $name }» con { $count } entidades.
+}
+presets-nothing-differs = Nada difiere de «{ $name }».
+presets-recalling = { $count ->
+    [one] Recuperando «{ $name }»: { $count } cambio.
+    [many] Recuperando «{ $name }»: { $count } cambios.
+   *[other] Recuperando «{ $name }»: { $count } cambios.
+}
+presets-missing = { $report } Ausentes o sin leer: { $missing }.
+presets-deleted = Se eliminó «{ $name }».
+
+## Controls
+
+control-numbered = Control { $index }
+control-not-shown = No se muestra aquí
+control-option = Opción { $number }
+
+## Network errors
+
+network-permission = triib necesita permiso para enviar y recibir tramas Ethernet sin procesar.
+
+matrix-stream-format = { $format }.
+matrix-stream-format-state = { $format }. { $state }.

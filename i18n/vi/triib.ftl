@@ -1,0 +1,529 @@
+# Văn bản giao diện của triib bằng tiếng Việt.
+# Thuật ngữ theo docs/GLOSSARY.md và docs/glossary/vi.md.
+
+## Language
+
+language-name = Tiếng Việt
+
+## Common
+
+common-close = Đóng
+common-more = Thêm
+common-keep-toolbar-shown = Luôn hiện thanh công cụ
+common-auto-hide-toolbar = Tự động ẩn thanh công cụ
+
+## Settings
+
+settings-title = Cài đặt
+settings-general = Chung
+settings-appearance = Diện mạo
+settings-language = Ngôn ngữ
+settings-language-system = Mặc định hệ thống: { $language }
+settings-language-note = Ô văn bản nhập theo ngôn ngữ nhập liệu của hệ thống.
+settings-appearance-system = Theo hệ thống
+settings-appearance-light = Sáng
+settings-appearance-dark = Tối
+settings-colors = Màu sắc
+settings-system-accent = Dùng màu nhấn của hệ thống
+settings-accent-picked = Bảng màu của triib được tạo từ màu bên dưới.
+settings-accent-omarchy = Từ chủ đề Omarchy, { $theme }.
+settings-accent-desktop = Từ màu nhấn của màn hình nền.
+settings-accent-none = Màn hình nền không có màu nhấn, nên dùng màu bên dưới.
+settings-motion = Chuyển động
+settings-animations = Hiệu ứng động
+settings-animations-note = Hiệu ứng nảy và trượt khi nội dung thay đổi.
+settings-animations-reduced = Màn hình nền yêu cầu giảm chuyển động, nên triib không chạy hiệu ứng.
+
+common-cancel = Hủy
+common-save = Lưu
+common-not-set = Chưa đặt
+common-unnamed = Chưa đặt tên
+common-none = Không có
+common-mac-address = Địa chỉ MAC
+common-list-separator = {", "}
+
+## Network interfaces
+
+interface-up = hoạt động
+interface-link-down = mất liên kết
+interface-wireless = không dây
+interface-hardware-clock = đồng hồ phần cứng
+interface-hardware-clock-named = đồng hồ phần cứng { $clock }
+interface-virtual = ảo
+
+## Toolbar
+
+toolbar-choose-interface = Chọn giao diện mạng
+toolbar-interface = Giao diện mạng
+toolbar-show-virtual = Hiện giao diện ảo
+toolbar-hide-virtual = Ẩn giao diện ảo
+toolbar-connections = Kết nối
+toolbar-network = Mạng
+toolbar-entities = Thực thể
+toolbar-rediscover = Yêu cầu mọi thực thể quảng bá lại
+toolbar-search = Tìm thực thể và luồng
+toolbar-presets = Preset
+toolbar-log = Nhật ký
+toolbar-inspector = Trình kiểm tra
+toolbar-settings = Cài đặt
+
+## The network's state, in place of a view
+
+state-no-interface = Chưa chọn giao diện
+state-no-interface-note = Chọn giao diện nối với mạng AVB để phát hiện thực thể.
+state-starting = Đang khởi động
+state-starting-note = Đang mở { $interface }.
+state-listening = Đang lắng nghe
+state-listening-note = Thực thể trên { $interface } sẽ hiện ở đây khi chúng quảng bá.
+state-permission-needed = Cần cấp quyền
+state-copy-command = Sao chép lệnh
+state-cannot-use = Không thể dùng { $interface }
+state-try-again = Thử lại
+
+## Entity list
+
+entities-none-yet = Chưa có thực thể nào
+entities-none-yet-note = Mọi thực thể trên mạng, cùng vai trò, lớp SR và đồng hồ của chúng.
+
+## Inspector
+
+inspector-title = Trình kiểm tra
+inspector-entity = Thực thể
+inspector-streams = Luồng
+inspector-controls = Điều khiển
+inspector-diagnostics = Chẩn đoán
+inspector-descriptors = Bộ mô tả
+inspector-select = Chọn một thực thể để xem chi tiết.
+inspector-offline = { $entity } đang ngoại tuyến.
+inspector-rename = Đổi tên
+inspector-name = Tên
+inspector-identify = Nhận dạng
+inspector-model-not-read = Chưa đọc mô hình thực thể.
+inspector-no-streams = Không có luồng.
+inspector-no-controls = Không có mục điều khiển nào để hiển thị.
+inspector-no-diagnostics = Không có giao diện hay bộ đếm nào được báo cáo.
+inspector-reading = Đang đọc bộ mô tả, đã đọc { $count }.
+inspector-read-failed = Không thể đọc mô hình thực thể: { $reason }.
+
+entity-section = Thực thể
+entity-name = Tên
+entity-group = Nhóm
+entity-product = Sản phẩm
+entity-firmware = Firmware
+entity-serial-number = Số sê-ri
+entity-configuration = Cấu hình
+entity-configuration-of = { $name } ({ $number }/{ $count })
+entity-milan = Milan
+entity-media-clock = Đồng hồ media
+entity-clock-domain = Miền đồng hồ
+entity-sampling-rate = Tần số lấy mẫu
+clock-source-numbered = Nguồn { $index }
+rate-pull = hệ số pull { $pull }
+
+stream-inputs = Đầu vào luồng
+stream-outputs = Đầu ra luồng
+stream-max-transit-time = Thời gian truyền tối đa { $time }
+
+avb-interfaces = Giao diện AVB
+avb-interface = Giao diện
+avb-interface-clock-identity = Định danh đồng hồ
+avb-interface-grandmaster = Grandmaster
+avb-interface-grandmaster-domain = { $grandmaster }, miền { $domain }
+avb-interface-peer-delay = Peer delay
+avb-interface-running = Đang chạy
+avb-interface-none-reported = Không báo cáo
+avb-interface-path = Đường đi
+avb-interface-own-grandmaster = Tự là Grandmaster
+avb-interface-hops = Cách Grandmaster { $count } bước nhảy
+avb-interface-link-up = Liên kết hoạt động
+avb-interface-link-down = Mất liên kết
+avb-interface-grandmaster-changes = Số lần đổi Grandmaster
+avb-interface-frames-sent = Khung đã gửi
+avb-interface-frames-received = Khung đã nhận
+avb-interface-crc-errors = Lỗi CRC
+
+tree-firmware = Firmware { $version }
+tree-descriptor-types = { $count } loại bộ mô tả
+tree-clock = Đồng hồ
+tree-clock-source-from = { $kind }, từ { $location } { $index }
+tree-clock-domain-using = Dùng { $source }
+tree-clusters = { $count } cụm
+tree-maps = { $count } ánh xạ
+
+advert-not-advertised = Không quảng bá
+advert-identity = Định danh
+advert-entity-id = ID thực thể
+advert-entity-model = Mô hình thực thể
+advert-roles = Vai trò
+advert-talker = Talker
+advert-listener = Listener
+advert-clock = Đồng hồ
+advert-btc = BTC
+advert-gptp-domain = Miền gPTP
+advert-sr-classes = Lớp SR
+advert-indexes = Chỉ mục mô hình thực thể
+advert-identify-control = Điều khiển nhận dạng
+advert-avb-interface = Giao diện AVB
+advert-advertising = Quảng bá
+advert-valid-time = Thời gian hiệu lực
+advert-available-index = Chỉ mục khả dụng
+advert-association = Kết hợp
+advert-capabilities = Khả năng
+
+## Status bar
+
+status-entities = { $count } thực thể
+status-not-discovering = Không phát hiện
+status-discovering = Đang phát hiện
+status-discovering-as = Đang phát hiện với tư cách { $controller }
+status-stopped = Đã dừng do lỗi
+status-alarm = Báo động
+status-alarm-of = { $entity }: { $alarm }
+status-alarm-more = { $alarm } và { $count } báo động khác
+
+## Descriptions of entities, shared by the views
+
+role-talker = Talker { $count }
+role-listener = Listener { $count }
+role-controller = bộ điều khiển
+role-none = không có vai trò
+classes-a-and-b = A và B
+clock-no-gptp = Không có gPTP
+
+read-not-read = Chưa đọc
+read-reading = Đang đọc, đã đọc { $count }
+read-ready-unreadable = Sẵn sàng, { $count } không đọc được
+read-ready-cached = Sẵn sàng, từ bộ nhớ đệm
+read-ready = Sẵn sàng
+read-failed = Thất bại: { $reason }
+
+milan-no = Không
+milan-before-1-3 = trước 1.3
+milan-certified = { $version }, chứng nhận { $certification }
+milan-not-certified = { $version }, chưa chứng nhận
+
+outcome-status = trạng thái { $status }
+outcome-no-response = không có phản hồi
+outcome-not-possible = không thể thực hiện
+outcome-connect = Không thể kết nối { $talker } tới { $listener }: { $reason }.
+outcome-disconnect = Không thể ngắt kết nối { $listener }: { $reason }.
+outcome-identify = Không thể gửi lệnh nhận dạng tới { $entity }: { $reason }.
+outcome-rename = Không thể đổi tên { $what } thành “{ $name }”: { $reason }.
+outcome-rename-group = Không thể đổi tên nhóm của { $entity } thành “{ $name }”: { $reason }.
+outcome-format-streaming = Không thể đổi định dạng của { $stream }: luồng đang truyền. Hãy ngắt kết nối trước.
+outcome-format = Không thể đổi định dạng của { $stream }: { $reason }.
+outcome-sampling-rate = Không thể đổi tần số lấy mẫu của { $entity }: { $reason }.
+outcome-clock-source = Không thể đổi nguồn đồng hồ của { $entity }: { $reason }.
+outcome-map = Không thể ánh xạ kênh trên { $entity }: { $reason }.
+outcome-unmap = Không thể bỏ ánh xạ kênh trên { $entity }: { $reason }.
+outcome-control = Không thể đặt “{ $control }” trên { $entity }: { $reason }.
+outcome-control-numbered = Không thể đặt điều khiển { $index } trên { $entity }: { $reason }.
+
+stream-not-connected = Chưa kết nối
+stream-from = Từ { $stream }
+stream-from-receiving = Từ { $stream }, đang nhận
+stream-from-waiting = Từ { $stream }, đang chờ Talker
+stream-from-failed = Từ { $stream }, đặt trước của Talker thất bại: { $reason }
+stream-sending-to = Đang gửi tới { $destination }
+
+failure-no-response = không phản hồi
+failure-refused = bị từ chối với { $status }
+failure-malformed = không giải mã được phản hồi
+
+msrp-failure-1 = không đủ băng thông
+msrp-failure-2 = không đủ tài nguyên switch
+msrp-failure-3 = không đủ băng thông cho lớp lưu lượng
+msrp-failure-4 = ID luồng đang được một Talker khác dùng
+msrp-failure-5 = địa chỉ đích đã được dùng
+msrp-failure-6 = bị một luồng có thứ hạng cao hơn giành quyền
+msrp-failure-7 = độ trễ được báo cáo đã thay đổi
+msrp-failure-8 = cổng ra không hỗ trợ AVB
+msrp-failure-9 = hãy dùng địa chỉ đích khác
+msrp-failure-10 = hết tài nguyên MSRP
+msrp-failure-11 = hết tài nguyên MMRP
+msrp-failure-12 = không thể lưu địa chỉ đích
+msrp-failure-13 = mức ưu tiên không phải mức ưu tiên của lớp SR
+msrp-failure-14 = khung quá lớn so với môi trường truyền
+msrp-failure-15 = đã đạt giới hạn cổng fan-in
+msrp-failure-16 = giá trị đầu tiên của một luồng đã đăng ký bị thay đổi
+msrp-failure-17 = VLAN bị chặn trên cổng ra
+msrp-failure-18 = gắn thẻ VLAN bị tắt trên cổng ra
+msrp-failure-19 = mức ưu tiên lớp SR không khớp
+msrp-failure-unknown = lý do không xác định
+msrp-failure-at = { $reason }, tại switch { $bridge }
+
+## Entity list columns
+
+column-vendor = Nhà sản xuất
+column-model = Model
+column-state = Trạng thái
+column-entity-model-id = ID mô hình thực thể
+column-talker-streams = Luồng Talker
+column-listener-streams = Luồng Listener
+column-avb-lite = AVB Lite
+column-egress = Lưu lượng ra
+
+## Settings file
+
+settings-no-place = Không có nơi lưu cài đặt: không xác định được thư mục nhà.
+settings-unusable = Không thể dùng { $path }: { $error }.
+settings-unsaved = Không thể lưu { $path }: { $error }.
+
+column-remove = Xóa cột
+column-move-left = Chuyển sang trái
+column-move-right = Chuyển sang phải
+column-add = Thêm cột
+common-percent = { $value }%
+
+## Network view
+
+netmap-empty = Chưa có mạng để hiển thị
+netmap-empty-note = Thực thể sẽ hiện ở đây sau khi đã được đọc và cho biết vị trí của chúng trên cây gPTP.
+netmap-focus-clock-path = đường đi đồng hồ của { $name }
+netmap-focus-streams = các luồng của { $name }
+netmap-showing = Đang hiển thị { $what }
+netmap-devices = { $count } thiết bị
+netmap-bridges = { $count } switch
+netmap-show-map = Hiện sơ đồ
+netmap-show-details = Hiện chi tiết
+stream-numbered = Luồng { $index }
+netmap-bridge = Switch
+netmap-device = Thiết bị
+netmap-this-computer = Máy tính này
+netmap-connected = Đã kết nối
+netmap-advertised = Đã quảng bá, chưa có Listener sẵn sàng
+netmap-advertised-off-tree = Đã quảng bá, chưa có Listener sẵn sàng ({ $listener } không nằm trên cây gPTP)
+netmap-failed-at = Đặt trước thất bại tại { $bridge }: { $reason }
+netmap-failed = Đặt trước thất bại: { $reason }
+netmap-no-bridge-on = Không thấy switch nào trên { $interface }
+netmap-path-not-reported = Chưa báo cáo đường đi
+netmap-gptp-not-reported = Chưa báo cáo gPTP
+netmap-off-tree = Không nằm trên cây gPTP
+netmap-synced = Đã đồng bộ
+netmap-not-synced = Chưa đồng bộ
+netmap-triib-on = triib trên { $interface }
+netmap-through-count = { $count } đi qua
+netmap-out = { $count } ra
+netmap-in = { $count } vào
+netmap-failed-count = { $count } thất bại
+netmap-advertised-only = Chỉ quảng bá
+netmap-failed-state = Thất bại
+netmap-stream-item = { $talker } → { $listener } · { $state }
+netmap-apart-own-grandmaster = Không nằm trên cây gPTP: nó tự là Grandmaster
+netmap-apart-no-path = Chưa báo cáo đường đi; nó theo Grandmaster { $grandmaster }
+netmap-apart-unreported = Chưa báo cáo trạng thái gPTP
+netmap-apart-no-neighbor = Không thấy switch nào trên giao diện của máy tính này
+netmap-clock-tree = Cây đồng hồ
+netmap-no-grandmaster = Không thấy Grandmaster nào
+netmap-grandmaster-is = Grandmaster: { $grandmaster }
+netmap-needs-attention = Cần chú ý
+netmap-nodes-below = Nút phía dưới
+netmap-bridges-below = Switch phía dưới
+netmap-clock-path = Đường đi đồng hồ
+netmap-hops = Số bước nhảy từ Grandmaster
+netmap-link-delay = Độ trễ liên kết
+netmap-bridge-port = Cổng switch
+netmap-link-drops = Số lần mất liên kết
+netmap-synced-to-grandmaster = Đã đồng bộ với Grandmaster
+netmap-host-no-gptp = Chưa đồng bộ: máy tính này không chạy gPTP
+netmap-link-no-gptp = Chưa đồng bộ: gPTP không chạy trên liên kết của nó
+netmap-audio = Âm thanh
+netmap-media-clock-streams = Luồng đồng hồ media
+netmap-audio-streams = Luồng âm thanh
+netmap-bound = { $count } đã gán
+netmap-flowing = Đang truyền
+netmap-advertised-state = Đã quảng bá
+netmap-media-clock-stream = Luồng đồng hồ media
+netmap-audio-stream = Luồng âm thanh
+netmap-reaches = Đi tới
+netmap-passing-count = { $count } luồng đi qua
+netmap-through = Đi qua
+netmap-passing-through = Các luồng đi qua
+netmap-sending = Đang gửi
+netmap-receiving = Đang nhận
+netmap-problems = Sự cố
+netmap-help-back = Nhấp vào nền để quay lại tổng quan.
+netmap-help-stream = Nhấp vào một luồng để kiểm tra, hoặc nhấp vào nền để quay lại tổng quan.
+netmap-help-clock = Đồng hồ đi từ Grandmaster qua từng switch tới mọi nút trên cây. Đường xám đứt nét là liên kết không chạy gPTP. Nhấp vào một thiết bị hoặc dây của nó để kiểm tra đường đi đồng hồ; nhấp vào nền để bỏ chọn.
+netmap-help-media-clock = Chỉ các luồng đồng hồ media (CRF), vẽ giống như âm thanh: mỗi luồng một dây, tô màu theo Talker. Nhấp vào một dây để kiểm tra luồng của nó, hoặc vào một thiết bị để xem các luồng của thiết bị đó; nhấp vào nền để bỏ chọn.
+netmap-help-audio = Mỗi luồng có dây riêng, đi vào và ra khỏi mọi switch mà nó đi qua. Màu theo Talker: mỗi Talker có một sắc màu, và các luồng của nó là các sắc độ của màu đó. Chấm chuyển động nghĩa là âm thanh đang truyền; đường đỏ đứng yên là đặt trước thất bại, còn đường xám đứng yên là đã quảng bá nhưng chưa có Listener sẵn sàng; cả hai dừng ở nơi đặt trước dừng lại. Thiết bị ở cột giữa nối thẳng vào switch của Grandmaster. Nhấp vào một dây để kiểm tra luồng của nó, hoặc vào một thiết bị để xem các luồng của thiết bị đó; nhấp vào nền để bỏ chọn.
+
+## Connections
+
+matrix-nothing-shown = Không có luồng để hiển thị
+matrix-nothing-shown-note = Đổi tìm kiếm hoặc bộ lọc để xem thêm luồng.
+matrix-empty = Không có luồng để kết nối
+matrix-empty-note = Luồng Talker và luồng Listener gặp nhau ở đây sau khi đã đọc các thực thể có chúng.
+matrix-all-streams = Tất cả luồng
+matrix-connectable-only = Ẩn mục không thể kết nối
+matrix-none-hidden = Mọi luồng đang hiện đều có thể kết nối
+matrix-hidden = Đã ẩn { $count } luồng
+matrix-own = Đầu ra của một thực thể không kết nối với đầu vào của chính nó.
+matrix-working = Đang xử lý.
+matrix-waiting-change = Đang chờ thay đổi trước đó của đầu vào này.
+matrix-connected = Đã kết nối và đang nhận. Nhấp để ngắt kết nối.
+matrix-bound-waiting = Đã gán, đang chờ luồng của Talker. Nhấp để ngắt kết nối.
+matrix-bound-failed = Đã gán, nhưng đặt trước của Talker thất bại: { $reason }. Nhấp để ngắt kết nối.
+matrix-bound-formats-differ = Đã gán, nhưng định dạng khác nhau: Talker gửi { $sent }, đầu vào đang đặt là { $set }. Nhấp để ngắt kết nối.
+matrix-formats-match = Định dạng khớp ({ $format }). Nhấp để kết nối.
+matrix-format-must-change = Đầu vào nhận được { $sent } nhưng đang đặt là { $set }, nên có thể không phát cho tới khi đổi định dạng. Nhấp để vẫn kết nối.
+matrix-incompatible = Đầu vào không nhận { $sent }. Nó đang đặt là { $set }.
+matrix-group-none = Chưa kết nối. Mở rộng để kết nối từng luồng.
+matrix-group-connected = { $count } đã kết nối. Mở rộng để xem từng kết nối.
+matrix-outputs-expand = { $count } đầu ra luồng. Nhấp mũi tên để mở rộng, nhấp tên để kiểm tra.
+matrix-outputs-collapse = { $count } đầu ra luồng. Nhấp mũi tên để thu gọn, nhấp tên để kiểm tra.
+matrix-inputs-expand = { $count } đầu vào luồng. Nhấp mũi tên để mở rộng, nhấp tên để kiểm tra.
+matrix-inputs-collapse = { $count } đầu vào luồng. Nhấp mũi tên để thu gọn, nhấp tên để kiểm tra.
+matrix-stream-inspect = { $detail } Nhấp để kiểm tra { $entity }.
+matrix-point = Trỏ vào một ô
+matrix-point-note = để xem Talker, Listener của ô và định dạng của chúng có khớp không.
+matrix-legend-waiting = Đã gán, đang chờ luồng
+matrix-legend-trouble = Đã gán, có sự cố
+matrix-legend-open = Có thể kết nối
+matrix-legend-change = Cần đổi định dạng đầu vào trước
+matrix-legend-incompatible = Định dạng không thể khớp
+matrix-talker-outputs = Đầu ra Talker
+matrix-listener-inputs = Đầu vào Listener
+
+common-thousands-separator = {"."}
+common-decimal-separator = {","}
+
+## Diagnostics
+
+diag-since-start = Đếm từ khi thực thể khởi động.
+diag-stream-input = Đầu vào luồng
+diag-stream-output = Đầu ra luồng
+diag-locked = { $count ->
+    [0] chưa khóa
+   *[other] khóa { $number } lần
+}
+diag-lost-lock = { $count ->
+    [0] chưa mất khóa
+   *[other] mất khóa { $number } lần
+}
+diag-frames-in = { $number } khung vào
+diag-frames-out = { $number } khung ra
+diag-media-locked = { $count ->
+    [0] chưa khóa media
+   *[other] khóa media { $number } lần
+}
+diag-lost-media-lock = { $count ->
+    [0] chưa mất khóa media
+   *[other] mất khóa media { $number } lần
+}
+diag-interrupted = { $count ->
+    [0] chưa bị gián đoạn
+   *[other] bị gián đoạn { $number } lần
+}
+diag-out-of-sequence = { $number } khung sai thứ tự
+diag-media-resets = { $number } lần đặt lại media
+diag-timestamps-uncertain = { $count ->
+    [0] dấu thời gian chưa từng bất định
+   *[other] dấu thời gian bất định { $number } lần
+}
+diag-no-timestamp = { $number } khung không có dấu thời gian
+diag-unsupported-format = { $number } khung có định dạng không được hỗ trợ
+diag-late = { $number } khung đến muộn
+diag-early = { $number } khung đến sớm
+diag-started = { $count ->
+    [0] chưa khởi động
+   *[other] khởi động { $number } lần
+}
+diag-stopped = { $count ->
+    [0] chưa dừng
+   *[other] dừng { $number } lần
+}
+diag-reservation-failed = đặt trước của Talker thất bại: { $reason }
+diag-latency = độ trễ tích lũy { $microseconds } µs
+
+## AVB Lite
+
+lite-active = Đang hoạt động
+lite-active-untagged = Đang hoạt động, không gắn thẻ
+lite-active-vlan = Đang hoạt động, VLAN { $vlan }
+lite-capable = Hỗ trợ
+lite-mode = Chế độ
+lite-mode-capable = AVB, hỗ trợ AVB Lite
+lite-because = Lý do
+lite-fallback-none = không nêu lý do
+lite-fallback-endpoint = khai báo của một thiết bị đầu cuối khác đi qua được, nên giữa chúng không có switch AVB
+lite-fallback-unanswered = chín yêu cầu peer delay không được trả lời
+lite-fallback-responders = một yêu cầu peer delay nhận được từ hai phản hồi trở lên, nên switch không phải switch AVB
+lite-fallback-configured = do người vận hành hoặc một bộ điều khiển đặt
+lite-fallback-other = lý do mà profile không nêu tên
+lite-other-profile = Profile khác
+lite-ptp-domain = { $profile }, miền { $domain }
+lite-offset = Độ lệch
+lite-offset-from = { $offset } so với { $grandmaster }
+lite-media-vlan = VLAN media
+lite-untagged = Không gắn thẻ
+lite-unicast = Unicast
+lite-fanout = Mỗi luồng gửi lần lượt tới tối đa { $count } Listener, sau đó chuyển sang multicast
+lite-link = Liên kết
+lite-bandwidth = Băng thông
+lite-egress-of = { $used } trên { $link }, { $share }
+lite-egress-of-assumed = { $used } trên { $link }, { $share }, giả định liên kết gigabit
+lite-egress-reported = Theo số luồng được chấp nhận mà thực thể đếm.
+lite-egress-worked-out = Tính từ định dạng của các đầu ra luồng đã kết nối.
+lite-alarm-offset = Độ lệch PTP { $offset }, vượt mức 50 µs mà AVB Lite cho phép
+lite-alarm-egress = Lưu lượng ra chiếm { $share } liên kết, vượt mức { $limit } mà các luồng được phép dùng
+
+## Log
+
+log-all = Tất cả
+log-warnings = Cảnh báo
+log-pause = Tạm dừng
+log-resume = Tiếp tục
+log-clear = Xóa
+log-empty = Mọi khung ATDECC mà triib gửi và nhận đều hiện ở đây, mới nhất ở trên cùng.
+log-none-match = Không có khung đã lưu nào khớp với bộ lọc.
+log-frames = { $count } khung
+log-shown-of = { $shown } trên { $all } khung
+log-sent = Đã gửi
+log-heard = Đã nhận
+log-not-decoded = Chưa giải mã
+log-warning-short = Trường control_data_length của khung khai báo vượt quá cuối khung { $missing } byte.
+log-warning-undecodable = Không giải mã được: { $error }.
+log-warning-long-acmp = Khung ở dạng ACMP dài, dạng mà thực thể Milan không được phép gửi (Milan 1.3, 5.5.2.2).
+
+## Channel mappings
+
+mapping-section = Ánh xạ kênh
+mapping-inputs = Đầu vào
+mapping-outputs = Đầu ra
+mapping-port = cổng { $number }
+mapping-fixed = cố định
+mapping-not-read = Chưa đọc.
+mapping-no-clusters = Không có cụm.
+mapping-no-streams = Không có luồng âm thanh.
+mapping-none = Không có ánh xạ.
+mapping-not-mapped = Chưa ánh xạ
+mapping-cluster-numbered = Cụm { $index }
+
+## Presets
+
+presets-note = Preset lưu nguồn đồng hồ, tần số lấy mẫu, định dạng luồng, điều khiển và kết nối của từng thực thể. Khi gọi lại, chỉ những gì khác biệt mới bị thay đổi.
+presets-none = Chưa lưu preset nào.
+presets-connections = { $count } kết nối
+presets-recall = Gọi lại
+presets-delete = Xóa
+presets-no-place = Không có nơi lưu preset: không xác định được thư mục nhà.
+presets-undeletable = Không thể xóa { $path }: { $error }.
+presets-saved = Đã lưu “{ $name }” với { $count } thực thể.
+presets-nothing-differs = Không có gì khác với “{ $name }”.
+presets-recalling = Đang gọi lại “{ $name }”: { $count } thay đổi.
+presets-missing = { $report } Không có ở đây hoặc chưa đọc: { $missing }.
+presets-deleted = Đã xóa “{ $name }”.
+
+## Controls
+
+control-numbered = Điều khiển { $index }
+control-not-shown = Không hiển thị ở đây
+control-option = Tùy chọn { $number }
+
+## Network errors
+
+network-permission = triib cần quyền gửi và nhận khung Ethernet thô.
+
+matrix-stream-format = { $format }.
+matrix-stream-format-state = { $format }. { $state }.

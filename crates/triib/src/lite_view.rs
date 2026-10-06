@@ -83,7 +83,8 @@ pub fn rate(bits: u64) -> String {
         bits => (bits as f64 / 1e3, "kb/s"),
     };
     let text = format!("{value:.1}");
-    format!("{} {unit}", text.trim_end_matches(".0"))
+    let text = crate::i18n::decimal(text.trim_end_matches(".0").to_owned());
+    format!("{text} {unit}")
 }
 
 /// A time in nanoseconds in the unit that suits it: "180 ns", "72 µs".
@@ -246,7 +247,10 @@ pub fn bandwidth<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
         let share = egress.share();
         let used = rate(egress.used);
         let link = rate(egress.link);
-        let percent = fl!("common-percent", value = format!("{:.1}", share * 100.0));
+        let percent = fl!(
+            "common-percent",
+            value = crate::i18n::decimal(format!("{:.1}", share * 100.0))
+        );
         let text = if egress.link_reported {
             fl!("lite-egress-of", used = used, link = link, share = percent)
         } else {

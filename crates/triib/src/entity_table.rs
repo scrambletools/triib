@@ -106,7 +106,7 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
             .map_or_else(String::new, |egress| {
                 fl!(
                     "common-percent",
-                    value = format!("{:.1}", egress.share() * 100.0)
+                    value = crate::i18n::decimal(format!("{:.1}", egress.share() * 100.0))
                 )
             }),
     }

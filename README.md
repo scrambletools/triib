@@ -19,7 +19,8 @@ listeners, routed to the computer's audio. Built in Rust with
 > that and the connections, logs every ATDECC frame sent and heard,
 > marking those that break the rules, and shows how entities run AVB
 > Lite, what their streams take of each link and the alarms the AVB Lite
-> profile calls for. See the [plan](docs/PLAN.md).
+> profile calls for. It speaks 38 languages, following the system's or the
+> one picked in Settings. See the [plan](docs/PLAN.md).
 
 ## Building
 

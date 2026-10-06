@@ -1207,7 +1207,9 @@ impl NetMap {
                     .dashed(&[5.0, 4.0]),
             );
             frame.fill_text(Text {
-                content: crate::fl!("netmap-off-tree-band"),
+                // In capitals where the script has them, gPTP kept as written.
+                content: crate::i18n::uppercase(&crate::fl!("netmap-off-tree"))
+                    .replace("GPTP", "gPTP"),
                 position: Point::new(band.x + BAND_PADDING, band.y + BAND_LABEL / 2.0),
                 color: colors.muted,
                 size: Pixels(11.0),

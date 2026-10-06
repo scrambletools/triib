@@ -411,6 +411,8 @@ netmap-failed = Reservation failed: { $reason }
 netmap-no-bridge-on = No bridge heard on { $interface }
 netmap-path-not-reported = Path not reported
 netmap-gptp-not-reported = gPTP not reported
+# Also a label over the devices off the tree, in capitals where the script
+# has them.
 netmap-off-tree = Not on the gPTP tree
 # In step with the grandmaster's clock.
 netmap-synced = Synced
@@ -532,9 +534,6 @@ matrix-legend-incompatible = Formats cannot meet
 # Over the matrix's corner: which way each side runs.
 matrix-talker-outputs = Talker outputs
 matrix-listener-inputs = Listener inputs
-# A label over the devices not on the clock tree, in capitals where the
-# script has them.
-netmap-off-tree-band = NOT ON THE gPTP TREE
 
 # Sets thousands apart in counts, as in 1,204,331. Keep the quotes and
 # braces; change only what is between the quotes, such as {"."} or {" "}.
@@ -778,3 +777,8 @@ network-permission = triib needs permission to send and receive raw Ethernet fra
 # A stream's format, such as "48k 8ch", and a stream input's state.
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+# The mark between a number's whole part and its fraction, as in 44.1 kHz.
+# Keep the quotes and braces; change only what is between them, such as
+# {","}.
+common-decimal-separator = {"."}

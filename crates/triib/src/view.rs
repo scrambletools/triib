@@ -623,7 +623,8 @@ impl fmt::Display for Rate {
         if hertz.is_multiple_of(1000) {
             write!(formatter, "{} kHz", hertz / 1000)?;
         } else {
-            write!(formatter, "{} kHz", f64::from(hertz) / 1000.0)?;
+            let kilohertz = crate::i18n::decimal((f64::from(hertz) / 1000.0).to_string());
+            write!(formatter, "{kilohertz} kHz")?;
         }
         // The pull multiplies the base frequency (7.3.1.2).
         match self.0.pull() {
@@ -1885,6 +1886,11 @@ pub(crate) mod tests {
         let Ok(path) = std::env::var("WINDOW_PICTURE") else {
             return;
         };
+        // Pictures in another language, such as WINDOW_LANGUAGE=de.
+        let language = std::env::var("WINDOW_LANGUAGE").ok();
+        crate::i18n::set_language(language.as_deref());
+        // Only the pictures whose names hold WINDOW_ONLY, such as "log".
+        let only = std::env::var("WINDOW_ONLY").ok();
         let theme = scramble_ui::scheme::theme("triib".to_owned(), crate::app::TRIIB_SEED, true);
         // The inspector in place, not sliding in.
         scramble_ui::motion::set_reduced(true);
@@ -1987,6 +1993,12 @@ pub(crate) mod tests {
                 Size::new(760.0, 600.0),
             ),
         ] {
+            if only
+                .as_ref()
+                .is_some_and(|only| !suffix.contains(only.as_str()))
+            {
+                continue;
+            }
             let file = format!("{path}-{suffix}.png");
             for renderer in ["tiny-skia", "wgpu"] {
                 let _ = std::fs::remove_file(format!("{path}-{suffix}-{renderer}.png"));

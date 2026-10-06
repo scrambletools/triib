@@ -1,0 +1,642 @@
+# triib's interface text in Finnish. Term choices: docs/glossary/fi.md.
+
+## Language
+
+language-name = Suomi
+
+## Common
+
+common-close = Sulje
+common-more = Lisää
+common-keep-toolbar-shown = Pidä työkalurivi näkyvissä
+common-auto-hide-toolbar = Piilota työkalurivi automaattisesti
+
+## Settings
+
+settings-title = Asetukset
+settings-general = Yleiset
+settings-appearance = Ulkoasu
+settings-language = Kieli
+settings-language-system = Järjestelmän oletus: { $language }
+settings-language-note = Tekstikenttiin kirjoitetaan järjestelmän syöttökielellä.
+settings-appearance-system = Järjestelmä
+settings-appearance-light = Vaalea
+settings-appearance-dark = Tumma
+settings-colors = Värit
+settings-system-accent = Käytä järjestelmän korostusväriä
+settings-accent-picked = Alla oleva väri määrää värit, joita triib käyttää.
+settings-accent-omarchy = Omarchy-teemasta: { $theme }.
+settings-accent-desktop = Työpöydän korostusväristä.
+settings-accent-none = Työpöydällä ei ole korostusväriä, joten käytetään alla olevaa väriä.
+settings-motion = Liike
+settings-animations = Animaatiot
+settings-animations-note = Jousto- ja liukuefektit asioiden muuttuessa.
+settings-animations-reduced = Työpöytä pyytää vähentämään liikettä, joten triib pysyy paikallaan.
+
+common-cancel = Peruuta
+common-save = Tallenna
+common-not-set = Ei asetettu
+common-unnamed = Nimetön
+common-none = Ei mitään
+common-mac-address = MAC-osoite
+common-list-separator = {", "}
+
+## Network interfaces
+
+interface-up = aktiivinen
+interface-link-down = ei linkkiä
+interface-wireless = langaton
+interface-hardware-clock = laitteistokello
+interface-hardware-clock-named = laitteistokello { $clock }
+interface-virtual = virtuaalinen
+
+## Toolbar
+
+toolbar-choose-interface = Valitse liitäntä
+toolbar-interface = Verkkoliitäntä
+toolbar-show-virtual = Näytä virtuaaliset liitännät
+toolbar-hide-virtual = Piilota virtuaaliset liitännät
+toolbar-connections = Yhteydet
+toolbar-network = Verkko
+toolbar-entities = Entiteetit
+toolbar-rediscover = Pyydä kaikkia entiteettejä mainostamaan itseään
+toolbar-search = Hae entiteettejä ja striimejä
+toolbar-presets = Esiasetukset
+toolbar-log = Loki
+toolbar-inspector = Tarkastelu
+toolbar-settings = Asetukset
+
+## The network's state, in place of a view
+
+state-no-interface = Ei liitäntää
+state-no-interface-note = Valitse AVB-verkon liitäntä, jotta entiteettejä voidaan etsiä.
+state-starting = Käynnistetään
+state-starting-note = Avataan liitäntää { $interface }.
+state-listening = Kuunnellaan
+state-listening-note = Liitännän { $interface } entiteetit näkyvät tässä sitä mukaa kuin ne mainostavat itseään.
+state-permission-needed = Tarvitaan käyttöoikeus
+state-copy-command = Kopioi komento
+state-cannot-use = Liitäntää { $interface } ei voi käyttää
+state-try-again = Yritä uudelleen
+
+## Entity list
+
+entities-none-yet = Ei vielä entiteettejä
+entities-none-yet-note = Kaikki verkon entiteetit rooleineen, SR-luokkineen ja kelloineen.
+
+## Inspector
+
+inspector-title = Tarkastelu
+inspector-entity = Entiteetti
+inspector-streams = Striimit
+inspector-controls = Säätimet
+inspector-diagnostics = Diagnostiikka
+inspector-descriptors = Kuvaajat
+inspector-select = Valitse entiteetti nähdäksesi sen tiedot.
+inspector-offline = Entiteetti { $entity } ei ole verkossa.
+inspector-rename = Nimeä uudelleen
+inspector-name = Nimi
+inspector-identify = Tunnista
+inspector-model-not-read = Sen entiteettimallia ei ole luettu.
+inspector-no-streams = Ei striimejä.
+inspector-no-controls = Ei näytettäviä säätimiä.
+inspector-no-diagnostics = Liitäntöjä tai laskureita ei raportoitu.
+inspector-reading = Luetaan kuvaajia, { $count } tähän mennessä.
+inspector-read-failed = Entiteettimallia ei voitu lukea: { $reason }.
+
+entity-section = Entiteetti
+entity-name = Nimi
+entity-group = Ryhmä
+entity-product = Tuote
+entity-firmware = Laiteohjelmisto
+entity-serial-number = Sarjanumero
+entity-configuration = Kokoonpano
+entity-configuration-of = { $name } ({ $number }/{ $count })
+entity-milan = Milan
+entity-media-clock = Mediakello
+entity-clock-domain = Kelloalue
+entity-sampling-rate = Näytteenottotaajuus
+clock-source-numbered = Lähde { $index }
+rate-pull = pull { $pull }
+
+stream-inputs = Striimitulot
+stream-outputs = Striimilähdöt
+stream-max-transit-time = Suurin läpikulkuaika { $time }
+
+avb-interfaces = AVB-liitännät
+avb-interface = Liitäntä
+avb-interface-clock-identity = Kellon tunniste
+avb-interface-grandmaster = Grandmaster
+avb-interface-grandmaster-domain = { $grandmaster }, toimialue { $domain }
+avb-interface-peer-delay = Peer delay
+avb-interface-running = Käynnissä
+avb-interface-none-reported = Ei raportoitu
+avb-interface-path = Polku
+avb-interface-own-grandmaster = Itse grandmaster
+avb-interface-hops = { $count ->
+    [one] { $count } hyppy grandmasterista
+   *[other] { $count } hyppyä grandmasterista
+}
+avb-interface-link-up = Linkki muodostui
+avb-interface-link-down = Linkki katkesi
+avb-interface-grandmaster-changes = Grandmasterin vaihdokset
+avb-interface-frames-sent = Lähetetyt kehykset
+avb-interface-frames-received = Vastaanotetut kehykset
+avb-interface-crc-errors = CRC-virheet
+
+tree-firmware = Laiteohjelmisto { $version }
+tree-descriptor-types = { $count ->
+    [one] { $count } kuvaajatyyppi
+   *[other] { $count } kuvaajatyyppiä
+}
+tree-clock = Kello
+tree-clock-source-from = { $kind }, lähde: { $location } { $index }
+tree-clock-domain-using = Käyttää: { $source }
+tree-clusters = { $count ->
+    [one] { $count } klusteri
+   *[other] { $count } klusteria
+}
+tree-maps = { $count ->
+    [one] { $count } kartoitus
+   *[other] { $count } kartoitusta
+}
+
+advert-not-advertised = Ei mainostettu
+advert-identity = Tunnistetiedot
+advert-entity-id = Entiteetin ID
+advert-entity-model = Entiteettimalli
+advert-roles = Roolit
+advert-talker = Talker
+advert-listener = Listener
+advert-clock = Kello
+advert-btc = BTC
+advert-gptp-domain = gPTP-toimialue
+advert-sr-classes = SR-luokat
+advert-indexes = Entiteettimallin indeksit
+advert-identify-control = Tunnistussäädin
+advert-avb-interface = AVB-liitäntä
+advert-advertising = Mainostus
+advert-valid-time = Voimassaoloaika
+advert-available-index = Saatavuusindeksi
+advert-association = Assosiaatio
+advert-capabilities = Ominaisuudet
+
+## Status bar
+
+status-entities = { $count ->
+    [one] { $count } entiteetti
+   *[other] { $count } entiteettiä
+}
+status-not-discovering = Ei etsitä
+status-discovering = Etsitään
+status-discovering-as = Etsitään tunnuksella { $controller }
+status-stopped = Pysähtyi virheeseen
+status-alarm = Hälytys
+status-alarm-of = { $entity }: { $alarm }
+status-alarm-more = { $count ->
+    [one] { $alarm } ja { $count } muu
+   *[other] { $alarm } ja { $count } muuta
+}
+
+## Descriptions of entities, shared by the views
+
+role-talker = talker { $count }
+role-listener = listener { $count }
+role-controller = ohjain
+role-none = ei rooleja
+classes-a-and-b = A ja B
+clock-no-gptp = Ei gPTP:tä
+
+read-not-read = Ei luettu
+read-reading = Luetaan, { $count } tähän mennessä
+read-ready-unreadable = { $count ->
+    [one] Valmis, { $count } lukukelvoton
+   *[other] Valmis, { $count } lukukelvotonta
+}
+read-ready-cached = Valmis, välimuistista
+read-ready = Valmis
+read-failed = Epäonnistui: { $reason }
+
+milan-no = Ei
+milan-before-1-3 = ennen versiota 1.3
+milan-certified = { $version }, sertifioitu { $certification }
+milan-not-certified = { $version }, ei sertifioitu
+
+outcome-status = tila { $status }
+outcome-no-response = ei vastausta
+outcome-not-possible = ei mahdollista
+outcome-connect = Striimiä { $talker } ei voitu yhdistää striimiin { $listener }: { $reason }.
+outcome-disconnect = Striimin { $listener } yhteyttä ei voitu katkaista: { $reason }.
+outcome-identify = Entiteettiä { $entity } ei voitu tunnistaa: { $reason }.
+outcome-rename = Kohteen { $what } uudeksi nimeksi ei voitu asettaa ”{ $name }”: { $reason }.
+outcome-rename-group = Entiteetin { $entity } ryhmän uudeksi nimeksi ei voitu asettaa ”{ $name }”: { $reason }.
+outcome-format-streaming = Striimin { $stream } muotoa ei voitu muuttaa: se on käynnissä. Katkaise sen yhteys ensin.
+outcome-format = Striimin { $stream } muotoa ei voitu muuttaa: { $reason }.
+outcome-sampling-rate = Entiteetin { $entity } näytteenottotaajuutta ei voitu muuttaa: { $reason }.
+outcome-clock-source = Entiteetin { $entity } kellolähdettä ei voitu muuttaa: { $reason }.
+outcome-map = Kanavaa ei voitu kartoittaa entiteetissä { $entity }: { $reason }.
+outcome-unmap = Kanavan kartoitusta ei voitu poistaa entiteetissä { $entity }: { $reason }.
+outcome-control = Säädintä ”{ $control }” ei voitu asettaa entiteetissä { $entity }: { $reason }.
+outcome-control-numbered = Säädintä { $index } ei voitu asettaa entiteetissä { $entity }: { $reason }.
+
+stream-not-connected = Ei yhdistetty
+stream-from = Lähde: { $stream }
+stream-from-receiving = Lähde: { $stream }, vastaanotetaan
+stream-from-waiting = Lähde: { $stream }, odotetaan talkeria
+stream-from-failed = Lähde: { $stream }, talkerin varaus epäonnistui: { $reason }
+stream-sending-to = Lähetetään osoitteeseen { $destination }
+
+failure-no-response = se ei vastannut
+failure-refused = se kieltäytyi tilalla { $status }
+failure-malformed = sen vastausta ei voitu purkaa
+
+msrp-failure-1 = kaistanleveys ei riitä
+msrp-failure-2 = sillan resurssit eivät riitä
+msrp-failure-3 = liikenneluokan kaistanleveys ei riitä
+msrp-failure-4 = toinen talker käyttää striimin ID:tä
+msrp-failure-5 = kohdeosoite on jo käytössä
+msrp-failure-6 = korkeamman tason striimi syrjäytti
+msrp-failure-7 = raportoitu viive muuttui
+msrp-failure-8 = lähtöportti ei tue AVB:tä
+msrp-failure-9 = käytä toista kohdeosoitetta
+msrp-failure-10 = MSRP-resurssit loppuivat
+msrp-failure-11 = MMRP-resurssit loppuivat
+msrp-failure-12 = kohdeosoitetta ei voi tallentaa
+msrp-failure-13 = prioriteetti ei ole SR-luokan prioriteetti
+msrp-failure-14 = kehykset ovat liian suuria siirtotielle
+msrp-failure-15 = portin fan-in-raja saavutettu
+msrp-failure-16 = rekisteröidyn striimin ensimmäinen arvo muuttui
+msrp-failure-17 = VLAN on estetty lähtöportissa
+msrp-failure-18 = VLAN-merkintä on pois käytöstä lähtöportissa
+msrp-failure-19 = SR-luokan prioriteetti ei täsmää
+msrp-failure-unknown = tuntematon syy
+msrp-failure-at = { $reason } (silta { $bridge })
+
+## Entity list columns
+
+column-vendor = Valmistaja
+column-model = Malli
+column-state = Tila
+column-entity-model-id = Entiteettimallin ID
+column-talker-streams = Talker-striimit
+column-listener-streams = Listener-striimit
+column-avb-lite = AVB Lite
+column-egress = Lähtevä liikenne
+
+## Settings file
+
+settings-no-place = Asetuksia ei voi tallentaa minnekään: kotikansio ei ole tiedossa.
+settings-unusable = Tiedostoa { $path } ei voitu käyttää: { $error }.
+settings-unsaved = Tiedostoa { $path } ei voitu tallentaa: { $error }.
+
+column-remove = Poista sarake
+column-move-left = Siirrä vasemmalle
+column-move-right = Siirrä oikealle
+column-add = Lisää sarake
+common-percent = { $value }{" "}%
+
+## Network view
+
+netmap-empty = Ei vielä näytettävää verkkoa
+netmap-empty-note = Entiteetit näkyvät tässä, kun ne on luettu ja ne ovat kertoneet paikkansa gPTP-puussa.
+netmap-focus-clock-path = kellopolku ({ $name })
+netmap-focus-streams = striimit ({ $name })
+netmap-showing = Näytetään { $what }
+netmap-devices = { $count ->
+    [one] { $count } laite
+   *[other] { $count } laitetta
+}
+netmap-bridges = { $count ->
+    [one] { $count } silta
+   *[other] { $count } siltaa
+}
+netmap-show-map = Näytä kartta
+netmap-show-details = Näytä tiedot
+stream-numbered = Striimi { $index }
+netmap-bridge = Silta
+netmap-device = Laite
+netmap-this-computer = Tämä tietokone
+netmap-connected = Yhdistetty
+netmap-advertised = Mainostettu, ei valmista listeneriä
+netmap-advertised-off-tree = Mainostettu, ei valmista listeneriä ({ $listener } ei ole gPTP-puussa)
+netmap-failed-at = Varaus epäonnistui sillassa { $bridge }: { $reason }
+netmap-failed = Varaus epäonnistui: { $reason }
+netmap-no-bridge-on = Liitännässä { $interface } ei havaittu siltaa
+netmap-path-not-reported = Polkua ei raportoitu
+netmap-gptp-not-reported = gPTP:tä ei raportoitu
+netmap-off-tree = Ei gPTP-puussa
+netmap-synced = Synkronoitu
+netmap-not-synced = Ei synkronoitu
+netmap-triib-on = triib liitännässä { $interface }
+netmap-through-count = { $count ->
+    [one] { $count } läpi kulkeva
+   *[other] { $count } läpi kulkevaa
+}
+netmap-out = { $count ->
+    [one] { $count } lähtevä
+   *[other] { $count } lähtevää
+}
+netmap-in = { $count ->
+    [one] { $count } saapuva
+   *[other] { $count } saapuvaa
+}
+netmap-failed-count = { $count ->
+    [one] { $count } epäonnistunut
+   *[other] { $count } epäonnistunutta
+}
+netmap-advertised-only = Vain mainostettu
+netmap-failed-state = Epäonnistui
+netmap-stream-item = { $talker } → { $listener } · { $state }
+netmap-apart-own-grandmaster = Ei gPTP-puussa: se on itse grandmaster
+netmap-apart-no-path = Sen polkua ei raportoitu; se seuraa grandmasteria { $grandmaster }
+netmap-apart-unreported = Se ei ole raportoinut gPTP-tilaansa
+netmap-apart-no-neighbor = Tämän tietokoneen liitännässä ei havaittu siltaa
+netmap-clock-tree = Kellopuu
+netmap-no-grandmaster = Grandmasteria ei havaittu
+netmap-grandmaster-is = Grandmaster: { $grandmaster }
+netmap-needs-attention = Vaatii huomiota
+netmap-nodes-below = Alemmat solmut
+netmap-bridges-below = Alemmat sillat
+netmap-clock-path = Kellopolku
+netmap-hops = Hypyt grandmasterista
+netmap-link-delay = Linkin viive
+netmap-bridge-port = Sillan portti
+netmap-link-drops = Linkin katkokset
+netmap-synced-to-grandmaster = Synkronoitu grandmasteriin
+netmap-host-no-gptp = Ei synkronoitu: tämä tietokone ei käytä gPTP:tä
+netmap-link-no-gptp = Ei synkronoitu: sen linkillä ei ole gPTP:tä käytössä
+netmap-audio = Ääni
+netmap-media-clock-streams = Mediakellostriimit
+netmap-audio-streams = Äänistriimit
+netmap-bound = { $count ->
+    [one] { $count } sidottu
+   *[other] { $count } sidottua
+}
+netmap-flowing = Kulkee
+netmap-advertised-state = Mainostettu
+netmap-media-clock-stream = Mediakellostriimi
+netmap-audio-stream = Äänistriimi
+netmap-reaches = Ulottuu
+netmap-passing-count = { $count ->
+    [one] { $count } läpi kulkeva striimi
+   *[other] { $count } läpi kulkevaa striimiä
+}
+netmap-through = Läpi kulkevat
+netmap-passing-through = Kulkee läpi
+netmap-sending = Lähtevät
+netmap-receiving = Saapuvat
+netmap-problems = Ongelmat
+netmap-help-back = Palaa yleiskuvaan napsauttamalla taustaa.
+netmap-help-stream = Napsauta striimiä tarkastellaksesi sitä tai taustaa palataksesi yleiskuvaan.
+netmap-help-clock = Kello kulkee grandmasterista kunkin sillan kautta puun jokaiseen solmuun. Katkoviivainen harmaa viiva on linkki, jolla gPTP ei ole käytössä. Napsauta laitetta tai sen johdinta tarkastellaksesi sen kellopolkua; tyhjennä valinta napsauttamalla taustaa.
+netmap-help-media-clock = Vain mediakellostriimit (CRF), piirrettynä samoin kuin ääni: yksi johdin striimiä kohden, väritettynä talkerin mukaan. Napsauta johdinta tarkastellaksesi sen striimiä tai laitetta nähdäksesi sen striimit; tyhjennä valinta napsauttamalla taustaa.
+netmap-help-audio = Jokaisella striimillä on oma johtimensa, joka tulee jokaiseen ylittämäänsä siltaan ja lähtee siitä. Väri määräytyy talkerin mukaan: jokaisella talkerilla on oma sävynsä, ja sen striimit ovat tämän sävyn vivahteita. Liikkuvat pisteet tarkoittavat, että ääni kulkee; paikallaan oleva punainen viiva on epäonnistunut varaus ja paikallaan oleva harmaa viiva mainostettu striimi ilman valmista listeneriä; molemmat päättyvät siihen, mihin varaus päättyy. Keskimmäisen sarakkeen laitteet ovat suoraan yhteydessä grandmasterin siltaan. Napsauta johdinta tarkastellaksesi sen striimiä tai laitetta nähdäksesi sen striimit; tyhjennä valinta napsauttamalla taustaa.
+
+## Connections
+
+matrix-nothing-shown = Ei näytettäviä striimejä
+matrix-nothing-shown-note = Muuta hakua tai suodattimia nähdäksesi lisää striimejä.
+matrix-empty = Ei yhdistettäviä striimejä
+matrix-empty-note = Talker- ja listener-striimit kohtaavat tässä, kun niitä sisältävät entiteetit on luettu.
+matrix-all-streams = Kaikki striimit
+matrix-connectable-only = Piilota ne, joita ei voi yhdistää
+matrix-none-hidden = Kaikki näytetyt striimit voi yhdistää
+matrix-hidden = { $count ->
+    [one] { $count } striimi piilotettu
+   *[other] { $count } striimiä piilotettu
+}
+matrix-own = Entiteetin lähtöjä ei yhdistetä sen omiin tuloihin.
+matrix-working = Työn alla.
+matrix-waiting-change = Odotetaan tämän tulon viimeisintä muutosta.
+matrix-connected = Yhdistetty ja vastaanottaa. Katkaise yhteys napsauttamalla.
+matrix-bound-waiting = Sidottu, odotetaan talkerin striimiä. Katkaise yhteys napsauttamalla.
+matrix-bound-failed = Sidottu, mutta talkerin varaus epäonnistui: { $reason }. Katkaise yhteys napsauttamalla.
+matrix-bound-formats-differ = Sidottu, mutta muodot eroavat: talker lähettää muotoa { $sent }, tulon asetus on { $set }. Katkaise yhteys napsauttamalla.
+matrix-formats-match = Muodot vastaavat ({ $format }). Yhdistä napsauttamalla.
+matrix-format-must-change = Tulo hyväksyy muodon { $sent }, mutta sen asetus on { $set }, joten se ei ehkä toista ennen kuin sen muotoa muutetaan. Yhdistä silti napsauttamalla.
+matrix-incompatible = Tulo ei hyväksy muotoa { $sent }. Sen asetus on { $set }.
+matrix-group-none = Ei yhdistetty. Laajenna yhdistääksesi striimit yksitellen.
+matrix-group-connected = { $count ->
+    [one] { $count } yhdistetty. Laajenna nähdäksesi sen.
+   *[other] { $count } yhdistettyä. Laajenna nähdäksesi jokaisen.
+}
+matrix-outputs-expand = { $count ->
+    [one] { $count } striimilähtö. Laajenna napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+   *[other] { $count } striimilähtöä. Laajenna napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+}
+matrix-outputs-collapse = { $count ->
+    [one] { $count } striimilähtö. Kutista napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+   *[other] { $count } striimilähtöä. Kutista napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+}
+matrix-inputs-expand = { $count ->
+    [one] { $count } striimitulo. Laajenna napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+   *[other] { $count } striimituloa. Laajenna napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+}
+matrix-inputs-collapse = { $count ->
+    [one] { $count } striimitulo. Kutista napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+   *[other] { $count } striimituloa. Kutista napsauttamalla nuolta, tarkastele napsauttamalla nimeä.
+}
+matrix-stream-inspect = { $detail } Tarkastele entiteettiä { $entity } napsauttamalla.
+matrix-point = Osoita solua
+matrix-point-note = nähdäksesi sen talkerin ja listenerin sekä sen, sopivatko niiden muodot yhteen.
+matrix-legend-waiting = Sidottu, odotetaan striimiä
+matrix-legend-trouble = Sidottu, jokin on vialla
+matrix-legend-open = Voi yhdistää
+matrix-legend-change = Tulon muotoa on ensin muutettava
+matrix-legend-incompatible = Muodot eivät voi sopia yhteen
+matrix-talker-outputs = Talker-lähdöt
+matrix-listener-inputs = Listener-tulot
+
+common-thousands-separator = {" "}
+
+## Diagnostics
+
+diag-since-start = Laskettu entiteetin käynnistymisestä lähtien.
+diag-stream-input = Striimitulo
+diag-stream-output = Striimilähtö
+diag-locked = { $count ->
+    [0] ei lukittunut
+    [one] lukittui kerran
+   *[other] lukittui { $number } kertaa
+}
+diag-lost-lock = { $count ->
+    [0] ei menettänyt lukitusta
+    [one] menetti lukituksen kerran
+   *[other] menetti lukituksen { $number } kertaa
+}
+diag-frames-in = { $count ->
+    [one] { $number } saapuva kehys
+   *[other] { $number } saapuvaa kehystä
+}
+diag-frames-out = { $count ->
+    [one] { $number } lähtevä kehys
+   *[other] { $number } lähtevää kehystä
+}
+diag-media-locked = { $count ->
+    [0] ei lukittunut mediakelloon
+    [one] lukittui mediakelloon kerran
+   *[other] lukittui mediakelloon { $number } kertaa
+}
+diag-lost-media-lock = { $count ->
+    [0] ei menettänyt mediakellon lukitusta
+    [one] menetti mediakellon lukituksen kerran
+   *[other] menetti mediakellon lukituksen { $number } kertaa
+}
+diag-interrupted = { $count ->
+    [0] ei keskeytynyt
+    [one] keskeytyi kerran
+   *[other] keskeytyi { $number } kertaa
+}
+diag-out-of-sequence = { $count ->
+    [one] { $number } kehys väärässä järjestyksessä
+   *[other] { $number } kehystä väärässä järjestyksessä
+}
+diag-media-resets = { $count ->
+    [one] { $number } median nollaus
+   *[other] { $number } median nollausta
+}
+diag-timestamps-uncertain = { $count ->
+    [0] ei epävarmoja aikaleimoja
+    [one] epävarmat aikaleimat kerran
+   *[other] epävarmat aikaleimat { $number } kertaa
+}
+diag-no-timestamp = { $count ->
+    [one] { $number } kehys ilman aikaleimaa
+   *[other] { $number } kehystä ilman aikaleimaa
+}
+diag-unsupported-format = { $count ->
+    [one] { $number } kehys tukemattomassa muodossa
+   *[other] { $number } kehystä tukemattomassa muodossa
+}
+diag-late = { $count ->
+    [one] { $number } kehys myöhässä
+   *[other] { $number } kehystä myöhässä
+}
+diag-early = { $count ->
+    [one] { $number } kehys etuajassa
+   *[other] { $number } kehystä etuajassa
+}
+diag-started = { $count ->
+    [0] ei käynnistynyt
+    [one] käynnistyi kerran
+   *[other] käynnistyi { $number } kertaa
+}
+diag-stopped = { $count ->
+    [0] ei pysähtynyt
+    [one] pysähtyi kerran
+   *[other] pysähtyi { $number } kertaa
+}
+diag-reservation-failed = talkerin varaus epäonnistui: { $reason }
+diag-latency = { $microseconds } µs kertynyttä viivettä
+
+## AVB Lite
+
+lite-active = Aktiivinen
+lite-active-untagged = Aktiivinen, merkitsemätön
+lite-active-vlan = Aktiivinen, VLAN { $vlan }
+lite-capable = Tuettu
+lite-mode = Toimintatila
+lite-mode-capable = AVB, AVB Lite -yhteensopiva
+lite-because = Syy
+lite-fallback-none = syytä ei annettu
+lite-fallback-endpoint = toisen päätepisteen ilmoitus tuli läpi, joten niiden välissä ei ole AVB-siltaa
+lite-fallback-unanswered = yhdeksään peer delay -pyyntöön ei vastattu
+lite-fallback-responders = kaksi tai useampi vastasi yhteen peer delay -pyyntöön, joten kytkin ei ole AVB-silta
+lite-fallback-configured = käyttäjä tai ohjain asetti sen
+lite-fallback-other = syy, jota profiili ei nimeä
+lite-other-profile = Muu profiili
+lite-ptp-domain = { $profile }, toimialue { $domain }
+lite-offset = Poikkeama
+lite-offset-from = { $offset } (grandmaster: { $grandmaster })
+lite-media-vlan = Media-VLAN
+lite-untagged = Merkitsemätön
+lite-unicast = Unicast
+lite-fanout = { $count ->
+    [one] Enintään { $count } listener striimiä kohden, sitten multicast
+   *[other] Enintään { $count } listeneriä striimiä kohden, sitten multicast
+}
+lite-link = Linkki
+lite-bandwidth = Kaistanleveys
+lite-egress-of = { $used } / { $link }, { $share }
+lite-egress-of-assumed = { $used } / { $link }, { $share }, oletuksena gigabitin linkki
+lite-egress-reported = Entiteetin oma laskelma sen hyväksymistä striimeistä.
+lite-egress-worked-out = Laskettu sen yhdistettyjen striimilähtöjen muodoista.
+lite-alarm-offset = PTP-poikkeama { $offset }, yli 50 µs:n rajan, jonka AVB Lite sallii
+lite-alarm-egress = Lähtevä liikenne { $share } linkistä, yli striimeille sallitun rajan { $limit }
+
+## Log
+
+log-all = Kaikki
+log-warnings = Varoitukset
+log-pause = Tauko
+log-resume = Jatka
+log-clear = Tyhjennä
+log-empty = Jokainen ATDECC-kehys, jonka triib lähettää ja vastaanottaa, näkyy tässä uusin ensin.
+log-none-match = Mikään säilytetty kehys ei vastaa suodatinta.
+log-frames = { $count ->
+    [one] { $count } kehys
+   *[other] { $count } kehystä
+}
+log-shown-of = { $shown } / { $all } kehystä
+log-sent = Lähetetty
+log-heard = Vastaanotettu
+log-not-decoded = Ei purettu
+log-warning-short = { $missing ->
+    [one] Sen control_data_length -kenttä ulottuu { $missing } oktetin kehyksen lopun yli.
+   *[other] Sen control_data_length -kenttä ulottuu { $missing } oktettia kehyksen lopun yli.
+}
+log-warning-undecodable = Sitä ei voi purkaa: { $error }.
+log-warning-long-acmp = Se on pitkässä ACMP-muodossa, jota Milan-entiteetti ei saa lähettää (Milan 1.3, 5.5.2.2).
+
+## Channel mappings
+
+mapping-section = Kanavakartoitukset
+mapping-inputs = Tulot
+mapping-outputs = Lähdöt
+mapping-port = portti { $number }
+mapping-fixed = kiinteä
+mapping-not-read = Ei vielä luettu.
+mapping-no-clusters = Ei klustereita.
+mapping-no-streams = Ei äänistriimejä.
+mapping-none = Ei kartoituksia.
+mapping-not-mapped = Ei kartoitettu
+mapping-cluster-numbered = Klusteri { $index }
+
+## Presets
+
+presets-note = Esiasetus tallentaa kunkin entiteetin kellolähteet, näytteenottotaajuudet, striimien muodot, säätimet ja yhteydet. Kun se palautetaan, muutetaan vain se, mikä eroaa.
+presets-none = Ei vielä tallennettuja esiasetuksia.
+presets-connections = { $count ->
+    [one] { $count } yhteys
+   *[other] { $count } yhteyttä
+}
+presets-recall = Palauta
+presets-delete = Poista
+presets-no-place = Esiasetuksia ei voi tallentaa minnekään: kotikansio ei ole tiedossa.
+presets-undeletable = Tiedostoa { $path } ei voitu poistaa: { $error }.
+presets-saved = { $count ->
+    [one] Tallennettu ”{ $name }”, { $count } entiteetti.
+   *[other] Tallennettu ”{ $name }”, { $count } entiteettiä.
+}
+presets-nothing-differs = Mikään ei eroa esiasetuksesta ”{ $name }”.
+presets-recalling = { $count ->
+    [one] Palautetaan ”{ $name }”: { $count } muutos.
+   *[other] Palautetaan ”{ $name }”: { $count } muutosta.
+}
+presets-missing = { $report } Ei paikalla tai ei luettu: { $missing }.
+presets-deleted = Poistettu ”{ $name }”.
+
+## Controls
+
+control-numbered = Säädin { $index }
+control-not-shown = Ei näytetä tässä
+control-option = Vaihtoehto { $number }
+
+## Network errors
+
+network-permission = triib tarvitsee oikeuden lähettää ja vastaanottaa raakoja Ethernet-kehyksiä.
+
+matrix-stream-format = { $format }.
+matrix-stream-format-state = { $format }. { $state }.
+
+common-decimal-separator = {","}

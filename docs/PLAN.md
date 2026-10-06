@@ -531,7 +531,19 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 - Text fields take the system's input language. Unlike prev, triib has
   no setting to force one.
 - Names the standards give, such as descriptor types and the commands
-  and statuses in the log, stay as the standards write them.
+  and statuses in the log, stay as the standards write them, and so do
+  the log's frame summaries; `triib-cli` stays English.
+- Done: the text of every view in `i18n/en/triib.ftl` and its 37
+  translations, their terms following `docs/GLOSSARY.md`, each
+  language's choices in `docs/glossary/` with those a native speaker
+  should check. Each language sets its list, thousands and decimal
+  marks and how it writes a percentage; capitals follow the language
+  (Turkish İ, Greek without accents). Tests check every translation
+  loads, keeps English's keys and variables, keeps the standards' names
+  and units, and picks its plural forms.
+- To do: mirror triib's own views in right to left languages (the entity
+  list, the inspector's rows, the log's lines), which now mirror only
+  where scramble-ui's components do; and review by native speakers.
 
 ### P2: macOS and Windows, everything but virtual endpoints
 
