@@ -1,0 +1,4 @@
+[env]
+# Tests draw windows with the software renderer, as on CI: several tests
+# opening the GPU driver at once can crash it.
+ICED_TEST_BACKEND = "tiny-skia"
