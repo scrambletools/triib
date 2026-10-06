@@ -32,6 +32,7 @@ pub mod aem;
 pub mod avtp;
 #[cfg(feature = "alloc")]
 pub mod cache;
+pub mod control;
 pub mod descriptor;
 pub mod error;
 pub mod id;

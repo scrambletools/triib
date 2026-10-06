@@ -1454,6 +1454,102 @@ fn picks_a_clock_source() {
     assert_eq!(model.clock_domains().next().unwrap().clock_source_index, 1);
 }
 
+impl FakeEntity {
+    /// Gives the entity a speaker volume control, CONTROL 0: a linear
+    /// 16-bit gain from -100 dB to 6 dB in tenths, at -6 dB.
+    fn add_volume(&mut self) {
+        let configuration = self
+            .descriptors
+            .get_mut(&(DescriptorType::CONFIGURATION.0, 0))
+            .unwrap();
+        let slot = configuration.len();
+        configuration.extend([0; 4]);
+        let count = u16::from_be_bytes([configuration[70], configuration[71]]);
+        put(configuration, 70, count + 1);
+        put(configuration, slot, DescriptorType::CONTROL.0);
+        put(configuration, slot + 2, 1);
+        let mut volume = named(DescriptorType::CONTROL, 0, 118, "Volume", 0xffff);
+        put(&mut volume, 80, crate::control::ValueType::LINEAR_INT16.0);
+        volume[82..90].copy_from_slice(&crate::control::ControlType::GAIN.0.to_be_bytes());
+        put(&mut volume, 94, 104);
+        put(&mut volume, 96, 1);
+        put(&mut volume, 98, DescriptorType::INVALID.0);
+        volume[104..118].copy_from_slice(&[
+            0xfc, 0x18, 0x00, 0x3c, 0x00, 0x05, 0x00, 0x00, 0xff, 0xc4, 0xff, 0xb0, 0xff, 0xff,
+        ]);
+        self.descriptors
+            .insert((DescriptorType::CONTROL.0, 0), volume);
+    }
+}
+
+/// An unsolicited SET_CONTROL from the entity, with a control's new values.
+fn control_notification(index: u16, values: &[u8]) -> Vec<u8> {
+    let mut payload = vec![0u8; 4];
+    put(&mut payload, 0, DescriptorType::CONTROL.0);
+    put(&mut payload, 2, index);
+    payload.extend_from_slice(values);
+    let pdu = AemPdu {
+        header: AecpHeader {
+            message_type: AecpMessageType::AEM_RESPONSE,
+            status: 0,
+            target_entity_id: TALKER,
+            controller_entity_id: CONTROLLER,
+            sequence_id: 4,
+        },
+        unsolicited: true,
+        controller_request: false,
+        command_type: AemCommandType::SET_CONTROL,
+        payload: &payload,
+    };
+    let mut out = [0; 64];
+    let length = pdu.encode(&mut out).unwrap();
+    out[..length].to_vec()
+}
+
+#[test]
+fn controls_are_set_and_kept_current_without_reading() {
+    use crate::control::Number;
+
+    let mut controller = controller();
+    let mut entity = FakeEntity::new();
+    entity.add_volume();
+    controller.handle_adpdu(at(0), TALKER_MAC, &aem_available(1));
+    controller.pump(at(0));
+    exchange(&mut controller, &mut entity, at(0));
+    events(&mut controller);
+    let current = |controller: &Controller| {
+        let model = controller.model(TALKER).unwrap();
+        model.control(0).unwrap().current().collect::<Vec<_>>()
+    };
+    assert_eq!(current(&controller), [Number::Int(-60)]);
+
+    let set = controller.set_control(at(1), TALKER, 0, &(-120i16).to_be_bytes());
+    exchange(&mut controller, &mut entity, at(1));
+    assert_eq!(finished(&mut controller), [(set, Outcome::Done)]);
+    assert_eq!(current(&controller), [Number::Int(-120)]);
+    assert_eq!(
+        entity.controls.last(),
+        Some(&(0, (-120i16).to_be_bytes().to_vec()))
+    );
+
+    // Another controller turns it down: the notification carries the
+    // value, so nothing is read again.
+    let frame = control_notification(0, &(-300i16).to_be_bytes());
+    controller.handle_frame(at(2), TALKER_MAC, &frame).unwrap();
+    assert_eq!(exchange(&mut controller, &mut entity, at(2)), 0);
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    assert_eq!(current(&controller), [Number::Int(-300)]);
+
+    // No values, or more than any control holds, are not sent.
+    let empty = controller.set_control(at(3), TALKER, 0, &[]);
+    let long = controller.set_control(at(3), TALKER, 0, &[0; 405]);
+    assert_eq!(
+        finished(&mut controller),
+        [(empty, Outcome::NotPossible), (long, Outcome::NotPossible)]
+    );
+    assert!(controller.control_values.is_empty());
+}
+
 /// Reads the entity with a controller that knows a model cached from an
 /// earlier reading, returning the controller and the commands the entity
 /// saw while being read.

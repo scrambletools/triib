@@ -1,9 +1,9 @@
 //! Headless ATDECC controller. It lists interfaces, discovers entities,
 //! reads their descriptors, maps the network from their gPTP paths,
 //! renames entities, changes stream formats, sampling rates and clock
-//! sources, shows the media clock each entity follows, and shows and
-//! changes how channels map to streams; connections follow as the
-//! engine grows.
+//! sources, shows the media clock each entity follows, shows and changes
+//! how channels map to streams, and shows and sets controls; connections
+//! follow as the engine grows.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::ExitCode;
@@ -11,8 +11,9 @@ use std::time::{Duration, Instant};
 
 use atdecc::aem::{AudioMapping, AvbInfoFlags, MappingChange};
 use atdecc::blocking::Driver;
+use atdecc::control::{ControlDescriptor, Linear, Number, Selector, Shape, Unit, encode_values};
 use atdecc::controller::{Controller, Outcome, Refusal};
-use atdecc::descriptor::{ClockSourceType, DescriptorType, SamplingRate};
+use atdecc::descriptor::{ClockSourceType, DescriptorType, LocalizedStringRef, SamplingRate};
 use atdecc::media_clock::{Broken, ClockFrom, DomainClock, DomainId, media_clocks};
 use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::stream_format::StreamFormat;
@@ -52,6 +53,11 @@ commands:
                                      the port as stream-port-input:0 and each
                                      mapping as stream:channel=cluster:channel,
                                      the cluster counted from the port's first
+  controls <interface> [entity-id]   print each control's values and ranges
+  control <interface> <entity-id> <control> <value>...
+                                     set a control by its index, each value in
+                                     its unit, such as -12 for -12 dB, a
+                                     selector's as one of its options
   help                               show this text";
 
 fn main() -> ExitCode {
@@ -118,6 +124,34 @@ fn main() -> ExitCode {
             };
             let Some(change) = Change::parse_mappings(change, port, &arguments[5..]) else {
                 return usage();
+            };
+            set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("controls") => {
+            let Some(interface) = argument(1) else {
+                return usage();
+            };
+            let entity = match argument(2).map(str::parse::<EntityId>) {
+                None => None,
+                Some(Ok(entity)) => Some(entity),
+                Some(Err(_)) => return usage(),
+            };
+            controls(interface, entity).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("control") => {
+            let (Some(interface), Some(Ok(entity)), Some(Ok(index))) = (
+                argument(1),
+                argument(2).map(str::parse::<EntityId>),
+                argument(3).map(str::parse::<u16>),
+            ) else {
+                return usage();
+            };
+            if arguments.len() < 5 {
+                return usage();
+            }
+            let change = Change::Control {
+                index,
+                values: arguments[4..].to_vec(),
             };
             set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
         }
@@ -347,6 +381,12 @@ enum Change {
         port: (DescriptorType, u16),
         mappings: Vec<AudioMapping>,
     },
+    /// A control's new values as typed, read against the control once its
+    /// entity is read.
+    Control {
+        index: u16,
+        values: Vec<String>,
+    },
 }
 
 impl Change {
@@ -452,6 +492,18 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
         println!("{entity} not found");
         return driver.close();
     }
+    let control_values = match &change {
+        Change::Control { index, values } => {
+            match control_values(driver.controller().model(entity), *index, values) {
+                Ok(encoded) => encoded,
+                Err(why) => {
+                    println!("{why}");
+                    return driver.close();
+                }
+            }
+        }
+        _ => Vec::new(),
+    };
     let now = driver.now();
     let controller = driver.controller_mut();
     let command = match &change {
@@ -486,6 +538,9 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
             port,
             mappings,
         } => controller.remove_audio_mappings(now, entity, *port, mappings),
+        Change::Control { index, .. } => {
+            controller.set_control(now, entity, *index, &control_values)
+        }
     };
     let started = Instant::now();
     let outcome = loop {
@@ -569,6 +624,11 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
                     .find(|found| found.index == port.1)
                 {
                     print_port_mappings(model, &found);
+                }
+            }
+            Change::Control { index, .. } => {
+                if let Some(control) = model.control(index) {
+                    print_control(model, &control);
                 }
             }
         }
@@ -742,6 +802,210 @@ fn print_clock_tree(
 
 /// Reads `entity`, or every entity, and prints how each stream port's
 /// channels map to and from the streams.
+/// A control's new values, typed in its units, encoded as SET_CONTROL
+/// takes them; why not, when they do not fit it.
+fn control_values(
+    model: Option<&EntityModel>,
+    index: u16,
+    values: &[String],
+) -> Result<Vec<u8>, String> {
+    let model = model.ok_or("no AEM model")?;
+    let control = model
+        .control(index)
+        .ok_or_else(|| format!("no control {index}"))?;
+    if control.read_only {
+        return Err(format!("control {index} is read only"));
+    }
+    let shown = |text: &str| {
+        text.parse::<f64>()
+            .map_err(|_| format!("{text} is not a number"))
+    };
+    let count = |wanted: usize| {
+        if values.len() == wanted {
+            Ok(())
+        } else {
+            let plural = if wanted == 1 { "" } else { "s" };
+            Err(format!("control {index} takes {wanted} value{plural}"))
+        }
+    };
+    let mut out = vec![0; atdecc::aem::MAX_CONTROL_VALUES];
+    let scalar = control.value_type.scalar();
+    let numbers: Vec<Number> = match (control.value_type.shape(), scalar) {
+        (Shape::Linear, Some(scalar)) => {
+            let linear: Vec<Linear> = control.linear().collect();
+            count(linear.len())?;
+            values
+                .iter()
+                .zip(&linear)
+                .map(
+                    |(text, value)| Ok(value.nearest(value.unit.raw(shown(text)?, scalar), scalar)),
+                )
+                .collect::<Result<_, String>>()?
+        }
+        (Shape::Array, Some(scalar)) => {
+            let array = control.array().ok_or("no array")?;
+            count(usize::from(control.count()))?;
+            values
+                .iter()
+                .map(|text| Ok(array.nearest(array.unit.raw(shown(text)?, scalar))))
+                .collect::<Result<_, String>>()?
+        }
+        (Shape::Selector, Some(_)) => {
+            let selector = control.selector().ok_or("no selector")?;
+            count(1)?;
+            let wanted = &values[0];
+            let option = selector.options().find(|&option| {
+                if selector.strings {
+                    let name = model.localized(LocalizedStringRef(option.to_f64() as u16));
+                    name == Some(wanted.as_str())
+                } else {
+                    shown(wanted).is_ok_and(|shown| {
+                        (option.to_f64() * selector.unit.scale() - shown).abs() < 1e-9
+                    })
+                }
+            });
+            let options: Vec<String> = selector
+                .options()
+                .map(|option| option_name(model, &selector, option))
+                .collect();
+            vec![option.ok_or_else(|| format!("{wanted} is not one of {}", options.join(", ")))?]
+        }
+        (Shape::Utf8, _) => {
+            let text = values.join(" ");
+            if text.len() >= out.len() {
+                return Err(format!("{} octets is too long", text.len()));
+            }
+            let mut encoded = text.into_bytes();
+            encoded.push(0);
+            return Ok(encoded);
+        }
+        _ => return Err(format!("control {index}'s values cannot be set here")),
+    };
+    let scalar = scalar.ok_or("no scalar")?;
+    let length = encode_values(scalar, numbers, &mut out).ok_or("too many values")?;
+    out.truncate(length);
+    Ok(out)
+}
+
+/// A selector's option: its name for a string selector, else its value
+/// in its unit.
+fn option_name(model: &EntityModel, selector: &Selector<'_>, option: Number) -> String {
+    if selector.strings {
+        model
+            .localized(LocalizedStringRef(option.to_f64() as u16))
+            .map_or_else(|| format!("string {}", option.to_f64()), str::to_owned)
+    } else {
+        selector.unit.show(option).to_string()
+    }
+}
+
+fn controls(interface: &str, entity: Option<EntityId>) -> std::io::Result<()> {
+    let driver = read(interface, entity)?;
+    let controller = driver.controller();
+    let mut printed = 0;
+    for found in controller.entities() {
+        if entity.is_some_and(|entity_id| entity_id != found.entity_id()) {
+            continue;
+        }
+        if printed > 0 {
+            println!();
+        }
+        println!("{}", summary(found));
+        printed += 1;
+        let Some(model) = controller.model(found.entity_id()) else {
+            println!("  no AEM model");
+            continue;
+        };
+        let mut controls = model.controls().peekable();
+        if controls.peek().is_none() {
+            println!("  no controls");
+        }
+        for control in controls {
+            print_control(model, &control);
+        }
+    }
+    if printed == 0 {
+        println!("no entity found");
+    }
+    driver.close()
+}
+
+/// A control's name and kind, then its values with their ranges.
+fn print_control(model: &EntityModel, control: &ControlDescriptor<'_>) {
+    let name = model
+        .name_of(DescriptorType::CONTROL, control.index)
+        .unwrap_or_default();
+    let kind = control.control_type.name().map_or_else(
+        || format!("vendor control {:#018x}", control.control_type.0),
+        |kind| kind.to_lowercase().replace('_', " "),
+    );
+    let mut notes = Vec::new();
+    if control.read_only {
+        notes.push("read only");
+    }
+    if control.unknown {
+        notes.push("value not known");
+    }
+    let notes = if notes.is_empty() {
+        String::new()
+    } else {
+        format!(", {}", notes.join(", "))
+    };
+    println!("  control {:<3} \"{name}\"  {kind}{notes}", control.index);
+    let range = |minimum: Number, maximum: Number, step: Number, unit: Unit| {
+        format!(
+            "from {} to {} in steps of {}",
+            unit.show(minimum),
+            unit.show(maximum),
+            unit.show(step)
+        )
+    };
+    match control.value_type.shape() {
+        Shape::Linear => {
+            for value in control.linear() {
+                let label = model
+                    .localized(value.string)
+                    .map(|label| format!("{label}: "))
+                    .unwrap_or_default();
+                println!(
+                    "    {label}{}  {}, default {}",
+                    value.unit.show(value.current),
+                    range(value.minimum, value.maximum, value.step, value.unit),
+                    value.unit.show(value.default)
+                );
+            }
+        }
+        Shape::Selector => {
+            if let Some(selector) = control.selector() {
+                let options: Vec<String> = selector
+                    .options()
+                    .map(|option| option_name(model, &selector, option))
+                    .collect();
+                println!(
+                    "    {}  of {}",
+                    option_name(model, &selector, selector.current),
+                    options.join(", ")
+                );
+            }
+        }
+        Shape::Array => {
+            if let Some(array) = control.array() {
+                let values: Vec<String> = array
+                    .current()
+                    .map(|value| array.unit.show(value).to_string())
+                    .collect();
+                println!(
+                    "    {}  {}",
+                    values.join(", "),
+                    range(array.minimum, array.maximum, array.step, array.unit)
+                );
+            }
+        }
+        Shape::Utf8 => println!("    \"{}\"", control.text().unwrap_or_default()),
+        Shape::Other => println!("    a {:?} value, not shown", control.value_type),
+    }
+}
+
 fn maps(interface: &str, entity: Option<EntityId>) -> std::io::Result<()> {
     let driver = read(interface, entity)?;
     let controller = driver.controller();

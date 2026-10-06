@@ -815,6 +815,7 @@ fn model_details<'a>(
             ));
         }
     }
+    items.extend(crate::controls_view::controls(triib, entity_id, model));
     let interfaces: Vec<_> = model.avb_interfaces().collect();
     if !interfaces.is_empty() {
         items.push(component::section("AVB interfaces"));

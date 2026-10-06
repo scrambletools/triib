@@ -236,6 +236,15 @@ pub fn outcome(triib: &Triib, action: Action, outcome: Outcome) -> Option<String
             "Could not unmap the channel on {}: {reason}.",
             triib.entity_name_of(entity)
         ),
+        Action::SetControl { entity, index, .. } => format!(
+            "Could not set {} on {}: {reason}.",
+            triib
+                .models
+                .get(&entity)
+                .and_then(|model| model.name_of(DescriptorType::CONTROL, index))
+                .map_or_else(|| format!("control {index}"), |name| format!("\"{name}\"")),
+            triib.entity_name_of(entity)
+        ),
     })
 }
 

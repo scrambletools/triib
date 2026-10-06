@@ -3,6 +3,7 @@
 
 mod app;
 mod column_resize;
+mod controls_view;
 mod describe;
 mod diagnostics_view;
 mod entity_table;

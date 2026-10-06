@@ -106,6 +106,10 @@ pub fn encode_get_stream_info(
     command(addressing, AemCommandType::GET_STREAM_INFO, &payload).encode(out)
 }
 
+/// The most octets of values a control has (IEEE 1722.1-2021, Table
+/// 7-38: value_details' maximum).
+pub const MAX_CONTROL_VALUES: usize = 404;
+
 /// Encodes SET_CONTROL with the control's new `values`, encoded as its
 /// value type requires.
 pub fn encode_set_control(
@@ -114,7 +118,7 @@ pub fn encode_set_control(
     values: &[u8],
     out: &mut [u8],
 ) -> Result<usize, EncodeError> {
-    let mut payload = [0; 64];
+    let mut payload = [0; 4 + MAX_CONTROL_VALUES];
     let length = 4 + values.len();
     let Some(body) = payload.get_mut(..length) else {
         return Err(EncodeError::OutOfRange("values"));

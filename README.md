@@ -13,8 +13,9 @@ listeners, routed to the computer's audio. Built in Rust with
 > next time, shows and changes stream connections in a matrix, maps the
 > network from each entity's gPTP path, identifies entities, renames
 > them, changes their stream formats, sampling rates and clock sources
-> (each entity's media clock right in the entity list), and shows and
-> changes how their channels map to streams. See the [plan](docs/PLAN.md).
+> (each entity's media clock right in the entity list), shows and
+> changes how their channels map to streams, and shows and sets their
+> controls, such as gain and mute. See the [plan](docs/PLAN.md).
 
 ## Building
 
@@ -33,13 +34,16 @@ cargo run -p triib-cli -- clock <interface> <entity-id> <clock-domain> <clock-so
 cargo run -p triib-cli -- clocks <interface>
 cargo run -p triib-cli -- maps <interface> [entity-id]
 cargo run -p triib-cli -- map <interface> <entity-id> <add|remove> <stream-port-input:N|stream-port-output:N> <stream:channel=cluster:channel>...
+cargo run -p triib-cli -- controls <interface> [entity-id]
+cargo run -p triib-cli -- control <interface> <entity-id> <control> <value>...
 ```
 
 triib uses [scramble-ui](https://github.com/scrambletools/scramble-ui)
 at the revision `Cargo.toml` pins, as prev does. To change both together,
 clone scramble-ui beside triib and build with
 `cargo --config .cargo/scramble-ui-local.toml build`, a git-ignored file
-pointing at that checkout:
+pointing at that checkout (for clippy and test, put `--config` after the
+subcommand):
 
 ```toml
 [patch."https://github.com/scrambletools/scramble-ui"]

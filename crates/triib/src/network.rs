@@ -119,6 +119,48 @@ pub enum Action {
         change: MappingChange,
         mapping: AudioMapping,
     },
+    /// Set a control's current values.
+    SetControl {
+        entity: EntityId,
+        index: u16,
+        values: ControlValues,
+    },
+}
+
+/// The most octets of a control's values an action carries: a linear
+/// control's at most (IEEE 1722.1-2021, Table 7-39).
+const CONTROL_VALUES: usize = 72;
+
+/// A control's new values, as SET_CONTROL carries them.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ControlValues {
+    octets: [u8; CONTROL_VALUES],
+    length: u8,
+}
+
+impl ControlValues {
+    /// `octets` as values, or `None` when there are none or too many.
+    pub fn new(octets: &[u8]) -> Option<Self> {
+        if octets.is_empty() || octets.len() > CONTROL_VALUES {
+            return None;
+        }
+        let mut values = Self {
+            octets: [0; CONTROL_VALUES],
+            length: octets.len() as u8,
+        };
+        values.octets[..octets.len()].copy_from_slice(octets);
+        Some(values)
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.octets[..usize::from(self.length)]
+    }
+}
+
+impl std::fmt::Debug for ControlValues {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "ControlValues({:02x?})", self.as_slice())
+    }
 }
 
 /// A name an entity holds: for the entity, `name_index` 0 is its name and
@@ -316,6 +358,11 @@ fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<
                             change: MappingChange::Remove,
                             mapping,
                         } => controller.remove_audio_mappings(now, entity, port, &[mapping]),
+                        Action::SetControl {
+                            entity,
+                            index,
+                            values,
+                        } => controller.set_control(now, entity, index, values.as_slice()),
                     };
                     actions.insert(command, action);
                 }

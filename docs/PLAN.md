@@ -438,8 +438,16 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   and connecting the CRF streams to it can follow.
 - Channel routing via audio maps (in the inspector,
   read with GET_AUDIO_MAP, changed with ADD_AUDIO_MAPPINGS and
-  REMOVE_AUDIO_MAPPINGS, kept current from their notifications), generic
-  CONTROL editors.
+  REMOVE_AUDIO_MAPPINGS, kept current from their notifications).
+- Controls, in the inspector: each CONTROL descriptor with what sets it,
+  a slider for a linear value (sent once let go, snapped to its step), a
+  switch for one that only goes from off to on, a picker for a selector,
+  and the value alone for read only, array, text and other controls;
+  values in their units. SET_CONTROL responses and notifications from
+  other controllers update the model in place without reading the
+  descriptor again. The identify control is left to the Identify button.
+  `triib-cli controls` and `control` show and set them. Editing arrays,
+  text and Bode plots, and meters drawn as bars, can follow.
 - Diagnostics, in the inspector: each clock domain's, stream input's and
   stream output's counters in words, what went wrong marked (lost locks,
   interruptions, late or early frames, media resets), read once an entity

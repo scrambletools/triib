@@ -12,6 +12,7 @@ use scramble_ui::appearance::{self, Appearance, Inputs};
 use scramble_ui::{desktop, motion, omarchy, scheme};
 
 use crate::External;
+use crate::controls_view::ControlDrag;
 use crate::entity_table::Column;
 use crate::matrix::{Hover, Side};
 use crate::netmap::{Focus, NodeKey};
@@ -69,6 +70,8 @@ pub struct Triib {
     pub editing: Option<(NameTarget, String)>,
     /// The descriptor types opened in the inspector's tree, by entity.
     pub tree_open: BTreeSet<(EntityId, DescriptorType)>,
+    /// The control slider being dragged.
+    pub control_drag: Option<ControlDrag>,
     /// The Settings dialog is open, on this tab.
     pub settings_open: bool,
     pub settings_tab: SettingsTab,
@@ -98,6 +101,10 @@ pub enum Message {
     EntitySelected(EntityId),
     /// A press on a view's empty space: nothing selected.
     SelectionCleared,
+    /// A control's slider moved, not yet let go.
+    ControlDragged(ControlDrag),
+    /// The slider being dragged was let go: its value is sent.
+    ControlReleased,
     Rediscover,
     RetryNetwork,
     Copy(String),
@@ -190,6 +197,7 @@ impl Triib {
             network_list: false,
             editing: None,
             tree_open: BTreeSet::new(),
+            control_drag: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error: None,
@@ -224,6 +232,7 @@ impl Triib {
             network_list: false,
             editing: None,
             tree_open: BTreeSet::new(),
+            control_drag: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error,
@@ -314,6 +323,14 @@ impl Triib {
                 if !self.settings.inspector {
                     self.settings.inspector = true;
                     self.save_settings();
+                }
+            }
+            Message::ControlDragged(drag) => self.control_drag = Some(drag),
+            Message::ControlReleased => {
+                if let Some(drag) = self.control_drag.take()
+                    && let Some(message) = crate::controls_view::released(self, drag)
+                {
+                    return self.update(message);
                 }
             }
             Message::SelectionCleared => {

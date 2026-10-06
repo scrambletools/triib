@@ -12,6 +12,7 @@ use crate::aem::{
     MappingChange, SetClockSource, SetName, SetSamplingRate, SetStreamFormat, StreamInfo,
     StreamInputCounters, StreamOutputCounters,
 };
+use crate::control::ControlDescriptor;
 use crate::descriptor::{
     AudioClusterDescriptor, AudioMapDescriptor, AudioUnitDescriptor, AvbInterfaceDescriptor,
     ClockDomainDescriptor, ClockSourceDescriptor, ConfigurationDescriptor, DescriptorType,
@@ -194,6 +195,16 @@ impl EntityModel {
             70,
             &set.source.to_be_bytes(),
         )
+    }
+
+    /// Takes the current values SET_CONTROL or GET_CONTROL carries for a
+    /// control, returning whether they changed.
+    pub(crate) fn apply_control(&mut self, index: u16, values: &[u8]) -> bool {
+        let Some(bytes) = self.descriptors.get_mut(&(DescriptorType::CONTROL, index)) else {
+            return false;
+        };
+        let before = bytes.clone();
+        crate::control::write_current(bytes, values) && *bytes != before
     }
 
     /// Records a stream input's binding, returning whether it changed.
@@ -465,6 +476,16 @@ impl EntityModel {
     pub fn clock_domains(&self) -> impl Iterator<Item = ClockDomainDescriptor<'_>> {
         self.descriptors(DescriptorType::CLOCK_DOMAIN)
             .filter_map(|(_, bytes)| ClockDomainDescriptor::decode(bytes).ok())
+    }
+
+    /// The configuration's controls, wherever in it they act.
+    pub fn controls(&self) -> impl Iterator<Item = ControlDescriptor<'_>> {
+        self.descriptors(DescriptorType::CONTROL)
+            .filter_map(|(_, bytes)| ControlDescriptor::decode(bytes).ok())
+    }
+
+    pub fn control(&self, index: u16) -> Option<ControlDescriptor<'_>> {
+        ControlDescriptor::decode(self.descriptor(DescriptorType::CONTROL, index)?).ok()
     }
 
     /// A localized string, from the first locale.

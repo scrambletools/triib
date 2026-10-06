@@ -302,6 +302,11 @@ enum Request {
         index: u16,
         command: CommandId,
     },
+    /// SET_CONTROL; the values wait in the controller's `control_values`.
+    SetControl {
+        index: u16,
+        command: CommandId,
+    },
     /// What changes on an entity whose descriptors came from the cache.
     GetDynamicInfo {
         queries: [DynamicQuery; MAX_DYNAMIC_QUERIES],
@@ -347,6 +352,7 @@ impl Request {
             | Request::SetStreamFormat { command, .. }
             | Request::SetSamplingRate { command, .. }
             | Request::SetClockSource { command, .. }
+            | Request::SetControl { command, .. }
             | Request::ChangeMappings { command, .. } => Some(command),
             Request::Identify { command, .. } => command,
             _ => None,
@@ -432,6 +438,8 @@ pub struct Controller {
     cache: BTreeMap<ModelKey, CachedModel>,
     /// The mappings of each mapping change queued or in flight.
     mapping_changes: BTreeMap<CommandId, Vec<AudioMapping>>,
+    /// The values of each SET_CONTROL waiting to go.
+    control_values: BTreeMap<CommandId, Vec<u8>>,
     advertiser: Option<Advertiser>,
     random: Random,
     outgoing: VecDeque<(MacAddress, Vec<u8>)>,
@@ -454,6 +462,7 @@ impl Controller {
             identify_off: BTreeMap::new(),
             cache: BTreeMap::new(),
             mapping_changes: BTreeMap::new(),
+            control_values: BTreeMap::new(),
             advertiser: config.advertise.map(|advertise| Advertiser {
                 config: advertise,
                 available_index: 0,
@@ -630,7 +639,7 @@ impl Controller {
             keep
         });
         for command in abandoned {
-            self.mapping_changes.remove(&command);
+            self.drop_command_data(command);
             self.events
                 .push_back(Event::CommandFinished(command, Outcome::NotPossible));
         }
@@ -856,6 +865,16 @@ impl Controller {
                     self.events
                         .push_back(Event::CommandFinished(command, aem_outcome(aem)));
                 }
+            }
+            Request::SetControl { index, command } => {
+                self.control_values.remove(&command);
+                // The response holds the values the control has after,
+                // set or not.
+                if let Some(values) = control_values(aem.payload, index) {
+                    self.store_control(entity_id, index, values);
+                }
+                self.events
+                    .push_back(Event::CommandFinished(command, aem_outcome(aem)));
             }
             Request::GetDynamicInfo { queries, count } => {
                 self.dynamic_info_answered(entity_id, &queries[..usize::from(count)], Some(aem));
@@ -1664,6 +1683,14 @@ impl Controller {
             }
             // Reading a map changes nothing; its descriptor needs no read.
             AemCommandType::GET_AUDIO_MAP => return,
+            AemCommandType::SET_CONTROL | AemCommandType::GET_CONTROL => {
+                if let Some((DescriptorType::CONTROL, index)) = aem::target_descriptor(aem.payload)
+                    && let Some(values) = control_values(aem.payload, index)
+                {
+                    self.store_control(entity_id, index, values);
+                }
+                return;
+            }
             _ => {}
         }
         // Whatever the notification changed, the descriptor it names holds
@@ -1803,6 +1830,14 @@ impl Controller {
             Request::SetStreamFormat { set, .. } => set.encode(addressing, &mut out),
             Request::SetSamplingRate { set, .. } => set.encode(addressing, &mut out),
             Request::SetClockSource { set, .. } => set.encode(addressing, &mut out),
+            Request::SetControl { index, command } => aem::encode_set_control(
+                addressing,
+                index,
+                self.control_values
+                    .get(&command)
+                    .map_or(&[][..], Vec::as_slice),
+                &mut out,
+            ),
             Request::GetAudioMap {
                 descriptor_type,
                 index,
@@ -2010,6 +2045,55 @@ impl Controller {
         command
     }
 
+    /// Sets a control's current values (SET_CONTROL), encoded as its value
+    /// type keeps them (see [`control::encode_values`]); the entity answers
+    /// with the values it has after, set or not, and the model takes them.
+    /// Up to [`aem::MAX_CONTROL_VALUES`] octets.
+    ///
+    /// [`control::encode_values`]: crate::control::encode_values
+    pub fn set_control(
+        &mut self,
+        now: Instant,
+        entity_id: EntityId,
+        index: u16,
+        values: &[u8],
+    ) -> CommandId {
+        let command = self.next_command();
+        if values.is_empty() || values.len() > aem::MAX_CONTROL_VALUES {
+            self.events
+                .push_back(Event::CommandFinished(command, Outcome::NotPossible));
+            return command;
+        }
+        self.control_values.insert(command, values.to_vec());
+        self.queue_command(
+            now,
+            entity_id,
+            command,
+            Request::SetControl { index, command },
+        );
+        if !self.entities.contains_key(&entity_id) {
+            self.control_values.remove(&command);
+        }
+        command
+    }
+
+    /// Forgets what a caller's command was to send, once it is answered or
+    /// given up.
+    fn drop_command_data(&mut self, command: CommandId) {
+        self.mapping_changes.remove(&command);
+        self.control_values.remove(&command);
+    }
+
+    /// Takes a control's current values into its entity's model.
+    fn store_control(&mut self, entity_id: EntityId, index: u16, values: &[u8]) {
+        if let Some(model) = self.models.get_mut(&entity_id)
+            && model.apply_control(index, values)
+            && model.state == EnumerationState::Complete
+        {
+            self.events.push_back(Event::EntityModelChanged(entity_id));
+        }
+    }
+
     /// Adds mappings to a stream port's dynamic mappings
     /// (ADD_AUDIO_MAPPINGS): stream channels to an input's cluster
     /// channels, or an output's cluster channels to stream channels. The
@@ -2188,7 +2272,7 @@ impl Controller {
                 );
             }
             if let Some(command) = inflight.request.command() {
-                self.mapping_changes.remove(&command);
+                self.drop_command_data(command);
                 self.events
                     .push_back(Event::CommandFinished(command, Outcome::NoResponse));
             }
@@ -2331,6 +2415,16 @@ impl Controller {
     }
 }
 
+/// The values a SET_CONTROL or GET_CONTROL response or notification for
+/// CONTROL `index` carries.
+fn control_values(payload: &[u8], index: u16) -> Option<&[u8]> {
+    let (descriptor_type, named) = aem::target_descriptor(payload)?;
+    (descriptor_type == DescriptorType::CONTROL && named == index)
+        .then(|| payload.get(4..))
+        .flatten()
+        .filter(|values| !values.is_empty())
+}
+
 fn command_type_of(request: Request) -> AemCommandType {
     match request {
         Request::ReadDescriptor { .. } => AemCommandType::READ_DESCRIPTOR,
@@ -2344,6 +2438,7 @@ fn command_type_of(request: Request) -> AemCommandType {
         Request::SetStreamFormat { .. } => AemCommandType::SET_STREAM_FORMAT,
         Request::SetSamplingRate { .. } => AemCommandType::SET_SAMPLING_RATE,
         Request::SetClockSource { .. } => AemCommandType::SET_CLOCK_SOURCE,
+        Request::SetControl { .. } => AemCommandType::SET_CONTROL,
         Request::GetDynamicInfo { .. } => AemCommandType::GET_DYNAMIC_INFO,
         Request::GetAudioMap { .. } => AemCommandType::GET_AUDIO_MAP,
         Request::ChangeMappings { change, .. } => change.command_type(),
