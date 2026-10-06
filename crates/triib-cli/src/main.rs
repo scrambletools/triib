@@ -991,6 +991,18 @@ fn print_entity(found: &DiscoveredEntity, model: Option<&EntityModel>) {
             if !state.is_empty() {
                 println!("{:16}{}", "", state.join(", "));
             }
+            let counters = if input {
+                model
+                    .stream_input_counters(stream.index)
+                    .map(|counters| stream_input_counters(&counters))
+            } else {
+                model
+                    .stream_output_counters(stream.index)
+                    .map(|counters| stream_output_counters(&counters))
+            };
+            if let Some(counters) = counters {
+                println!("{:16}counters: {counters}", "");
+            }
             // The formats the stream supports, in the hex the format
             // command takes, the current one marked.
             for format in stream.formats() {
@@ -1029,6 +1041,12 @@ fn print_entity(found: &DiscoveredEntity, model: Option<&EntityModel>) {
             domain.clock_source_index,
             domain.clock_sources().collect::<Vec<_>>()
         );
+        if let Some(counters) = model.clock_domain_counters(domain.index) {
+            println!(
+                "                counters: {}",
+                counter_list(&[("locked", counters.locked), ("unlocked", counters.unlocked)])
+            );
+        }
     }
     for source in model.clock_sources() {
         let kind = match source.clock_source_type {
@@ -1061,6 +1079,49 @@ fn print_entity(found: &DiscoveredEntity, model: Option<&EntityModel>) {
             ""
         }
     );
+}
+
+/// The counters an entity keeps, by name, leaving out those it does not.
+fn counter_list(counters: &[(&str, Option<u32>)]) -> String {
+    let kept: Vec<String> = counters
+        .iter()
+        .filter_map(|(name, value)| value.map(|value| format!("{name} {value}")))
+        .collect();
+    if kept.is_empty() {
+        "none kept".to_owned()
+    } else {
+        kept.join(", ")
+    }
+}
+
+fn stream_input_counters(counters: &atdecc::aem::StreamInputCounters) -> String {
+    counter_list(&[
+        ("media locked", counters.media_locked),
+        ("media unlocked", counters.media_unlocked),
+        ("interrupted", counters.stream_interrupted),
+        ("sequence mismatches", counters.seq_num_mismatch),
+        ("media resets", counters.media_reset),
+        ("timestamps uncertain", counters.timestamp_uncertain),
+        ("timestamps valid", counters.timestamp_valid),
+        ("timestamps not valid", counters.timestamp_not_valid),
+        ("unsupported formats", counters.unsupported_format),
+        ("late", counters.late_timestamp),
+        ("early", counters.early_timestamp),
+        ("frames in", counters.frames_rx),
+    ])
+}
+
+fn stream_output_counters(counters: &atdecc::aem::StreamOutputCounters) -> String {
+    counter_list(&[
+        ("started", counters.stream_start),
+        ("stopped", counters.stream_stop),
+        ("interrupted", counters.stream_interrupted),
+        ("media resets", counters.media_reset),
+        ("timestamps uncertain", counters.timestamp_uncertain),
+        ("timestamps valid", counters.timestamp_valid),
+        ("timestamps not valid", counters.timestamp_not_valid),
+        ("frames out", counters.frames_tx),
+    ])
 }
 
 /// An AVB interface's gPTP state, path and counters, as far as the entity

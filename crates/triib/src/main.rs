@@ -4,6 +4,7 @@
 mod app;
 mod clock_view;
 mod describe;
+mod diagnostics_view;
 mod mapping_view;
 mod matrix;
 mod netmap;

@@ -207,6 +207,16 @@ captured may run older or newer builds.
 - **Fix:** copy only the command's 28 octets, fill the block from kept
   counters, and use `sizeof(aecp_get_counters_rsp_s) -
   sizeof(atdecc_header_s) - sizeof(unique_id_t)`.
+- **Also seen (2026-10-05 16:58 PDT):** the CLOCK_DOMAIN and both
+  STREAM_OUTPUT responses carry the same stale block as the interface's
+  (0x3a710000 at position 4, an address and flags at 9 to 11). For the
+  stream outputs counters_valid is 0x9b, marking positions 3, 4 and 7,
+  so the stale quadlet at 4 shows as TIMESTAMP_UNCERTAIN; STREAM_START
+  reads 0 on an output that is sending. The stream output case's comment
+  that the values are "zero-initialized from memset above" is wrong for
+  the same reason, and no stream output event is counted. The
+  STREAM_INPUT responses are filled by `avb_get_stream_in_counters` and
+  read cleanly.
 
 ### 14. Wi-Fi endpoint does not answer GET_AS_PATH or GET_COUNTERS (2026-10-04 14:50 PDT)
 

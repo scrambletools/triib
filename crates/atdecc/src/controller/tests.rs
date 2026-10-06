@@ -1861,3 +1861,29 @@ fn entities_not_milan_are_not_asked_for_media_clock_references() {
     assert_eq!(model.state, EnumerationState::Complete);
     assert!(model.media_clock_reference(0).is_none());
 }
+
+#[test]
+fn reads_the_counters_of_clocks_and_streams() {
+    let (controller, _) = enumerated();
+    let model = controller.model(TALKER).unwrap();
+    for descriptor_type in [
+        DescriptorType::CLOCK_DOMAIN,
+        DescriptorType::STREAM_INPUT,
+        DescriptorType::STREAM_OUTPUT,
+    ] {
+        assert!(
+            model.counters(descriptor_type, 0).is_some(),
+            "{descriptor_type:?}"
+        );
+    }
+    // The fake marks counters 0, 1 and 5 valid.
+    let input = model.stream_input_counters(0).unwrap();
+    assert_eq!(input.media_locked, Some(1));
+    assert_eq!(input.timestamp_uncertain, Some(2));
+    assert_eq!(input.stream_interrupted, None);
+    // A Milan 1.3 entity's output counters, numbered as 1722.1 has them.
+    let output = model.stream_output_counters(0).unwrap();
+    assert_eq!(output.stream_start, Some(1));
+    assert_eq!(output.timestamp_uncertain, None);
+    assert_eq!(model.clock_domain_counters(0).unwrap().locked, Some(1));
+}

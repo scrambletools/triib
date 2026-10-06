@@ -812,6 +812,106 @@ impl Counters {
     }
 }
 
+impl Counters {
+    /// A CLOCK_DOMAIN's counters.
+    pub fn clock_domain(&self) -> Option<ClockDomainCounters> {
+        (self.descriptor_type == DescriptorType::CLOCK_DOMAIN).then_some(ClockDomainCounters {
+            locked: self.get(0),
+            unlocked: self.get(1),
+        })
+    }
+
+    /// A STREAM_INPUT's counters.
+    pub fn stream_input(&self) -> Option<StreamInputCounters> {
+        (self.descriptor_type == DescriptorType::STREAM_INPUT).then_some(StreamInputCounters {
+            media_locked: self.get(0),
+            media_unlocked: self.get(1),
+            stream_interrupted: self.get(2),
+            seq_num_mismatch: self.get(3),
+            media_reset: self.get(4),
+            timestamp_uncertain: self.get(5),
+            timestamp_valid: self.get(6),
+            timestamp_not_valid: self.get(7),
+            unsupported_format: self.get(8),
+            late_timestamp: self.get(9),
+            early_timestamp: self.get(10),
+            frames_rx: self.get(11),
+        })
+    }
+
+    /// A STREAM_OUTPUT's counters. Milan before 1.3 numbered them apart
+    /// from 1722.1 (Milan 1.3, 5.4.2.25), stream start, stop, media reset,
+    /// timestamp uncertain and frames sent in a row from 0; an entity
+    /// telling no specification_version in GET_MILAN_INFO is one of those.
+    pub fn stream_output(&self, before_milan_1_3: bool) -> Option<StreamOutputCounters> {
+        if self.descriptor_type != DescriptorType::STREAM_OUTPUT {
+            return None;
+        }
+        Some(if before_milan_1_3 {
+            StreamOutputCounters {
+                stream_start: self.get(0),
+                stream_stop: self.get(1),
+                media_reset: self.get(2),
+                timestamp_uncertain: self.get(3),
+                frames_tx: self.get(4),
+                ..StreamOutputCounters::default()
+            }
+        } else {
+            StreamOutputCounters {
+                stream_start: self.get(0),
+                stream_stop: self.get(1),
+                stream_interrupted: self.get(2),
+                media_reset: self.get(3),
+                timestamp_uncertain: self.get(4),
+                timestamp_valid: self.get(5),
+                timestamp_not_valid: self.get(6),
+                frames_tx: self.get(7),
+            }
+        })
+    }
+}
+
+/// A CLOCK_DOMAIN's counters (Table 7-155), which Milan requires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ClockDomainCounters {
+    pub locked: Option<u32>,
+    pub unlocked: Option<u32>,
+}
+
+/// A STREAM_INPUT's counters (Table 7-157), each `None` when the entity
+/// does not keep it. Milan requires all but the two timestamp validity
+/// counters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StreamInputCounters {
+    pub media_locked: Option<u32>,
+    pub media_unlocked: Option<u32>,
+    pub stream_interrupted: Option<u32>,
+    pub seq_num_mismatch: Option<u32>,
+    pub media_reset: Option<u32>,
+    pub timestamp_uncertain: Option<u32>,
+    pub timestamp_valid: Option<u32>,
+    pub timestamp_not_valid: Option<u32>,
+    pub unsupported_format: Option<u32>,
+    pub late_timestamp: Option<u32>,
+    pub early_timestamp: Option<u32>,
+    pub frames_rx: Option<u32>,
+}
+
+/// A STREAM_OUTPUT's counters (Table 7-159), each `None` when the entity
+/// does not keep it. Milan requires the starts, stops, media resets,
+/// uncertain timestamps and frames sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StreamOutputCounters {
+    pub stream_start: Option<u32>,
+    pub stream_stop: Option<u32>,
+    pub stream_interrupted: Option<u32>,
+    pub media_reset: Option<u32>,
+    pub timestamp_uncertain: Option<u32>,
+    pub timestamp_valid: Option<u32>,
+    pub timestamp_not_valid: Option<u32>,
+    pub frames_tx: Option<u32>,
+}
+
 /// An AVB_INTERFACE's counters (Table 7-153), each `None` when the entity
 /// does not keep it. Milan requires the link and grandmaster ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1279,6 +1379,56 @@ mod tests {
         assert_eq!(interface.gptp_gm_changed, Some(4));
         assert_eq!(counters.get(32), None);
         assert!(Counters::decode(&payload[..135]).is_err());
+    }
+
+    #[test]
+    fn stream_and_clock_domain_counters() {
+        let counters = |descriptor_type: DescriptorType, valid: u32| {
+            let mut block = [0; 32];
+            for (position, counter) in block.iter_mut().enumerate() {
+                *counter = 100 + position as u32;
+            }
+            Counters {
+                descriptor_type,
+                index: 0,
+                valid,
+                block,
+            }
+        };
+        let domain = counters(DescriptorType::CLOCK_DOMAIN, 0x3)
+            .clock_domain()
+            .unwrap();
+        assert_eq!((domain.locked, domain.unlocked), (Some(100), Some(101)));
+
+        // Milan's mandatory stream input counters (Table 5.13).
+        let input = counters(DescriptorType::STREAM_INPUT, 0x0000_0f3f)
+            .stream_input()
+            .unwrap();
+        assert_eq!(input.stream_interrupted, Some(102));
+        assert_eq!(input.unsupported_format, Some(108));
+        assert_eq!(input.frames_rx, Some(111));
+        assert_eq!(input.timestamp_valid, None);
+        assert!(
+            counters(DescriptorType::STREAM_INPUT, 0)
+                .clock_domain()
+                .is_none()
+        );
+
+        // Milan 1.3's mandatory stream output counters (Table 5.14).
+        let output = counters(DescriptorType::STREAM_OUTPUT, 0x0000_009b);
+        let now = output.stream_output(false).unwrap();
+        assert_eq!(now.media_reset, Some(103));
+        assert_eq!(now.timestamp_uncertain, Some(104));
+        assert_eq!(now.frames_tx, Some(107));
+        assert_eq!(now.stream_interrupted, None);
+        // Before 1.3 the same counters sat at 0 to 4.
+        let before = counters(DescriptorType::STREAM_OUTPUT, 0x1f)
+            .stream_output(true)
+            .unwrap();
+        assert_eq!(before.media_reset, Some(102));
+        assert_eq!(before.timestamp_uncertain, Some(103));
+        assert_eq!(before.frames_tx, Some(104));
+        assert_eq!(before.stream_interrupted, None);
     }
 
     #[test]

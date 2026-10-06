@@ -977,6 +977,7 @@ fn model_details<'a>(
             items.extend(interface_details(model, &interface));
         }
     }
+    items.extend(crate::diagnostics_view::diagnostics(model));
     items.extend(descriptor_tree(triib, entity_id, model));
     items
 }
@@ -1448,6 +1449,7 @@ mod tests {
         config.register_unsolicited = false;
         config.network_info = false;
         config.media_clock_info = false;
+        config.read_counters = false;
         config.first_sequence_id = first_sequence_id;
         let mut controller = Controller::new(config);
         let mut buffer = [0; 1500];
@@ -1492,6 +1494,7 @@ mod tests {
         patch: impl FnOnce(&mut BTreeMap<(u16, u16), Vec<u8>>),
         mappings: &[(u16, u16)],
         bound: &[(u16, EntityId, u16)],
+        counting: bool,
     ) -> EntityModel {
         use atdecc::aecp::{AecpHeader, AecpMessageType, AemStatus};
         use atdecc::aem::StreamInfoFlags;
@@ -1574,6 +1577,27 @@ mod tests {
                         }
                         AemStatus::SUCCESS
                     }
+                    AemCommandType::GET_COUNTERS if counting => {
+                        let (descriptor_type, _) = key(0, &payload);
+                        // Locks, a lost lock, interruptions, late frames and
+                        // frames counted, as an entity a while into a show.
+                        let (valid, counts): (u32, &[(usize, u32)]) =
+                            match DescriptorType(descriptor_type) {
+                                DescriptorType::CLOCK_DOMAIN => (0x3, &[(0, 2), (1, 1)]),
+                                DescriptorType::STREAM_INPUT => {
+                                    (0xf3f, &[(0, 3), (1, 2), (2, 2), (9, 12), (11, 1_204_331)])
+                                }
+                                DescriptorType::STREAM_OUTPUT => (0x9b, &[(0, 1), (7, 987_654)]),
+                                _ => (0, &[]),
+                            };
+                        payload.resize(136, 0);
+                        payload[4..8].copy_from_slice(&valid.to_be_bytes());
+                        for &(position, count) in counts {
+                            let at = 8 + 4 * position;
+                            payload[at..at + 4].copy_from_slice(&count.to_be_bytes());
+                        }
+                        AemStatus::SUCCESS
+                    }
                     AemCommandType::GET_STREAM_INFO => {
                         let (descriptor_type, index) = key(0, &payload);
                         let mut flags = StreamInfoFlags::STREAM_FORMAT_VALID;
@@ -1638,6 +1662,7 @@ mod tests {
             },
             &[(0, 1), (1, 0), (4, 4)],
             &[],
+            false,
         );
         assert!(
             model
@@ -1669,8 +1694,9 @@ mod tests {
             from_crf_input,
             &[],
             &[(1, MAC_MINI, 1)],
+            false,
         );
-        let wifi = reread(entities, models, WIFI_ESP, from_crf_input, &[], &[]);
+        let wifi = reread(entities, models, WIFI_ESP, from_crf_input, &[], &[], false);
         models.insert(WIRED_ESP, wired);
         models.insert(WIFI_ESP, wifi);
     }
@@ -1717,6 +1743,12 @@ mod tests {
             ),
             ("matrix-filtered", View::Matrix, false, desktop),
             ("clocks-desktop", View::Clocks, false, desktop),
+            (
+                "inspector-diagnostics",
+                View::Entities,
+                true,
+                Size::new(1280.0, 2400.0),
+            ),
             ("clocks-phone", View::Clocks, false, phone),
             (
                 "media-clock-bench",
@@ -1764,8 +1796,24 @@ mod tests {
             if suffix.starts_with("clocks") {
                 clocked_bench(&entities, &mut models);
             }
+            if suffix.contains("diagnostics") {
+                let model = reread(
+                    &entities,
+                    &models,
+                    WIRED_ESP,
+                    |_| {},
+                    &[],
+                    &[(0, MAC_MINI, 0)],
+                    true,
+                );
+                models.insert(WIRED_ESP, model);
+            }
             let mut triib = Triib::sample(settings, interface.clone(), entities.clone(), models);
-            triib.selected = entities.keys().next().copied();
+            triib.selected = if suffix.contains("diagnostics") {
+                Some(WIRED_ESP)
+            } else {
+                entities.keys().next().copied()
+            };
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
             }

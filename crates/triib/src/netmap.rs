@@ -19,6 +19,7 @@ use scramble_ui::icon::{self, Icon};
 use scramble_ui::{Scheme, shape, style};
 
 use crate::app::{Message, NetworkState, Triib};
+use crate::describe;
 use crate::settings::NetworkShows;
 use crate::topology::{
     Apart, EntityReport, InterfaceReport, Kind as NodeKind, NodeId, Route, Topology,
@@ -430,32 +431,6 @@ fn node_name(topology: &Topology, node: NodeId) -> String {
     }
 }
 
-/// What an MSRP failure code means (IEEE 802.1Q, 35.2.2.8.7).
-fn failure(code: u8) -> &'static str {
-    match code {
-        1 => "insufficient bandwidth",
-        2 => "insufficient bridge resources",
-        3 => "insufficient bandwidth for the traffic class",
-        4 => "stream ID in use by another talker",
-        5 => "destination address already in use",
-        6 => "pre-empted by a stream of higher rank",
-        7 => "reported latency has changed",
-        8 => "egress port is not AVB capable",
-        9 => "use a different destination address",
-        10 => "out of MSRP resources",
-        11 => "out of MMRP resources",
-        12 => "cannot store the destination address",
-        13 => "priority is not an SR class priority",
-        14 => "frames too large for the medium",
-        15 => "fan-in port limit reached",
-        16 => "first value changed for a registered stream",
-        17 => "VLAN blocked on the egress port",
-        18 => "VLAN tagging disabled on the egress port",
-        19 => "SR class priority mismatch",
-        _ => "unknown reason",
-    }
-}
-
 /// Every bound stream input, by listener, with how far its stream gets.
 fn streams(triib: &Triib, topology: &Topology) -> Vec<Stream> {
     let mut streams = Vec::new();
@@ -519,10 +494,13 @@ fn streams(triib: &Triib, topology: &Topology) -> Vec<Stream> {
                             format!(
                                 "Reservation failed at {}: {}",
                                 node_name(topology, bridge),
-                                failure(code)
+                                describe::msrp_failure(code)
                             ),
                         ),
-                        None => (talker_leg, format!("Reservation failed: {}", failure(code))),
+                        None => (
+                            talker_leg,
+                            format!("Reservation failed: {}", describe::msrp_failure(code)),
+                        ),
                     }
                 }
             };

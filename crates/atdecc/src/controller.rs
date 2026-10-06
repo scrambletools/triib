@@ -104,6 +104,10 @@ pub struct Config {
     /// Ask each Milan entity's clock domains for their media clock
     /// reference priority and domain name once it is read.
     pub media_clock_info: bool,
+    /// Ask each clock domain, stream input and stream output for its
+    /// counters once an entity is read; Milan entities then report
+    /// changes.
+    pub read_counters: bool,
     /// Advertise the controller with ADP.
     pub advertise: Option<Advertise>,
     /// The first sequence ID of AEM and of MVU commands.
@@ -121,6 +125,7 @@ impl Config {
             network_info: true,
             read_mappings: true,
             media_clock_info: true,
+            read_counters: true,
             advertise: None,
             first_sequence_id: 0,
             random_seed: entity_id.0,
@@ -1566,6 +1571,21 @@ impl Controller {
         // How channels map to and from the streams.
         if self.config.read_mappings {
             session.queue.extend(audio_map_reads(model));
+        }
+        // How the clocks and streams have fared.
+        if self.config.read_counters {
+            for descriptor_type in [
+                DescriptorType::CLOCK_DOMAIN,
+                DescriptorType::STREAM_INPUT,
+                DescriptorType::STREAM_OUTPUT,
+            ] {
+                for (index, _) in model.descriptors(descriptor_type) {
+                    session.queue.push_back(Request::GetCounters {
+                        descriptor_type,
+                        index,
+                    });
+                }
+            }
         }
         // How each clock domain stands in media clock management.
         if self.config.media_clock_info && model.milan.is_some() {

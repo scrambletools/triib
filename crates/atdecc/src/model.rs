@@ -8,8 +8,9 @@ use alloc::vec::Vec;
 use crate::acmp::AcmpFlags;
 use crate::aecp::AemStatus;
 use crate::aem::{
-    AsPath, AudioMap, AudioMapping, AudioMappings, AvbInfo, Counters, MappingChange,
-    SetClockSource, SetName, SetSamplingRate, SetStreamFormat, StreamInfo,
+    AsPath, AudioMap, AudioMapping, AudioMappings, AvbInfo, ClockDomainCounters, Counters,
+    MappingChange, SetClockSource, SetName, SetSamplingRate, SetStreamFormat, StreamInfo,
+    StreamInputCounters, StreamOutputCounters,
 };
 use crate::descriptor::{
     AudioClusterDescriptor, AudioMapDescriptor, AudioUnitDescriptor, AvbInterfaceDescriptor,
@@ -319,6 +320,28 @@ impl EntityModel {
     /// A descriptor's counters, once read.
     pub fn counters(&self, descriptor_type: DescriptorType, index: u16) -> Option<&Counters> {
         self.counters.get(&(descriptor_type, index))
+    }
+
+    /// A stream input's counters, once read.
+    pub fn stream_input_counters(&self, index: u16) -> Option<StreamInputCounters> {
+        self.counters(DescriptorType::STREAM_INPUT, index)?
+            .stream_input()
+    }
+
+    /// A stream output's counters, once read, numbered as the entity's
+    /// Milan version has them.
+    pub fn stream_output_counters(&self, index: u16) -> Option<StreamOutputCounters> {
+        let before_milan_1_3 = self
+            .milan
+            .is_some_and(|milan| milan.specification_version.is_none());
+        self.counters(DescriptorType::STREAM_OUTPUT, index)?
+            .stream_output(before_milan_1_3)
+    }
+
+    /// A clock domain's counters, once read.
+    pub fn clock_domain_counters(&self, index: u16) -> Option<ClockDomainCounters> {
+        self.counters(DescriptorType::CLOCK_DOMAIN, index)?
+            .clock_domain()
     }
 
     pub(crate) fn has(&self, descriptor_type: DescriptorType, index: u16) -> bool {

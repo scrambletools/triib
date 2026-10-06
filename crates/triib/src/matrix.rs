@@ -636,9 +636,8 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
                     .stream_info(DescriptorType::STREAM_INPUT, input.index)
                 {
                     Some(info) if info.talker_failed() => format!(
-                        "Bound, but the talker's reservation failed (code {}). Click to \
-                         disconnect.",
-                        info.msrp_failure_code
+                        "Bound, but the talker's reservation failed: {}. Click to disconnect.",
+                        crate::describe::reservation_failure(info)
                     ),
                     _ => format!(
                         "Bound, but the formats differ: the talker sends {}, the input is set \

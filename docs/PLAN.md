@@ -435,8 +435,16 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 - Channel routing via audio maps (in the inspector,
   read with GET_AUDIO_MAP, changed with ADD_AUDIO_MAPPINGS and
   REMOVE_AUDIO_MAPPINGS, kept current from their notifications), generic
-  CONTROL editors, diagnostics (Milan counters, gPTP info, MSRP failure
-  codes).
+  CONTROL editors.
+- Diagnostics, in the inspector: each clock domain's, stream input's and
+  stream output's counters in words, what went wrong marked (lost locks,
+  interruptions, late or early frames, media resets), read once an entity
+  is read and kept current from the GET_COUNTERS notifications entities
+  send to registered controllers as counters change; stream output
+  counters numbered by the entity's Milan version, as Milan 1.3 renumbered
+  them. Each bound input's accumulated latency, or why and where its
+  talker's reservation failed, by MSRP failure code and bridge. gPTP state
+  and interface counters show with each AVB interface.
 - Network view: the gPTP tree built from each entity's GET_AS_PATH, with
   bridges as nodes and each link's peer delay, asCapable and link
   counters (`triib-cli network` prints it as text). The grandmaster sits
