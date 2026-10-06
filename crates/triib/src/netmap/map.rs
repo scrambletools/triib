@@ -53,8 +53,11 @@ const COLUMN_GAP: f32 = 24.0;
 const MARGIN: f32 = 32.0;
 /// Between trees of different grandmasters.
 const TREE_GAP: f32 = 64.0;
-/// Of a wire's rounded elbows.
-const ELBOW: f32 = 8.0;
+/// Of a device's corners and a bridge's.
+const DEVICE_RADIUS: f32 = 10.0;
+const HUB_RADIUS: f32 = 14.0;
+/// Of a wire's rounded elbows: twice a device's corners.
+const ELBOW: f32 = 2.0 * DEVICE_RADIUS;
 /// Between wires side by side in a column's gutter, in the grandmaster's
 /// column, rising from a bridge, and entering a bridge's side.
 const LANE: f32 = 7.0;
@@ -338,7 +341,7 @@ fn gutter(lanes: usize) -> f32 {
     if lanes == 0 {
         0.0
     } else {
-        10.0 + (lanes - 1) as f32 * LANE + ELBOW
+        ELBOW + (lanes - 1) as f32 * LANE + 10.0
     }
 }
 
@@ -485,7 +488,7 @@ fn fan(map: &Map, width: f32) -> Placement {
             .fold(CENTRE_WIDTH, f32::max)
             .min(WIDEST);
         let centre_lanes = count_of(&lanes, root);
-        let lane_low = -8.0 - centre_lanes.saturating_sub(1) as f32 * CENTRE_LANE;
+        let lane_low = -ELBOW - centre_lanes.saturating_sub(1) as f32 * CENTRE_LANE;
         let root_width = natural[root].clamp(ROOT.width, WIDEST);
         let (root_left, root_right) = if grove.centre.is_empty() {
             (-root_width / 2.0, root_width / 2.0)
@@ -673,8 +676,11 @@ fn fan(map: &Map, width: f32) -> Placement {
             let corners = match role[upper] {
                 Role::Head(side) => {
                     let sign = if side == 0 { -1.0 } else { 1.0 };
-                    let x = outer_edge(above, side) + sign * (10.0 + lane as f32 * LANE);
-                    let top = above.y + 4.0 + (group.len() - 1 - lane) as f32 * ENTRY;
+                    let x = outer_edge(above, side) + sign * (ELBOW + lane as f32 * LANE);
+                    // Centred down the head's side, however many leave it;
+                    // the outer lanes leave higher, so none crosses another.
+                    let middle = (group.len() - 1) as f32 / 2.0;
+                    let top = above.center_y() + (middle - lane as f32) * ENTRY;
                     vec![
                         Point::new(outer_edge(above, side), top),
                         Point::new(x, top),
@@ -684,7 +690,7 @@ fn fan(map: &Map, width: f32) -> Placement {
                 }
                 _ => {
                     let x = middle.get(&upper).copied().unwrap_or(above.x)
-                        - 8.0
+                        - ELBOW
                         - lane as f32 * CENTRE_LANE;
                     vec![
                         Point::new(x, above.y + above.height),
@@ -710,7 +716,9 @@ fn fan(map: &Map, width: f32) -> Placement {
                 side,
                 20.0 + (count_of(&arches, leg.node) + rise_place(leg)) as f32 * TRUNK,
             );
-            let y = above.y + 8.0 + place as f32 * TRUNK;
+            // Centred down the grandmaster's side, the farther out higher.
+            let middle = (group.len() - 1) as f32 / 2.0;
+            let y = above.center_y() + (place as f32 - middle) * TRUNK;
             let into = if side == 0 {
                 above.x
             } else {
@@ -739,7 +747,7 @@ fn fan(map: &Map, width: f32) -> Placement {
             );
             let inward = (total - 1 - place) as f32;
             let into = from_outer(above, side, 8.0 + inward * TRUNK);
-            let y = above.y - 10.0 - inward * 6.0;
+            let y = above.y - ELBOW - inward * 6.0;
             put(
                 leg,
                 vec![
@@ -826,8 +834,9 @@ fn compact(map: &Map) -> Placement {
             entries.entry(leg.node).or_default().push(leg);
         }
     }
-    let indent =
-        |node: NodeId| INDENT.max(16.0 + CENTRE_LANE * lanes.get(&node).map_or(0, Vec::len) as f32);
+    let indent = |node: NodeId| {
+        INDENT.max(ELBOW + 12.0 + CENTRE_LANE * lanes.get(&node).map_or(0, Vec::len) as f32)
+    };
     let sizes: Vec<Size> = (0..count)
         .map(|node| {
             let base = if hubs[node] {
@@ -914,7 +923,7 @@ fn compact(map: &Map) -> Placement {
                 own.iter().position(|other| other == leg).unwrap_or(0),
                 own.len(),
             );
-            let x = above.x + indent(upper) - 8.0 - lane as f32 * CENTRE_LANE;
+            let x = above.x + indent(upper) - ELBOW - lane as f32 * CENTRE_LANE;
             let wire = Wire::new(vec![
                 Point::new(x, above.y + above.height),
                 Point::new(x, y),
@@ -1088,18 +1097,22 @@ fn unit(vector: Vector) -> Vector {
     }
 }
 
-/// Straight runs between the corners, and an elbow at each.
+/// Straight runs between the corners, and an elbow at each. A run between
+/// two elbows gives each half of it; a wire's first and last runs give
+/// their one elbow all of theirs.
 fn pieces(corners: &[Point]) -> Vec<Piece> {
     let mut pieces = Vec::new();
     let Some((&first, rest)) = corners.split_first() else {
         return pieces;
     };
     let mut from = first;
-    for window in corners.windows(3) {
+    let elbows = corners.len().saturating_sub(2);
+    for (index, window) in corners.windows(3).enumerate() {
         let (before, corner, after) = (window[0], window[1], window[2]);
+        let share = |end: bool| if end { 1.0 } else { 0.5 };
         let radius = ELBOW
-            .min(before.distance(corner) / 2.0)
-            .min(corner.distance(after) / 2.0);
+            .min(before.distance(corner) * share(index == 0))
+            .min(corner.distance(after) * share(index + 1 == elbows));
         let toward = |target: Point| {
             let direction = unit(target - corner);
             Point::new(
@@ -1270,9 +1283,9 @@ impl NetMap {
         hub: bool,
     ) {
         let (radius, padding, name_size) = if hub {
-            (14.0, 14.0, 14.0)
+            (HUB_RADIUS, 14.0, 14.0)
         } else {
-            (10.0, 10.0, 13.0)
+            (DEVICE_RADIUS, 10.0, 13.0)
         };
         let opacity = if card.faded { 0.4 } else { 1.0 };
         let shape =
