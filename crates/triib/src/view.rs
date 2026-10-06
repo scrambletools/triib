@@ -370,7 +370,7 @@ fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
     };
     let tabs = component::tabs(vec![
         tab("Entity", Icon::Info, InspectorTab::Entity),
-        tab("Streams", Icon::Stream, InspectorTab::Streams),
+        tab("Streams", Icon::GraphicEq, InspectorTab::Streams),
         tab("Controls", Icon::Tune, InspectorTab::Controls),
         tab("Diagnostics", Icon::MonitorHeart, InspectorTab::Diagnostics),
         tab("Descriptors", Icon::AccountTree, InspectorTab::Descriptors),
