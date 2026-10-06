@@ -1401,7 +1401,7 @@ fn speed_text(megabits: u32) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     use std::collections::BTreeMap;
@@ -1415,7 +1415,7 @@ mod tests {
 
     /// The entities and models a controller reads from the bench, replaying
     /// the capture of a live run.
-    fn bench() -> (
+    pub(crate) fn bench() -> (
         BTreeMap<EntityId, DiscoveredEntity>,
         BTreeMap<EntityId, EntityModel>,
     ) {

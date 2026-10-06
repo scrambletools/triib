@@ -113,6 +113,9 @@ impl State {
 pub enum Cell {
     /// Under an expanded talker or beside an expanded listener.
     Blank,
+    /// An entity's outputs against its own inputs, which triib does not
+    /// connect, as Hive does not.
+    Own,
     /// How many bindings join a collapsed talker's or listener's streams
     /// to the other line.
     Count(usize),
@@ -165,6 +168,13 @@ struct Stream<'a> {
 impl Stream<'_> {
     fn key(&self) -> (EntityId, u16) {
         (self.entity_id, self.index)
+    }
+
+    /// For an input, whether `output` is its own entity's and not bound to
+    /// it: a connection triib does not offer. One made elsewhere still
+    /// shows, so it can be undone.
+    fn own(&self, output: &Stream<'_>) -> bool {
+        self.entity_id == output.entity_id && self.bound_to() != Some(output.key())
     }
 
     /// For an input, the talker's stream output it is bound to.
@@ -344,8 +354,9 @@ fn tag(entity: &DiscoveredEntity) -> String {
 fn connectable_only<'a>(talkers: &mut Vec<Group<'a>>, listeners: &mut Vec<Group<'a>>) {
     let reaches = |output: &Stream<'_>, input: &Stream<'_>| {
         input.bound_to() == Some(output.key())
-            || fit(output.format, input.format, input.supported.iter().copied())
-                != Fit::Incompatible
+            || (!input.own(output)
+                && fit(output.format, input.format, input.supported.iter().copied())
+                    != Fit::Incompatible)
     };
     let outputs: Vec<(EntityId, u16)> = talkers
         .iter()
@@ -446,20 +457,31 @@ fn grid(triib: &Triib, talkers: &[Group<'_>], listeners: &[Group<'_>]) -> Grid {
         for outputs in &outputs {
             cells.push(match (inputs, outputs) {
                 (Some(inputs), Some(outputs)) => match (inputs.as_slice(), outputs.as_slice()) {
+                    ([input], [output]) if input.own(output) => Cell::Own,
                     ([input], [output]) => {
                         let (state, action) = assess(triib, output, input);
                         Cell::Stream { state, action }
                     }
-                    _ => Cell::Count(
-                        inputs
+                    _ => {
+                        let count = inputs
                             .iter()
                             .filter(|input| {
                                 input.bound_to().is_some_and(|bound| {
                                     outputs.iter().any(|output| output.key() == bound)
                                 })
                             })
-                            .count(),
-                    ),
+                            .count();
+                        let same = inputs.iter().all(|input| {
+                            outputs
+                                .iter()
+                                .all(|output| output.entity_id == input.entity_id)
+                        });
+                        if same && count == 0 {
+                            Cell::Own
+                        } else {
+                            Cell::Count(count)
+                        }
+                    }
                 },
                 _ => Cell::Blank,
             });
@@ -596,6 +618,9 @@ fn status<'a>(
     .into()
 }
 
+/// What pointing at an entity's outputs against its own inputs says.
+const OWN: &str = "An entity's outputs do not connect to its own inputs.";
+
 fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>]) -> Said {
     let scheme = Scheme::of(&triib.theme());
     let info = |title: String, detail: String| Said {
@@ -614,7 +639,6 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
         .map(|(row, column)| grid.cell(row, column));
     match (column, row, cell) {
         (Some(Found::Stream(talker, output)), Some(Found::Stream(listener, input)), _) => {
-            let (state, action) = assess(triib, output, input);
             let route = format!(
                 "{}, {}  →  {}, {}",
                 talker.label(),
@@ -622,6 +646,10 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
                 listener.label(),
                 input.name
             );
+            if input.own(output) {
+                return info(route, OWN.to_owned());
+            }
+            let (state, action) = assess(triib, output, input);
             let detail = match state {
                 State::Working => "Working on it.".to_owned(),
                 _ if action.is_none() && state != State::Incompatible => {
@@ -663,6 +691,10 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
                 detail,
             }
         }
+        (Some(column), Some(row), Some(Cell::Own)) => info(
+            format!("{}  →  {}", column.label(), row.label()),
+            OWN.to_owned(),
+        ),
         (Some(column), Some(row), Some(Cell::Count(count))) => info(
             format!("{}  →  {}", column.label(), row.label()),
             if count == 0 {
@@ -760,6 +792,40 @@ fn legend<'a>() -> Element<'a, Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::settings::Settings;
+
+    #[test]
+    fn entities_do_not_connect_to_themselves() {
+        let (entities, models) = crate::view::tests::bench();
+        let interface = avb_net::Interface {
+            name: "enp6s0".to_owned(),
+            mac: avb_net::MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]),
+            up: true,
+            speed: None,
+            physical: true,
+            wireless: false,
+            hardware_clock: None,
+        };
+        let triib = Triib::sample(Settings::default(), interface, entities, models);
+        let talkers = groups(&triib, Side::Talker);
+        let listeners = groups(&triib, Side::Listener);
+        let built = grid(&triib, &talkers, &listeners);
+        let mut own = 0;
+        for (row, row_heading) in built.rows.iter().enumerate() {
+            for (column, column_heading) in built.columns.iter().enumerate() {
+                let cell = built.cell(row, column);
+                match (row_heading.line, column_heading.line) {
+                    (Line::Stream(listener, _), Line::Stream(talker, _)) => {
+                        // Nothing on the bench is bound to itself.
+                        assert_eq!(cell == Cell::Own, listener == talker, "{row}, {column}");
+                        own += usize::from(cell == Cell::Own);
+                    }
+                    _ => assert_ne!(cell, Cell::Own),
+                }
+            }
+        }
+        assert!(own > 0, "each entity meets its own streams");
+    }
 
     #[test]
     fn formats_shorten() {
