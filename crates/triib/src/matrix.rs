@@ -114,7 +114,7 @@ pub enum Cell {
     /// Under an expanded talker or beside an expanded listener.
     Blank,
     /// An entity's outputs against its own inputs, which triib does not
-    /// connect, as Hive does not.
+    /// connect, as Hive does not; drawn empty.
     Own,
     /// How many bindings join a collapsed talker's or listener's streams
     /// to the other line.

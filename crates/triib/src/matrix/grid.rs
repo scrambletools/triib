@@ -953,12 +953,9 @@ impl Matrix {
                 (index / columns) as f32 * CELL + CELL / 2.0,
             );
             match *cell {
-                Cell::Blank | Cell::Count(0) => {}
-                Cell::Own => frame.fill_rectangle(
-                    Point::new(center.x - CELL / 2.0 + 1.0, center.y - CELL / 2.0 + 1.0),
-                    Size::new(CELL - 1.0, CELL - 1.0),
-                    colors.own,
-                ),
+                // An entity's outputs against its own inputs stay empty, so
+                // the pointer's row and column show through.
+                Cell::Blank | Cell::Own | Cell::Count(0) => {}
                 Cell::Count(count) => {
                     let count = count.to_string();
                     let width = (measure(&count, BOLD, 11.0) + 10.0).max(20.0);
@@ -1149,8 +1146,6 @@ struct Colors {
     cross: Color,
     /// The circle behind a cell's icon that clicking acts on.
     hit: Color,
-    /// An entity's outputs against its own inputs.
-    own: Color,
     label: Color,
     text: Color,
     detail: Color,
@@ -1172,7 +1167,6 @@ impl Colors {
             hover_heading: blend(container, scheme.primary, 0.08),
             cross: blend(container, scheme.primary, 0.11),
             hit: blend(container, scheme.primary, 0.2),
-            own: blend(container, scheme.on_surface, 0.05),
             label: scheme.on_surface_variant,
             text: scheme.on_surface,
             detail: scheme.outline,

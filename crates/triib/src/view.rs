@@ -1592,6 +1592,7 @@ pub(crate) mod tests {
             ("network-phone", View::Network, false, phone),
             ("inspector-phone", View::Matrix, true, phone),
             ("matrix-desktop", View::Matrix, true, desktop),
+            ("matrix-hover-own", View::Matrix, false, desktop),
             ("entities-desktop", View::Entities, false, desktop),
             (
                 "entities-wide",
@@ -1687,6 +1688,13 @@ pub(crate) mod tests {
             };
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
+            }
+            if suffix.contains("hover-own") {
+                // The Mac mini's audio output against its own audio input.
+                triib.hover = crate::matrix::Hover {
+                    column: Some(crate::matrix::Line::Stream(MAC_MINI, 0)),
+                    row: Some(crate::matrix::Line::Stream(MAC_MINI, 0)),
+                };
             }
             if suffix.starts_with("settings") {
                 triib.settings_open = true;
