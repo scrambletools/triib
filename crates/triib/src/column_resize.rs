@@ -157,8 +157,12 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
                 }
                 return;
             }
-            Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                if let Some((origin, start)) = state.drag {
+            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                // The pointer as the scrolled table places it, as at the
+                // press; the event's position is the window's.
+                if let Some((origin, start)) = state.drag
+                    && let Some(position) = cursor.land().position()
+                {
                     let width = (start + position.x - origin).max(MIN_WIDTH);
                     shell.publish((self.on_resize)(width));
                     shell.capture_event();
@@ -261,5 +265,71 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
 impl<'a, Message: Clone + 'a> From<Resizable<'a, Message>> for Element<'a, Message> {
     fn from(resizable: Resizable<'a, Message>) -> Self {
         Element::new(resizable)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::mouse::{Button, Event as Mouse, ScrollDelta};
+    use iced::widget::scrollable;
+    use iced::{Point, Settings};
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum Message {
+        Resized(f32),
+        Ended,
+        Reset,
+    }
+
+    /// Drags 30 pixels right the edge of a 100 pixel heading 200 pixels
+    /// into a table scrolled `scrolled` pixels sideways.
+    fn drag(scrolled: f32) -> Vec<Message> {
+        let heading = resizable(
+            iced::widget::text("Heading"),
+            Message::Resized,
+            Message::Ended,
+            Message::Reset,
+        )
+        .width(Length::Fixed(100.0));
+        let table = scrollable(iced::widget::row![
+            iced::widget::space().width(200),
+            heading,
+            iced::widget::space().width(500),
+        ])
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::default(),
+        ))
+        .width(iced::Fill)
+        .height(80);
+        let mut simulator =
+            iced_test::Simulator::with_size(Settings::default(), Size::new(400.0, 100.0), table);
+        simulator.point_at(Point::new(200.0, 10.0));
+        let _ = simulator.simulate([Event::Mouse(Mouse::WheelScrolled {
+            delta: ScrollDelta::Pixels {
+                x: -scrolled,
+                y: 0.0,
+            },
+        })]);
+        // The edge where the window shows it.
+        let edge = Point::new(300.0 - scrolled, 10.0);
+        simulator.point_at(edge);
+        let _ = simulator.simulate([Event::Mouse(Mouse::ButtonPressed(Button::Left))]);
+        let to = Point::new(edge.x + 30.0, edge.y);
+        simulator.point_at(to);
+        let _ = simulator.simulate([Event::Mouse(Mouse::CursorMoved { position: to })]);
+        let _ = simulator.simulate([Event::Mouse(Mouse::ButtonReleased(Button::Left))]);
+        simulator.into_messages().collect()
+    }
+
+    #[test]
+    fn a_drag_widens_by_how_far_the_pointer_moves_however_scrolled() {
+        for scrolled in [0.0, 150.0] {
+            assert_eq!(
+                drag(scrolled),
+                [Message::Resized(130.0), Message::Ended],
+                "scrolled {scrolled}"
+            );
+        }
     }
 }
