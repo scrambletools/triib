@@ -475,7 +475,10 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   forward, and the panel beside the map explains it. Narrow windows show
   the map or the panel, and stack the map when its columns would be too
   small. Switch ports need LLDP tables over SNMP, a later addition.
-- Log view: the ATDECC frames the controller sent and heard, newest
+- Log, in a panel under whichever view shows, beside the inspector,
+  opened from the toolbar beside the inspector's button and resized from
+  its top edge (its height kept in the settings, the view keeping room
+  above it): the ATDECC frames the controller sent and heard, newest
   first, the newest 5000 kept, each with its time, direction, entity and
   what it says, refusals marked; filtered by protocol or to warnings,
   paused and cleared, a line opening to its octets. Warnings mark frames

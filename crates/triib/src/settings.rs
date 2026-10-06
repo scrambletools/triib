@@ -27,6 +27,10 @@ pub struct Settings {
     pub hide_virtual_interfaces: bool,
     pub view: View,
     pub inspector: bool,
+    /// The log shows in a panel under the view.
+    pub log: bool,
+    /// The height the user dragged the log panel to.
+    pub log_height: f32,
     /// The streams the connection matrix shows.
     pub matrix_streams: Streams,
     /// Leave out of the matrix the streams nothing shown can connect to.
@@ -54,6 +58,8 @@ impl Default for Settings {
             hide_virtual_interfaces: true,
             view: View::Matrix,
             inspector: false,
+            log: false,
+            log_height: 240.0,
             matrix_streams: Streams::All,
             matrix_connectable_only: false,
             network_shows: NetworkShows::Audio,
@@ -69,7 +75,9 @@ impl Default for Settings {
 #[serde(rename_all = "lowercase")]
 pub enum View {
     /// Talker streams against listener streams.
+    // The log was a view before it became a panel under any of them.
     #[default]
+    #[serde(alias = "log")]
     Matrix,
     // Host talkers and listeners are entities like any other, and each
     // entity's media clock is picked in its row.
@@ -77,8 +85,6 @@ pub enum View {
     Entities,
     /// The network as gPTP paths show it.
     Network,
-    /// The ATDECC frames sent and heard.
-    Log,
 }
 
 /// What a column of the entity list after the name shows.
@@ -269,5 +275,12 @@ mod tests {
         let _ = std::fs::remove_file(&file);
         assert_eq!(loaded.view, View::Entities);
         assert_eq!(loaded.entity_columns, EntityField::DEFAULT_COLUMNS);
+
+        // The log view, now a panel.
+        std::fs::write(&file, saved.replace("view = \"matrix\"", "view = \"log\"")).unwrap();
+        let loaded = triib_store::load_or_create::<Settings>(&file).unwrap();
+        let _ = std::fs::remove_file(&file);
+        assert_eq!(loaded.view, View::Matrix);
+        assert!(!loaded.log);
     }
 }

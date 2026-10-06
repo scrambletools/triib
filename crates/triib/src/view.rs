@@ -35,6 +35,8 @@ const INTERFACE_PICKER_WIDTH: f32 = 320.0;
 const TOOLBAR_PADDING: f32 = 12.0;
 /// The narrowest window that has room for the inspector beside the view.
 const INSPECTOR_BESIDE: f32 = 720.0;
+/// The least height the view keeps above the log panel.
+const VIEW_ABOVE_LOG: f32 = 160.0;
 /// The narrowest the interface picker gets, and below which its choices
 /// leave out all but each interface's name and link.
 const PICKER_NARROWEST: f32 = 160.0;
@@ -44,7 +46,7 @@ pub fn window(triib: &Triib) -> Element<'_, Message> {
     let window: Element<'_, Message> = iced::widget::column![
         toolbar(triib),
         container(iced::widget::responsive(move |size| {
-            panels(triib, size.width)
+            panels(triib, size)
         }))
         .height(Fill)
         .style(style::surface),
@@ -60,18 +62,37 @@ pub fn window(triib: &Triib) -> Element<'_, Message> {
     }
 }
 
-/// The active view with the inspector beside it, or on a narrow window the
-/// inspector in its place until it is closed.
-fn panels(triib: &Triib, width: f32) -> Element<'_, Message> {
-    let view = container(content(triib)).width(Fill).height(Fill);
-    if !triib.settings.inspector {
-        return view.into();
-    }
-    if width < INSPECTOR_BESIDE {
-        return inspector(triib, Length::Fill);
+/// The active view with the log under it and the inspector beside both,
+/// or on a narrow window the inspector in the view's place until it is
+/// closed.
+fn panels(triib: &Triib, size: iced::Size) -> Element<'_, Message> {
+    let beside = triib.settings.inspector && size.width >= INSPECTOR_BESIDE;
+    let main: Element<'_, Message> = if triib.settings.inspector && !beside {
+        inspector(triib, Length::Fill)
+    } else {
+        container(content(triib)).width(Fill).height(Fill).into()
+    };
+    let main = if triib.settings.log {
+        let width = if beside {
+            size.width - component::SIDE_SHEET_WIDTH
+        } else {
+            size.width
+        };
+        // The view keeps room above the log however tall it was dragged.
+        let most = (size.height - VIEW_ABOVE_LOG).max(crate::log_view::LEAST_HEIGHT);
+        let height = triib
+            .settings
+            .log_height
+            .clamp(crate::log_view::LEAST_HEIGHT, most);
+        iced::widget::column![main, crate::log_view::panel(triib, width, height, most)].into()
+    } else {
+        main
+    };
+    if !beside {
+        return main;
     }
     // The panels keep their sides in every language.
-    iced::widget::row![view, inspector(triib, component::SIDE_SHEET_WIDTH.into())]
+    iced::widget::row![main, inspector(triib, component::SIDE_SHEET_WIDTH.into())]
         .height(Fill)
         .into()
 }
@@ -186,9 +207,8 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 view_tool(Icon::GridOn, "Connections", View::Matrix),
                 view_tool(Icon::Hub, "Network", View::Network),
                 view_tool(Icon::ViewList, "Entities", View::Entities),
-                view_tool(Icon::History, "Log", View::Log),
             ]),
-            DIVIDER_WIDTH + TOOLBAR_GAP + tools(4.0),
+            DIVIDER_WIDTH + TOOLBAR_GAP + tools(3.0),
             Some(3),
             true,
         ),
@@ -220,6 +240,17 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         component::tool(Icon::Bookmarks, "Presets", Some(Message::PresetsOpened)),
         TOOL_WIDTH,
         Some(1),
+        false,
+    ));
+    slots.push((
+        component::toggle_tool(
+            Icon::History,
+            "Log",
+            triib.settings.log,
+            Message::LogToggled,
+        ),
+        TOOL_WIDTH,
+        Some(3),
         false,
     ));
     slots.push((
@@ -359,7 +390,6 @@ fn content(triib: &Triib) -> Element<'_, Message> {
             NetworkState::Running { .. } | NetworkState::Starting => crate::netmap::view(triib),
             state => network_state_view(triib, state),
         },
-        View::Log => crate::log_view::view(triib),
     }
 }
 
@@ -1873,7 +1903,9 @@ pub(crate) mod tests {
                 true,
                 Size::new(1280.0, 1400.0),
             ),
-            ("log-desktop", View::Log, false, desktop),
+            ("log-desktop", View::Entities, true, desktop),
+            ("log-matrix", View::Matrix, false, desktop),
+            ("log-phone", View::Network, false, phone),
             ("presets-desktop", View::Matrix, false, desktop),
             (
                 "inspector-mappings-phone",
@@ -1960,6 +1992,7 @@ pub(crate) mod tests {
             if suffix.starts_with("log") {
                 let frames = crate::log_view::tests::bench_frames(&triib);
                 triib.log.add(frames);
+                triib.settings.log = true;
             }
             if suffix.contains("narrow") {
                 // Columns dragged narrower than their text.
@@ -2108,6 +2141,120 @@ pub(crate) mod tests {
         // The network map's empty corner.
         let network = presses(View::Network, &[(60.0, 700.0)]);
         assert!(clears(&network[0]), "{:?}", network[0]);
+    }
+
+    /// The bench with the log open under `view` and some frames in it,
+    /// and the wired ESP in the inspector when it is open.
+    fn logging(view: View, inspector: bool) -> Triib {
+        let (entities, models) = bench();
+        let interface = Interface {
+            name: "enp6s0".to_owned(),
+            mac: MacAddress(HOST_MAC),
+            up: true,
+            speed: Some(2500),
+            physical: true,
+            wireless: false,
+            hardware_clock: Some(0),
+        };
+        let settings = Settings {
+            interface: Some(interface.name.clone()),
+            view,
+            inspector,
+            log: true,
+            ..Settings::default()
+        };
+        let mut triib = Triib::sample(settings, interface, entities, models);
+        triib.selected = Some(WIRED_ESP);
+        let frames = crate::log_view::tests::bench_frames(&triib);
+        triib.log.add(frames);
+        triib
+    }
+
+    fn simulate(triib: &Triib, size: Size) -> iced_test::Simulator<'_, Message> {
+        iced_test::Simulator::with_size(
+            iced::Settings {
+                fonts: scramble_ui::font::files().collect(),
+                default_font: scramble_ui::font::TEXT,
+                ..iced::Settings::default()
+            },
+            size,
+            window(triib),
+        )
+    }
+
+    #[test]
+    fn the_log_shows_under_every_view_beside_the_inspector() {
+        let desktop = Size::new(1280.0, 800.0);
+        let phone = Size::new(360.0, 760.0);
+        for view in [View::Matrix, View::Network, View::Entities] {
+            for (size, inspector) in [(desktop, true), (desktop, false), (phone, true)] {
+                let triib = logging(view, inspector);
+                let mut simulator = simulate(&triib, size);
+                let case = format!("{view:?} at {} wide", size.width);
+                assert!(simulator.find("Warnings").is_ok(), "{case}");
+                assert!(
+                    simulator.find("Read descriptor, stream input 1").is_ok(),
+                    "{case}"
+                );
+                assert_eq!(simulator.find("Serial number").is_ok(), inspector, "{case}");
+            }
+        }
+        let mut closed = logging(View::Matrix, true);
+        let _ = closed.update(Message::LogToggled);
+        assert!(simulate(&closed, desktop).find("Warnings").is_err());
+    }
+
+    #[test]
+    fn dragging_the_logs_edge_resizes_it_within_the_window() {
+        use iced::mouse::{Button, Event as Mouse};
+        use scramble_ui::resize::{Drag, HANDLE_WIDTH};
+
+        let mut triib = logging(View::Matrix, true);
+        let size = Size::new(1280.0, 800.0);
+        let area = size.height - TOOLBAR_HEIGHT - STATUS_BAR_HEIGHT;
+        let edge = TOOLBAR_HEIGHT + area - triib.settings.log_height + HANDLE_WIDTH / 2.0;
+        let messages: Vec<Message> = {
+            let mut simulator = simulate(&triib, size);
+            simulator.point_at(iced::Point::new(400.0, edge));
+            let _ = simulator.simulate([
+                iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+                iced::Event::Mouse(Mouse::CursorMoved {
+                    position: iced::Point::new(420.0, edge - 100.0),
+                }),
+                iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+            ]);
+            simulator.into_messages().collect()
+        };
+        let most = area - VIEW_ABOVE_LOG;
+        let drags: Vec<(Drag, f32, f32)> = messages
+            .iter()
+            .filter_map(|message| match message {
+                Message::LogResized(drag, shown, most) => Some((*drag, *shown, *most)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            drags,
+            [
+                (Drag::Started, 240.0, most),
+                (Drag::Moved(-100.0), 240.0, most),
+                (Drag::Ended, 240.0, most),
+            ],
+            "{messages:?}"
+        );
+        assert_eq!(messages.len(), 3, "the drag alone: {messages:?}");
+        for message in messages {
+            let _ = triib.update(message);
+        }
+        assert_eq!(triib.settings.log_height, 340.0);
+        // Dragged past the window's top the view keeps its room, and past
+        // its bottom the log keeps a few lines.
+        for (moved, height) in [(-2000.0, most), (2000.0, crate::log_view::LEAST_HEIGHT)] {
+            for drag in [Drag::Started, Drag::Moved(moved), Drag::Ended] {
+                let _ = triib.update(Message::LogResized(drag, 340.0, most));
+            }
+            assert_eq!(triib.settings.log_height, height);
+        }
     }
 
     #[test]

@@ -1,7 +1,8 @@
-//! The log: the ATDECC frames triib sent and heard, newest first, each
-//! with what it says and, marked, where its sender broke the rules: a
-//! frame that does not decode, a control_data_length claiming octets the
-//! frame does not carry, and the long ACMP form from a Milan entity.
+//! The log, in a panel under the view: the ATDECC frames triib sent and
+//! heard, newest first, each with what it says and, marked, where its
+//! sender broke the rules: a frame that does not decode, a
+//! control_data_length claiming octets the frame does not carry, and the
+//! long ACMP form from a Milan entity.
 
 use std::collections::VecDeque;
 use std::time::SystemTime;
@@ -17,11 +18,11 @@ use atdecc::mvu::MvuMessage;
 use atdecc::pdu::{self, Pdu};
 use avb_mrp::msrp;
 use iced::widget::{column, container, mouse_area, row, space};
-use iced::{Center, Element, Fill, Font, Length};
+use iced::{Center, Element, Fill, Font, Length, Padding};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
-use scramble_ui::{component, style};
+use scramble_ui::{component, resize, style};
 
 use crate::app::{Message, Triib};
 use crate::describe;
@@ -30,6 +31,13 @@ use crate::describe;
 pub const LIMIT: usize = 5000;
 /// The most lines drawn at once, the newest.
 const SHOWN: usize = 500;
+/// The least height the log panel takes: its edge, its header and a few
+/// lines.
+pub const LEAST_HEIGHT: f32 = 140.0;
+/// The narrowest panel whose filters fit beside its title.
+const HEADER_IN_ONE_ROW: f32 = 760.0;
+/// The narrowest panel whose lines have what they say beside their entity.
+const LINE_IN_ONE_ROW: f32 = 600.0;
 const TIME_WIDTH: f32 = 76.0;
 const ENTITY_WIDTH: f32 = 180.0;
 
@@ -417,7 +425,10 @@ fn describe_acmp(triib: &Triib, frame: &Frame, acmpdu: &Acmpdu, line: &mut Line)
     }
 }
 
-pub fn view(triib: &Triib) -> Element<'_, Message> {
+/// The log panel under the view, `width` wide and `height` tall of the
+/// `most` it may take, its top edge dragged to resize it: a header with
+/// the filters, then the frames, newest first.
+pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, Message> {
     let log = &triib.log;
     let lines: Vec<&Entry> = log
         .entries
@@ -431,61 +442,121 @@ pub fn view(triib: &Triib) -> Element<'_, Message> {
             .selected(log.filter == value)
             .on_press(Message::Log(LogMessage::Filter(value)))
     };
-    let pause = if log.paused {
-        button::with_icon(Kind::Tonal, Icon::ProgressActivity, "Resume")
+    let wide = width >= HEADER_IN_ONE_ROW;
+    let pause_message = Message::Log(LogMessage::Paused(!log.paused));
+    let (pause_icon, pause_label) = if log.paused {
+        (Icon::ProgressActivity, "Resume")
     } else {
-        button::with_icon(Kind::Filled, Icon::Stop, "Pause").selected(false)
-    }
-    .size(Size::ExtraSmall)
-    .on_press(Message::Log(LogMessage::Paused(!log.paused)));
+        (Icon::Stop, "Pause")
+    };
+    let clear_message = (log.len() > 0).then_some(Message::Log(LogMessage::Cleared));
+    // On a narrow window the buttons give up their labels.
+    let (pause, clear): (Element<'_, Message>, Element<'_, Message>) = if wide {
+        let pause = if log.paused {
+            button::with_icon(Kind::Tonal, pause_icon, pause_label)
+        } else {
+            button::with_icon(Kind::Filled, pause_icon, pause_label).selected(false)
+        };
+        (
+            pause.size(Size::ExtraSmall).on_press(pause_message).into(),
+            button::with_icon(Kind::Text, Icon::Delete, "Clear")
+                .size(Size::ExtraSmall)
+                .on_press_maybe(clear_message)
+                .into(),
+        )
+    } else {
+        (
+            component::tip(
+                button::icon_button(pause_icon)
+                    .selected(log.paused)
+                    .on_press(pause_message),
+                pause_label,
+            ),
+            component::tip(
+                button::icon_button(Icon::Delete).on_press_maybe(clear_message),
+                "Clear",
+            ),
+        )
+    };
     let count = match (lines.len(), log.len()) {
         (shown, all) if shown == all => frames(all),
         (shown, all) => format!("{} of {}", frames(shown), all),
     };
-    let header = row![
-        component::connected(vec![
-            filter("All", LogFilter::All),
-            filter("Warnings", LogFilter::Warnings),
-            filter("ADP", LogFilter::Adp),
-            filter("AECP", LogFilter::Aecp),
-            filter("ACMP", LogFilter::Acmp),
-        ]),
-        styled(count, Type::BodyMedium).style(style::on_surface_variant),
-        space::horizontal(),
+    let title = styled("Log", Type::TitleLarge);
+    let filters = component::connected(vec![
+        filter("All", LogFilter::All),
+        filter("Warnings", LogFilter::Warnings),
+        filter("ADP", LogFilter::Adp),
+        filter("AECP", LogFilter::Aecp),
+        filter("ACMP", LogFilter::Acmp),
+    ]);
+    let count = styled(count, Type::BodyMedium)
+        .style(style::on_surface_variant)
+        .wrapping(iced::widget::text::Wrapping::None);
+    let actions = row![
         pause,
-        button::with_icon(Kind::Text, Icon::Delete, "Clear")
-            .size(Size::ExtraSmall)
-            .on_press_maybe((log.len() > 0).then_some(Message::Log(LogMessage::Cleared))),
+        clear,
+        component::tip(
+            button::icon_button(Icon::Close).on_press(Message::LogToggled),
+            scramble_ui::labels::get().close,
+        ),
     ]
-    .spacing(12)
+    .spacing(8)
     .align_y(Center);
+    // On a narrow window the filters go under the title.
+    let header: Element<'_, Message> = if wide {
+        row![title, filters, count, space::horizontal(), actions]
+            .spacing(16)
+            .align_y(Center)
+            .into()
+    } else {
+        column![
+            row![title, count, space::horizontal(), actions]
+                .spacing(12)
+                .align_y(Center),
+            filters,
+        ]
+        .spacing(4)
+        .into()
+    };
     let body: Element<'_, Message> = if lines.is_empty() {
-        component::empty_state(
-            Icon::History,
-            if log.len() == 0 {
-                "No frames yet"
-            } else {
-                "No frames to show"
-            },
-            if log.len() == 0 {
-                "Every ATDECC frame triib sends and hears appears here, newest first."
-            } else {
-                "No frame kept matches the filter."
-            },
+        container(
+            styled(
+                if log.len() == 0 {
+                    "Every ATDECC frame triib sends and hears appears here, newest first."
+                } else {
+                    "No frame kept matches the filter."
+                },
+                Type::BodyMedium,
+            )
+            .style(style::on_surface_variant)
+            .center(),
         )
+        .center(Fill)
+        .into()
     } else {
         let mut list = column![].spacing(2);
         for entry in lines.into_iter().take(SHOWN) {
-            list = list.push(log_line(triib, entry));
+            list = list.push(log_line(triib, entry, width >= LINE_IN_ONE_ROW));
         }
         component::scroll(list.padding([0, 4])).height(Fill).into()
     };
-    column![header, body]
-        .spacing(12)
-        .padding([16, 24])
-        .width(Fill)
-        .height(Fill)
-        .into()
+    let handle = resize::handle(move |drag| Message::LogResized(drag, height, most)).height();
+    container(column![
+        handle,
+        container(column![header, body].spacing(4))
+            .padding(Padding {
+                top: 0.0,
+                right: 12.0,
+                bottom: 8.0,
+                left: 24.0,
+            })
+            .height(Fill),
+    ])
+    .width(Fill)
+    .height(height)
+    .style(style::chrome)
+    .into()
 }
 
 fn frames(count: usize) -> String {
@@ -497,8 +568,9 @@ fn frames(count: usize) -> String {
 }
 
 /// A frame's line: when, which way, the entity and what it says, then
-/// its warnings, and its octets when opened.
-fn log_line<'a>(triib: &'a Triib, entry: &Entry) -> Element<'a, Message> {
+/// its warnings, and its octets when opened; what it says goes under the
+/// entity unless `one_row`.
+fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, Message> {
     let line = entry.line.clone();
     let log = &triib.log;
     let opened = log.open == Some(entry.number);
@@ -530,27 +602,46 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry) -> Element<'a, Message> {
     if let Some(refusal) = line.refusal {
         summary = summary.push(styled(refusal, Type::BodyMedium).style(style::error_text));
     }
-    let top = row![
-        styled(
-            format!("{:.3}", log.seconds(entry.frame.at)),
-            Type::BodySmall
-        )
-        .font(Font::MONOSPACE)
-        .style(style::on_surface_variant)
-        .width(Length::Fixed(TIME_WIDTH)),
-        component::tip(icon::icon(glyph, 16).style(style::on_surface_variant), way),
-        container(entity)
-            .width(Length::Fixed(ENTITY_WIDTH))
-            .clip(true),
-        summary.width(Fill),
-    ]
-    .spacing(12)
-    .align_y(Center);
-    let mut lines = column![top].spacing(4);
+    let time = styled(
+        format!("{:.3}", log.seconds(entry.frame.at)),
+        Type::BodySmall,
+    )
+    .font(Font::MONOSPACE)
+    .style(style::on_surface_variant)
+    .width(Length::Fixed(TIME_WIDTH));
+    let way = component::tip(icon::icon(glyph, 16).style(style::on_surface_variant), way);
+    // Under the time, or beside the entity.
+    let indent = if one_row {
+        TIME_WIDTH + 12.0 + 16.0 + 12.0
+    } else {
+        TIME_WIDTH + 12.0
+    };
+    let mut lines = if one_row {
+        column![
+            row![
+                time,
+                way,
+                container(entity)
+                    .width(Length::Fixed(ENTITY_WIDTH))
+                    .clip(true),
+                summary.width(Fill),
+            ]
+            .spacing(12)
+            .align_y(Center)
+        ]
+    } else {
+        column![
+            row![time, way, container(entity).width(Fill).clip(true)]
+                .spacing(12)
+                .align_y(Center),
+            row![space().width(Length::Fixed(indent)), summary.width(Fill)],
+        ]
+    }
+    .spacing(4);
     for warning in line.warnings {
         lines = lines.push(
             row![
-                space().width(Length::Fixed(TIME_WIDTH + 12.0 + 16.0 + 12.0)),
+                space().width(Length::Fixed(indent)),
                 icon::icon(Icon::Warning, 16).style(style::error_text),
                 styled(warning, Type::BodySmall).style(style::error_text),
             ]
@@ -566,7 +657,7 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry) -> Element<'a, Message> {
                     .style(style::on_surface_variant),
             )
             .padding(iced::Padding {
-                left: TIME_WIDTH + 12.0,
+                left: if one_row { TIME_WIDTH + 12.0 } else { 0.0 },
                 ..iced::Padding::ZERO
             }),
         );

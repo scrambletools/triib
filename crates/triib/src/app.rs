@@ -9,7 +9,7 @@ use atdecc::{DiscoveredEntity, EntityId};
 use avb_net::Interface;
 use iced::{Color, Element, Subscription, Task, Theme};
 use scramble_ui::appearance::{self, Appearance, Inputs};
-use scramble_ui::{desktop, motion, omarchy, scheme};
+use scramble_ui::{desktop, motion, omarchy, resize, scheme};
 
 use crate::External;
 use crate::controls_view::ControlDrag;
@@ -79,6 +79,9 @@ pub struct Triib {
     pub inspector_tab: InspectorTab,
     /// The ATDECC frames sent and heard.
     pub log: Log,
+    /// The log panel's height and the most it could take when a drag of
+    /// its edge started.
+    log_resize: Option<(f32, f32)>,
     /// The Settings dialog is open, on this tab.
     pub settings_open: bool,
     /// The presets saved, the presets dialog is open, the name typed in
@@ -109,6 +112,11 @@ pub enum Message {
     InterfacePicked(String),
     ViewPicked(View),
     InspectorToggled,
+    /// Show the log panel under the view, or hide it.
+    LogToggled,
+    /// A drag of the log panel's top edge, with its height and the most
+    /// it may take as shown.
+    LogResized(resize::Drag, f32, f32),
     VirtualInterfacesToggled,
     SearchChanged(String),
     EntitySelected(EntityId),
@@ -225,6 +233,7 @@ impl Triib {
             control_drag: None,
             inspector_tab: InspectorTab::default(),
             log: Log::default(),
+            log_resize: None,
             presets: crate::presets::load_all(),
             presets_open: false,
             preset_name: String::new(),
@@ -266,6 +275,7 @@ impl Triib {
             control_drag: None,
             inspector_tab: InspectorTab::default(),
             log: Log::default(),
+            log_resize: None,
             presets: crate::presets::load_all(),
             presets_open: false,
             preset_name: String::new(),
@@ -347,6 +357,26 @@ impl Triib {
                 self.settings.inspector = !self.settings.inspector;
                 self.save_settings();
             }
+            Message::LogToggled => {
+                self.settings.log = !self.settings.log;
+                self.save_settings();
+            }
+            Message::LogResized(drag, shown, most) => match drag {
+                resize::Drag::Started => self.log_resize = Some((shown, most)),
+                resize::Drag::Moved(moved) => {
+                    if let Some((start, most)) = self.log_resize {
+                        // The edge is the panel's top, so dragging up
+                        // makes it taller.
+                        self.settings.log_height =
+                            (start - moved).clamp(crate::log_view::LEAST_HEIGHT, most);
+                    }
+                }
+                resize::Drag::Ended => {
+                    if self.log_resize.take().is_some() {
+                        self.save_settings();
+                    }
+                }
+            },
             Message::SearchChanged(search) => self.search = search,
             Message::EntitySelected(entity_id) => {
                 if self
