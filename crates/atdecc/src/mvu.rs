@@ -130,9 +130,128 @@ impl MilanInfo {
     }
 }
 
+flags! {
+    /// SET_MEDIA_CLOCK_REFERENCE_INFO flags (Table 5.18): which values are
+    /// valid, which also means the entity lets a controller change them.
+    pub struct MediaClockReferenceFlags(u8) {
+        const PRIORITY_VALID = 0x01;
+        const DOMAIN_NAME_VALID = 0x02;
+    }
+}
+
+/// Encodes GET_MEDIA_CLOCK_REFERENCE_INFO for a CLOCK_DOMAIN (Figure 5.9).
+pub fn encode_get_media_clock_reference(
+    target: EntityId,
+    controller: EntityId,
+    sequence_id: u16,
+    domain: u16,
+    out: &mut [u8],
+) -> Result<usize, EncodeError> {
+    let header = AecpHeader {
+        message_type: AecpMessageType::VENDOR_UNIQUE_COMMAND,
+        status: 0,
+        target_entity_id: target,
+        controller_entity_id: controller,
+        sequence_id,
+    };
+    let command = MvuCommandType::GET_MEDIA_CLOCK_REFERENCE_INFO
+        .0
+        .to_be_bytes();
+    header.encode(&[&MVU_PROTOCOL_ID, &command, &domain.to_be_bytes()], out)
+}
+
+/// A GET_ or SET_MEDIA_CLOCK_REFERENCE_INFO response, or the same in a
+/// notification (Figure 5.8): how readily a clock domain should be chosen
+/// as media clock reference, and the media clock domain it belongs to
+/// (Milan 1.3, 7.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MediaClockReference {
+    /// The CLOCK_DOMAIN.
+    pub domain: u16,
+    pub flags: MediaClockReferenceFlags,
+    /// The vendor's priority for the device, by its kind (Table 7.3).
+    pub default_priority: u8,
+    user_priority: u8,
+    domain_name: [u8; 64],
+}
+
+impl MediaClockReference {
+    /// Decodes the command specific data after the command type.
+    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
+        if data.len() < 74 {
+            return Err(DecodeError::Truncated {
+                needed: 74,
+                available: data.len(),
+            });
+        }
+        Ok(Self {
+            domain: read_u16(data, 0),
+            flags: MediaClockReferenceFlags(data[2]),
+            default_priority: data[4],
+            user_priority: data[5],
+            domain_name: read_array(data, 10),
+        })
+    }
+
+    /// The user's priority, when the entity keeps one; it starts as the
+    /// default.
+    pub fn user_priority(&self) -> Option<u8> {
+        self.flags
+            .contains(MediaClockReferenceFlags::PRIORITY_VALID)
+            .then_some(self.user_priority)
+    }
+
+    /// The priority to elect by: the user's, else the default.
+    pub fn priority(&self) -> u8 {
+        self.user_priority().unwrap_or(self.default_priority)
+    }
+
+    /// The media clock domain's name, when the entity keeps one; it starts
+    /// as "DEFAULT".
+    pub fn domain_name(&self) -> Option<&str> {
+        self.flags
+            .contains(MediaClockReferenceFlags::DOMAIN_NAME_VALID)
+            .then(|| crate::descriptor::aem_string(&self.domain_name))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn media_clock_reference_info() {
+        let mut out = [0; 64];
+        let length =
+            encode_get_media_clock_reference(EntityId(1), EntityId(2), 7, 3, &mut out).unwrap();
+        assert_eq!(length, 32);
+        let pdu = VendorUniquePdu::decode(&out[..length]).unwrap();
+        let message = MvuMessage::from_pdu(&pdu).unwrap();
+        assert_eq!(
+            message.command_type,
+            MvuCommandType::GET_MEDIA_CLOCK_REFERENCE_INFO
+        );
+        assert_eq!(message.data, &[0, 3]);
+
+        let mut data = [0u8; 74];
+        data[0..2].copy_from_slice(&1u16.to_be_bytes());
+        data[2] = 0x03;
+        data[4] = 192;
+        data[5] = 200;
+        data[10..17].copy_from_slice(b"DEFAULT");
+        let reference = MediaClockReference::decode(&data).unwrap();
+        assert_eq!(reference.domain, 1);
+        assert_eq!(reference.default_priority, 192);
+        assert_eq!(reference.user_priority(), Some(200));
+        assert_eq!(reference.priority(), 200);
+        assert_eq!(reference.domain_name(), Some("DEFAULT"));
+        // Values the entity does not keep are not shown.
+        data[2] = 0;
+        let fixed = MediaClockReference::decode(&data).unwrap();
+        assert_eq!((fixed.user_priority(), fixed.priority()), (None, 192));
+        assert_eq!(fixed.domain_name(), None);
+        assert!(MediaClockReference::decode(&data[..73]).is_err());
+    }
 
     #[test]
     fn get_milan_info_command_layout() {

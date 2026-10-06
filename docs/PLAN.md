@@ -377,7 +377,8 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 ## Window layout
 
 - **Toolbar**: interface picker with link and timestamping capability,
-  discovery indicator, search, view switcher (Matrix, Entities, Network).
+  discovery indicator, search, view switcher (Matrix, Entities, Network,
+  Media clock).
   Tools that do not fit move into a "More" menu, as in prev.
 - **Content**: the active view, Matrix by default. Each view selects
   entities its own way (the matrix's headings, the entity table, the
@@ -423,7 +424,15 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 
 ### P1: Hive parity and AVB Lite control
 
-- Media clock view, channel routing via audio maps (in the inspector,
+- Media clock view: each media clock reference with the clock domains
+  following it, as a tree through the streams carrying its clock, each
+  with where its clock comes from, whether that stream flows, its rate
+  against the reference's and its Milan media clock reference priority
+  and domain name (GET_MEDIA_CLOCK_REFERENCE_INFO); then the domains whose
+  chain breaks (an unbound input, an unknown talker, a loop) and why. The
+  clock source of each is picked where it shows. Electing a reference by
+  priority and connecting the CRF streams to it can follow.
+- Channel routing via audio maps (in the inspector,
   read with GET_AUDIO_MAP, changed with ADD_AUDIO_MAPPINGS and
   REMOVE_AUDIO_MAPPINGS, kept current from their notifications), generic
   CONTROL editors, diagnostics (Milan counters, gPTP info, MSRP failure

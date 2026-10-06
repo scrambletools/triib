@@ -214,8 +214,9 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 view_tool(Icon::GridOn, "Connections", View::Matrix),
                 view_tool(Icon::ViewList, "Entities", View::Entities),
                 view_tool(Icon::Hub, "Network", View::Network),
+                view_tool(Icon::Timer, "Media clock", View::Clocks),
             ]),
-            DIVIDER_WIDTH + TOOLBAR_GAP + tools(3.0),
+            DIVIDER_WIDTH + TOOLBAR_GAP + tools(4.0),
             Some(3),
             true,
         ),
@@ -378,6 +379,10 @@ fn content(triib: &Triib) -> Element<'_, Message> {
         },
         View::Network => match &triib.network_state {
             NetworkState::Running { .. } | NetworkState::Starting => crate::netmap::view(triib),
+            state => network_state_view(triib, state),
+        },
+        View::Clocks => match &triib.network_state {
+            NetworkState::Running { .. } | NetworkState::Starting => crate::clock_view::view(triib),
             state => network_state_view(triib, state),
         },
     }
@@ -696,7 +701,7 @@ fn format_picker<'a>(
 
 /// A sampling rate in words, such as "48 kHz" or "44.1 kHz".
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Rate(SamplingRate);
+pub(crate) struct Rate(pub(crate) SamplingRate);
 
 impl fmt::Display for Rate {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -769,7 +774,7 @@ impl fmt::Display for Source {
 
 /// A clock domain's clock source, with a picker of the sources it can use
 /// when it has more than one.
-fn source_picker<'a>(
+pub(crate) fn source_picker<'a>(
     triib: &'a Triib,
     entity: EntityId,
     model: &EntityModel,
@@ -1442,6 +1447,7 @@ mod tests {
         let mut config = Config::new(EntityId(0x9c6b_00ff_fe30_9a2b));
         config.register_unsolicited = false;
         config.network_info = false;
+        config.media_clock_info = false;
         config.first_sequence_id = first_sequence_id;
         let mut controller = Controller::new(config);
         let mut buffer = [0; 1500];
@@ -1474,33 +1480,40 @@ mod tests {
         (entities, models)
     }
 
-    /// The bench's Mac mini as if its stream port input took dynamic
-    /// mappings: read again by a controller from its own descriptors, with
-    /// its first two stream channels crossed and the fifth mapped.
-    fn dynamic_mac_mini(
+    /// A bench entity as it would read with its descriptors changed by
+    /// `patch`: read again by a controller from those descriptors, its
+    /// stream input port answering GET_AUDIO_MAP with `mappings` (stream
+    /// channel, cluster channel) and its stream inputs bound as `bound`
+    /// says (input, talker, output) and flowing.
+    fn reread(
         entities: &BTreeMap<EntityId, DiscoveredEntity>,
         models: &BTreeMap<EntityId, EntityModel>,
+        entity_id: EntityId,
+        patch: impl FnOnce(&mut BTreeMap<(u16, u16), Vec<u8>>),
+        mappings: &[(u16, u16)],
+        bound: &[(u16, EntityId, u16)],
     ) -> EntityModel {
         use atdecc::aecp::{AecpHeader, AecpMessageType, AemStatus};
-        use atdecc::{AemCommandType, EntityCapabilities};
+        use atdecc::aem::StreamInfoFlags;
+        use atdecc::{AcmpMessageType, Acmpdu, AemCommandType, EntityCapabilities};
 
-        let mac_mini = EntityId(0xd111_e597_f544_8000);
-        let mut descriptors: BTreeMap<(u16, u16), Vec<u8>> = models[&mac_mini]
+        let mut descriptors: BTreeMap<(u16, u16), Vec<u8>> = models[&entity_id]
             .all_descriptors()
             .map(|(descriptor_type, index, bytes)| ((descriptor_type.0, index), bytes.to_vec()))
             .collect();
-        let port = descriptors
-            .get_mut(&(DescriptorType::STREAM_PORT_INPUT.0, 0))
-            .unwrap();
-        port[16..18].copy_from_slice(&0u16.to_be_bytes());
-        // stream channel, cluster channel
-        let mappings: [(u16, u16); 3] = [(0, 1), (1, 0), (4, 4)];
+        patch(&mut descriptors);
+        let bound_to = |input: u16| {
+            bound
+                .iter()
+                .find(|(place, _, _)| *place == input)
+                .map(|&(_, talker, output)| (talker, output))
+        };
 
         let mut config = Config::new(EntityId(0x9c6b_00ff_fe30_9a2b));
         config.register_unsolicited = false;
         config.network_info = false;
         let mut controller = Controller::new(config);
-        let entity = entities[&mac_mini];
+        let entity = entities[&entity_id];
         let mut adpdu = entity.adp;
         adpdu.entity_capabilities = EntityCapabilities::AEM_SUPPORTED;
         controller.handle_adpdu(Instant::from_millis(0), entity.mac, &adpdu);
@@ -1509,7 +1522,28 @@ mod tests {
         for step in 1..400 {
             let now = Instant::from_millis(step * 100);
             while let Some(transmit) = controller.poll_transmit(&mut buffer).unwrap() {
-                let Ok(command) = AemPdu::decode(&buffer[..transmit.length]) else {
+                let frame = &buffer[..transmit.length];
+                if let Ok(command) = Acmpdu::decode(frame) {
+                    if command.message_type != AcmpMessageType::GET_RX_STATE_COMMAND
+                        || command.listener_entity_id != entity_id
+                    {
+                        continue;
+                    }
+                    let talker = bound_to(command.listener_unique_id);
+                    let response = Acmpdu {
+                        message_type: command.message_type.response(),
+                        talker_entity_id: talker.map_or(EntityId(0), |(talker, _)| talker),
+                        talker_unique_id: talker.map_or(0, |(_, output)| output),
+                        connection_count: u16::from(talker.is_some()),
+                        ..command
+                    };
+                    let length = response.encode(&mut out).unwrap();
+                    controller
+                        .handle_frame(now, entity.mac, &out[..length])
+                        .unwrap();
+                    continue;
+                }
+                let Ok(command) = AemPdu::decode(frame) else {
                     continue;
                 };
                 let mut payload = command.payload.to_vec();
@@ -1528,16 +1562,30 @@ mod tests {
                         }
                         None => AemStatus::NO_SUCH_DESCRIPTOR,
                     },
-                    AemCommandType::GET_AUDIO_MAP => {
+                    AemCommandType::GET_AUDIO_MAP if !mappings.is_empty() => {
                         payload.truncate(6);
                         payload.extend_from_slice(&1u16.to_be_bytes());
                         payload.extend_from_slice(&(mappings.len() as u16).to_be_bytes());
                         payload.extend_from_slice(&[0, 0]);
-                        for (stream_channel, cluster_channel) in mappings {
+                        for &(stream_channel, cluster_channel) in mappings {
                             for field in [0, stream_channel, 0, cluster_channel] {
                                 payload.extend_from_slice(&u16::to_be_bytes(field));
                             }
                         }
+                        AemStatus::SUCCESS
+                    }
+                    AemCommandType::GET_STREAM_INFO => {
+                        let (descriptor_type, index) = key(0, &payload);
+                        let mut flags = StreamInfoFlags::STREAM_FORMAT_VALID;
+                        if descriptor_type == DescriptorType::STREAM_INPUT.0
+                            && bound_to(index).is_some()
+                        {
+                            flags |= StreamInfoFlags::CONNECTED
+                                | StreamInfoFlags::STREAM_ID_VALID
+                                | StreamInfoFlags::MSRP_ACC_LAT_VALID;
+                        }
+                        payload.resize(48, 0);
+                        payload[4..8].copy_from_slice(&flags.0.to_be_bytes());
                         AemStatus::SUCCESS
                     }
                     _ => AemStatus::NOT_IMPLEMENTED,
@@ -1557,14 +1605,40 @@ mod tests {
                     .unwrap();
             }
             controller.handle_timeout(now);
-            let model = controller.model(mac_mini);
-            if !controller.busy(mac_mini)
+            let model = controller.model(entity_id);
+            if !controller.busy(entity_id)
                 && model.is_some_and(|model| model.state == EnumerationState::Complete)
             {
                 break;
             }
         }
-        let model = controller.model(mac_mini).unwrap().clone();
+        controller.model(entity_id).unwrap().clone()
+    }
+
+    const MAC_MINI: EntityId = EntityId(0xd111_e597_f544_8000);
+    const WIRED_ESP: EntityId = EntityId(0xe8f6_0ae0_9220_0000);
+    const WIFI_ESP: EntityId = EntityId(0xfc01_2cfd_fe80_0000);
+
+    /// The bench's Mac mini as if its stream port input took dynamic
+    /// mappings, with its first two stream channels crossed and the fifth
+    /// mapped.
+    fn dynamic_mac_mini(
+        entities: &BTreeMap<EntityId, DiscoveredEntity>,
+        models: &BTreeMap<EntityId, EntityModel>,
+    ) -> EntityModel {
+        let model = reread(
+            entities,
+            models,
+            MAC_MINI,
+            |descriptors| {
+                let port = descriptors
+                    .get_mut(&(DescriptorType::STREAM_PORT_INPUT.0, 0))
+                    .unwrap();
+                port[16..18].copy_from_slice(&0u16.to_be_bytes());
+            },
+            &[(0, 1), (1, 0), (4, 4)],
+            &[],
+        );
         assert!(
             model
                 .dynamic_mappings(DescriptorType::STREAM_PORT_INPUT, 0)
@@ -1572,6 +1646,33 @@ mod tests {
             "the mappings read"
         );
         model
+    }
+
+    /// The bench with a media clock chain: the wired endpoint clocked from
+    /// the Mac mini's CRF output through its CRF input, and the Wi-Fi
+    /// endpoint clocked from a CRF input bound to nothing.
+    fn clocked_bench(
+        entities: &BTreeMap<EntityId, DiscoveredEntity>,
+        models: &mut BTreeMap<EntityId, EntityModel>,
+    ) {
+        // Clock source 1 is the endpoints' CRF input, stream input 1.
+        let from_crf_input = |descriptors: &mut BTreeMap<(u16, u16), Vec<u8>>| {
+            let domain = descriptors
+                .get_mut(&(DescriptorType::CLOCK_DOMAIN.0, 0))
+                .unwrap();
+            domain[70..72].copy_from_slice(&1u16.to_be_bytes());
+        };
+        let wired = reread(
+            entities,
+            models,
+            WIRED_ESP,
+            from_crf_input,
+            &[],
+            &[(1, MAC_MINI, 1)],
+        );
+        let wifi = reread(entities, models, WIFI_ESP, from_crf_input, &[], &[]);
+        models.insert(WIRED_ESP, wired);
+        models.insert(WIFI_ESP, wifi);
     }
 
     /// Writes pictures of the whole window on the bench, at a phone's width
@@ -1615,6 +1716,14 @@ mod tests {
                 Size::new(1280.0, 3200.0),
             ),
             ("matrix-filtered", View::Matrix, false, desktop),
+            ("clocks-desktop", View::Clocks, false, desktop),
+            ("clocks-phone", View::Clocks, false, phone),
+            (
+                "media-clock-bench",
+                View::Clocks,
+                false,
+                Size::new(1280.0, 500.0),
+            ),
             (
                 "inspector-mappings",
                 View::Entities,
@@ -1650,7 +1759,10 @@ mod tests {
             let mut models = models.clone();
             if suffix.contains("mappings") {
                 let model = dynamic_mac_mini(&entities, &models);
-                models.insert(EntityId(0xd111_e597_f544_8000), model);
+                models.insert(MAC_MINI, model);
+            }
+            if suffix.starts_with("clocks") {
+                clocked_bench(&entities, &mut models);
             }
             let mut triib = Triib::sample(settings, interface.clone(), entities.clone(), models);
             triib.selected = entities.keys().next().copied();

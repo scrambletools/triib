@@ -31,7 +31,7 @@ use crate::descriptor::{
 use crate::error::{DecodeError, EncodeError};
 use crate::id::{EntityId, EntityModelId};
 use crate::model::{Binding, EntityModel, EnumerationFailure, EnumerationState};
-use crate::mvu::{self, MilanInfo, MvuCommandType, MvuMessage};
+use crate::mvu::{self, MediaClockReference, MilanInfo, MvuCommandType, MvuMessage};
 use crate::pdu::{self, Pdu};
 use crate::stream_format::StreamFormat;
 use crate::time::Instant;
@@ -101,6 +101,9 @@ pub struct Config {
     pub network_info: bool,
     /// Read each stream port's dynamic mappings once an entity is read.
     pub read_mappings: bool,
+    /// Ask each Milan entity's clock domains for their media clock
+    /// reference priority and domain name once it is read.
+    pub media_clock_info: bool,
     /// Advertise the controller with ADP.
     pub advertise: Option<Advertise>,
     /// The first sequence ID of AEM and of MVU commands.
@@ -117,6 +120,7 @@ impl Config {
             register_unsolicited: true,
             network_info: true,
             read_mappings: true,
+            media_clock_info: true,
             advertise: None,
             first_sequence_id: 0,
             random_seed: entity_id.0,
@@ -223,6 +227,10 @@ enum Request {
         refresh: bool,
     },
     GetMilanInfo,
+    /// GET_MEDIA_CLOCK_REFERENCE_INFO for a CLOCK_DOMAIN.
+    GetMediaClockReference {
+        domain: u16,
+    },
     RegisterUnsolicited,
     GetRxState {
         input: u16,
@@ -307,7 +315,7 @@ enum Channel {
 impl Request {
     fn channel(self) -> Channel {
         match self {
-            Request::GetMilanInfo => Channel::Mvu,
+            Request::GetMilanInfo | Request::GetMediaClockReference { .. } => Channel::Mvu,
             Request::GetRxState { .. } | Request::Bind { .. } | Request::Unbind { .. } => {
                 Channel::Acmp
             }
@@ -699,26 +707,59 @@ impl Controller {
         let Ok(message) = MvuMessage::from_pdu(pdu) else {
             return;
         };
+        let entity_id = pdu.header.target_entity_id;
         if message.unsolicited {
+            // Another controller set a clock domain's media clock reference
+            // information.
+            if pdu.header.status == 0
+                && message.command_type == MvuCommandType::SET_MEDIA_CLOCK_REFERENCE_INFO
+                && let Ok(reference) = MediaClockReference::decode(message.data)
+            {
+                self.store_media_clock_reference(entity_id, reference);
+            }
             return;
         }
         let key = (Channel::Mvu, pdu.header.sequence_id);
         let Some(inflight) = self.inflight.get(&key).copied() else {
             return;
         };
-        if inflight.entity_id != pdu.header.target_entity_id
-            || message.command_type != MvuCommandType::GET_MILAN_INFO
-        {
+        if inflight.entity_id != entity_id {
             return;
         }
-        self.complete(key, inflight);
-        let info = (pdu.header.status == 0)
-            .then(|| MilanInfo::decode(message.data).ok())
-            .flatten();
-        if let Some(model) = self.models.get_mut(&inflight.entity_id) {
-            model.milan = info;
+        match (inflight.request, message.command_type) {
+            (Request::GetMilanInfo, MvuCommandType::GET_MILAN_INFO) => {
+                self.complete(key, inflight);
+                let info = (pdu.header.status == 0)
+                    .then(|| MilanInfo::decode(message.data).ok())
+                    .flatten();
+                if let Some(model) = self.models.get_mut(&entity_id) {
+                    model.milan = info;
+                }
+            }
+            (
+                Request::GetMediaClockReference { domain },
+                MvuCommandType::GET_MEDIA_CLOCK_REFERENCE_INFO,
+            ) => {
+                self.complete(key, inflight);
+                if pdu.header.status == 0
+                    && let Ok(reference) = MediaClockReference::decode(message.data)
+                    && reference.domain == domain
+                {
+                    self.store_media_clock_reference(entity_id, reference);
+                }
+            }
+            _ => return,
         }
-        self.check_complete(inflight.entity_id);
+        self.check_complete(entity_id);
+    }
+
+    fn store_media_clock_reference(&mut self, entity_id: EntityId, reference: MediaClockReference) {
+        if let Some(model) = self.models.get_mut(&entity_id)
+            && model.has(DescriptorType::CLOCK_DOMAIN, reference.domain)
+            && model.set_media_clock_reference(reference)
+        {
+            self.events.push_back(Event::EntityModelChanged(entity_id));
+        }
     }
 
     /// Clears a command from flight, so the entity's next one can go.
@@ -863,6 +904,7 @@ impl Controller {
                     .push_back(Event::CommandFinished(command, aem_outcome(aem)));
             }
             Request::GetMilanInfo
+            | Request::GetMediaClockReference { .. }
             | Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. } => {}
@@ -1525,6 +1567,14 @@ impl Controller {
         if self.config.read_mappings {
             session.queue.extend(audio_map_reads(model));
         }
+        // How each clock domain stands in media clock management.
+        if self.config.media_clock_info && model.milan.is_some() {
+            for (domain, _) in model.descriptors(DescriptorType::CLOCK_DOMAIN) {
+                session
+                    .queue
+                    .push_back(Request::GetMediaClockReference { domain });
+            }
+        }
         // Where the entity sits in the network.
         if self.config.network_info {
             for (index, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
@@ -1694,6 +1744,13 @@ impl Controller {
                 addressing.target,
                 addressing.controller,
                 sequence_id,
+                &mut out,
+            ),
+            Request::GetMediaClockReference { domain } => mvu::encode_get_media_clock_reference(
+                addressing.target,
+                addressing.controller,
+                sequence_id,
+                domain,
                 &mut out,
             ),
             Request::GetStreamInfo {
@@ -2272,6 +2329,7 @@ fn command_type_of(request: Request) -> AemCommandType {
         Request::ChangeMappings { change, .. } => change.command_type(),
         // Not AEM commands; never match an AEM response.
         Request::GetMilanInfo
+        | Request::GetMediaClockReference { .. }
         | Request::GetRxState { .. }
         | Request::Bind { .. }
         | Request::Unbind { .. } => AemCommandType(0xffff),

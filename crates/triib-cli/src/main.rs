@@ -1,8 +1,9 @@
 //! Headless ATDECC controller. It lists interfaces, discovers entities,
 //! reads their descriptors, maps the network from their gPTP paths,
 //! renames entities, changes stream formats, sampling rates and clock
-//! sources, and shows and changes how channels map to streams;
-//! connections follow as the engine grows.
+//! sources, shows the media clock each entity follows, and shows and
+//! changes how channels map to streams; connections follow as the
+//! engine grows.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::ExitCode;
@@ -12,6 +13,7 @@ use atdecc::aem::{AudioMapping, AvbInfoFlags, MappingChange};
 use atdecc::blocking::Driver;
 use atdecc::controller::{Controller, Outcome, Refusal};
 use atdecc::descriptor::{ClockSourceType, DescriptorType, SamplingRate};
+use atdecc::media_clock::{Broken, ClockFrom, DomainClock, DomainId, media_clocks};
 use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::stream_format::StreamFormat;
 use atdecc::{
@@ -41,6 +43,8 @@ commands:
                                      set an audio unit's sampling rate
   clock <interface> <entity-id> <clock-domain> <clock-source>
                                      pick a clock domain's clock source
+  clocks <interface>                 read every entity and print each media clock
+                                     reference with the entities following it
   maps <interface> [entity-id]       print how each stream port's channels map
                                      to and from the streams
   map <interface> <entity-id> <add|remove> <port> <mapping>...
@@ -85,6 +89,12 @@ fn main() -> ExitCode {
                 return usage();
             };
             network(interface).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("clocks") => {
+            let Some(interface) = argument(1) else {
+                return usage();
+            };
+            clocks(interface).map_err(|error| format!("{interface}: {error}"))
         }
         Some("maps") => {
             let Some(interface) = argument(1) else {
@@ -564,6 +574,170 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
         }
     }
     driver.close()
+}
+
+/// Reads every entity and prints each media clock reference, with the
+/// clock domains following it as a tree through their streams, then the
+/// domains whose chain breaks and why.
+fn clocks(interface: &str) -> std::io::Result<()> {
+    let driver = read(interface, None)?;
+    let controller = driver.controller();
+    let models: BTreeMap<EntityId, &EntityModel> = controller
+        .entities()
+        .filter_map(|found| Some((found.entity_id(), controller.model(found.entity_id())?)))
+        .collect();
+    let clocks = media_clocks(models.iter().map(|(&entity, &model)| (entity, model)));
+    if clocks.is_empty() {
+        println!("no clock domains found");
+        return driver.close();
+    }
+    let references: Vec<&DomainClock> = clocks
+        .iter()
+        .filter(|clock| clock.reference == Ok(clock.id))
+        .collect();
+    for (number, reference) in references.iter().enumerate() {
+        if number > 0 {
+            println!();
+        }
+        let rate = models[&reference.id.entity].sampling_rate(reference.id.domain);
+        print_clock_tree(&models, &clocks, reference, rate, 0);
+    }
+    let broken: Vec<&DomainClock> = clocks
+        .iter()
+        .filter(|clock| clock.reference.is_err())
+        .collect();
+    if !broken.is_empty() {
+        println!();
+        println!("not clocked");
+        for clock in broken {
+            let reason = match clock.reference {
+                Err(Broken::Unbound(at)) if at == clock.id => {
+                    "its clock source is a stream input bound to nothing".to_owned()
+                }
+                Err(Broken::Unbound(at)) => {
+                    format!("{} upstream is bound to nothing", domain_name(&models, at))
+                }
+                Err(Broken::TalkerUnknown(at)) => {
+                    format!(
+                        "the talker {} takes its clock from is not known",
+                        domain_name(&models, at)
+                    )
+                }
+                Err(Broken::Unknown(at)) => {
+                    format!(
+                        "the clock source of {} is not known",
+                        domain_name(&models, at)
+                    )
+                }
+                Err(Broken::Loop(_)) => "its clock goes round in a loop".to_owned(),
+                Ok(_) => continue,
+            };
+            println!("  {}: {reason}", domain_name(&models, clock.id));
+        }
+    }
+    driver.close()
+}
+
+/// An entity's name, and its clock domain's when it has more than one.
+fn domain_name(models: &BTreeMap<EntityId, &EntityModel>, id: DomainId) -> String {
+    let Some(model) = models.get(&id.entity) else {
+        return id.entity.to_string();
+    };
+    let entity = model
+        .entity_name()
+        .map_or_else(|| id.entity.to_string(), str::to_owned);
+    if model.clock_domains().count() > 1 {
+        let domain = model
+            .name_of(DescriptorType::CLOCK_DOMAIN, id.domain)
+            .unwrap_or("clock domain");
+        format!("{entity} \"{domain}\"")
+    } else {
+        entity
+    }
+}
+
+/// A domain on its line, indented by `depth`, then the domains clocked
+/// from it below.
+fn print_clock_tree(
+    models: &BTreeMap<EntityId, &EntityModel>,
+    clocks: &[DomainClock],
+    clock: &DomainClock,
+    reference_rate: Option<SamplingRate>,
+    depth: usize,
+) {
+    let model = models[&clock.id.entity];
+    let source_name = |index: u16| {
+        model
+            .name_of(DescriptorType::CLOCK_SOURCE, index)
+            .map(|name| format!(", \"{name}\""))
+            .unwrap_or_default()
+    };
+    let source = model
+        .clock_domains()
+        .find(|domain| domain.index == clock.id.domain)
+        .map(|domain| domain.clock_source_index)
+        .unwrap_or_default();
+    let from = match clock.from {
+        ClockFrom::Internal => format!("own clock{}", source_name(source)),
+        ClockFrom::External => format!("external clock{}", source_name(source)),
+        ClockFrom::Stream {
+            input,
+            talker,
+            output,
+        } => {
+            let input_name = model
+                .name_of(DescriptorType::STREAM_INPUT, input)
+                .unwrap_or("stream input");
+            let output_name = models
+                .get(&talker)
+                .and_then(|talker_model| {
+                    talker_model.name_of(DescriptorType::STREAM_OUTPUT, output)
+                })
+                .unwrap_or("stream output");
+            let talker_name = models
+                .get(&talker)
+                .and_then(|talker_model| talker_model.entity_name())
+                .map_or_else(|| talker.to_string(), str::to_owned);
+            let flowing = model
+                .stream_info(DescriptorType::STREAM_INPUT, input)
+                .is_some_and(|info| info.settled());
+            let waiting = if flowing { "" } else { ", not flowing" };
+            format!("from \"{input_name}\", fed by {talker_name} \"{output_name}\"{waiting}")
+        }
+        ClockFrom::Unbound { .. } | ClockFrom::Unknown => "no clock".to_owned(),
+    };
+    let rate = model.sampling_rate(clock.id.domain);
+    let rate_text = match (rate, reference_rate) {
+        (Some(rate), Some(reference)) if rate != reference => format!(
+            ", {} Hz, not the reference's {} Hz",
+            rate.base_frequency(),
+            reference.base_frequency()
+        ),
+        (Some(rate), _) => format!(", {} Hz", rate.base_frequency()),
+        (None, _) => String::new(),
+    };
+    let priority = model
+        .media_clock_reference(clock.id.domain)
+        .map(|reference| {
+            let domain = reference
+                .domain_name()
+                .map(|name| format!(", domain \"{name}\""))
+                .unwrap_or_default();
+            format!(", priority {}{domain}", reference.priority())
+        })
+        .unwrap_or_default();
+    let role = if depth == 0 { "reference" } else { "follows" };
+    println!(
+        "{}{role} {}: {from}{rate_text}{priority}",
+        "  ".repeat(depth),
+        domain_name(models, clock.id)
+    );
+    for follower in clocks
+        .iter()
+        .filter(|follower| follower.parent == Some(clock.id) && follower.reference.is_ok())
+    {
+        print_clock_tree(models, clocks, follower, reference_rate, depth + 1);
+    }
 }
 
 /// Reads `entity`, or every entity, and prints how each stream port's

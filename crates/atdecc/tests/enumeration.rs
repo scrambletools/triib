@@ -269,8 +269,9 @@ fn replaying_the_entities_reproduces_the_commands_and_models() {
 
     let mut config = Config::new(CONTROLLER);
     config.register_unsolicited = false;
-    // The live run predates the network queries.
+    // The live run predates the network and media clock queries.
     config.network_info = false;
+    config.media_clock_info = false;
     config.first_sequence_id = first_sequence_id;
     let mut controller = Controller::new(config);
     let mut replayed: Vec<Vec<u8>> = Vec::new();

@@ -58,14 +58,14 @@ impl Default for Settings {
 pub enum View {
     /// Talker streams against listener streams.
     #[default]
-    // Settings saved while a media clock view existed open the matrix.
-    #[serde(alias = "clocks")]
     Matrix,
     // Host talkers and listeners are entities like any other.
     #[serde(alias = "host")]
     Entities,
     /// The network as gPTP paths show it.
     Network,
+    /// Each media clock reference and the clock domains following it.
+    Clocks,
 }
 
 /// Which streams the connection matrix shows.

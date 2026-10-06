@@ -88,6 +88,8 @@ struct FakeEntity {
     mappings: Vec<AudioMapping>,
     /// How many parts GET_AUDIO_MAP answers in, split by cluster.
     map_parts: u16,
+    /// Its clock domains' user media clock reference priority.
+    user_priority: u8,
 }
 
 fn descriptor(descriptor_type: DescriptorType, index: u16, length: usize) -> Vec<u8> {
@@ -215,6 +217,7 @@ impl FakeEntity {
             answers_dynamic_info: true,
             mappings: Vec::new(),
             map_parts: 1,
+            user_priority: 192,
         }
     }
 
@@ -561,10 +564,27 @@ impl FakeEntity {
             return Some(out[..length].to_vec());
         }
         let command = VendorUniquePdu::decode(frame).ok()?;
-        let mut data = vec![0u8; 20];
-        data[1] = 0x00; // GET_MILAN_INFO
-        data[4..8].copy_from_slice(&1u32.to_be_bytes());
-        data[16..20].copy_from_slice(&[1, 3, 0, 0]);
+        let asked = crate::mvu::MvuMessage::from_pdu(&command).ok()?;
+        let data = match asked.command_type {
+            crate::mvu::MvuCommandType::GET_MEDIA_CLOCK_REFERENCE_INFO => {
+                // Priority 192, for an audio interface, both changeable.
+                let mut data = vec![0u8; 76];
+                data[1] = 0x04;
+                data[2..4].copy_from_slice(&asked.data[..2]);
+                data[4] = 0x03;
+                data[6] = 192;
+                data[7] = self.user_priority;
+                data[12..19].copy_from_slice(b"DEFAULT");
+                data
+            }
+            _ => {
+                let mut data = vec![0u8; 20];
+                data[1] = 0x00; // GET_MILAN_INFO
+                data[4..8].copy_from_slice(&1u32.to_be_bytes());
+                data[16..20].copy_from_slice(&[1, 3, 0, 0]);
+                data
+            }
+        };
         let response = VendorUniquePdu {
             header: AecpHeader {
                 message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
@@ -1781,4 +1801,63 @@ fn a_new_stream_format_reads_the_mappings_again() {
     );
     exchange(&mut controller, &mut entity, at(1));
     assert!(commands_since(&entity, seen).contains(&AemCommandType::GET_AUDIO_MAP));
+}
+
+#[test]
+fn reads_each_domains_media_clock_reference() {
+    let (mut controller, entity) = enumerated();
+    let model = controller.model(TALKER).unwrap();
+    let reference = model.media_clock_reference(0).expect("read");
+    assert_eq!(reference.default_priority, 192);
+    assert_eq!(reference.priority(), 192);
+    assert_eq!(reference.domain_name(), Some("DEFAULT"));
+    assert_eq!(
+        entity.commands.last(),
+        Some(&AemCommandType::REGISTER_UNSOLICITED_NOTIFICATION)
+    );
+    events(&mut controller);
+
+    // Another controller raises the priority.
+    let mut data = vec![0u8; 76];
+    data[1] = 0x03; // SET_MEDIA_CLOCK_REFERENCE_INFO
+    data[0] = 0x80; // unsolicited
+    data[4] = 0x03;
+    data[6] = 192;
+    data[7] = 240;
+    data[12..19].copy_from_slice(b"DEFAULT");
+    let notification = VendorUniquePdu {
+        header: AecpHeader {
+            message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+            status: 0,
+            target_entity_id: TALKER,
+            controller_entity_id: CONTROLLER,
+            sequence_id: 4,
+        },
+        protocol_id: MVU_PROTOCOL_ID,
+        payload: &data,
+    };
+    let mut out = [0; 128];
+    let length = notification.encode(&mut out).unwrap();
+    controller
+        .handle_frame(at(1), TALKER_MAC, &out[..length])
+        .unwrap();
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    let reference = controller
+        .model(TALKER)
+        .unwrap()
+        .media_clock_reference(0)
+        .unwrap();
+    assert_eq!(reference.priority(), 240);
+}
+
+#[test]
+fn entities_not_milan_are_not_asked_for_media_clock_references() {
+    let mut adpdu = aem_available(1);
+    adpdu.entity_capabilities = EntityCapabilities::AEM_SUPPORTED;
+    let mut controller = controller_with(adpdu);
+    let mut entity = FakeEntity::new();
+    exchange(&mut controller, &mut entity, at(0));
+    let model = controller.model(TALKER).unwrap();
+    assert_eq!(model.state, EnumerationState::Complete);
+    assert!(model.media_clock_reference(0).is_none());
 }

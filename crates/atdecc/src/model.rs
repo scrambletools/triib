@@ -14,11 +14,11 @@ use crate::aem::{
 use crate::descriptor::{
     AudioClusterDescriptor, AudioMapDescriptor, AudioUnitDescriptor, AvbInterfaceDescriptor,
     ClockDomainDescriptor, ClockSourceDescriptor, ConfigurationDescriptor, DescriptorType,
-    EntityDescriptor, LocaleDescriptor, LocalizedStringRef, StreamDescriptor, StreamPortDescriptor,
-    StringsDescriptor, names,
+    EntityDescriptor, LocaleDescriptor, LocalizedStringRef, SamplingRate, StreamDescriptor,
+    StreamPortDescriptor, StringsDescriptor, names,
 };
 use crate::id::{ClockIdentity, EntityId};
-use crate::mvu::MilanInfo;
+use crate::mvu::{MediaClockReference, MilanInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EnumerationState {
@@ -95,6 +95,7 @@ pub struct EntityModel {
     as_paths: BTreeMap<u16, Vec<ClockIdentity>>,
     counters: BTreeMap<(DescriptorType, u16), Counters>,
     audio_maps: BTreeMap<(DescriptorType, u16), DynamicMap>,
+    media_clock_references: BTreeMap<u16, MediaClockReference>,
 }
 
 impl EntityModel {
@@ -271,6 +272,27 @@ impl EntityModel {
             };
             any | applied
         })
+    }
+
+    /// Records a clock domain's media clock reference information,
+    /// returning whether it changed.
+    pub(crate) fn set_media_clock_reference(&mut self, reference: MediaClockReference) -> bool {
+        self.media_clock_references
+            .insert(reference.domain, reference)
+            != Some(reference)
+    }
+
+    /// A clock domain's media clock reference priority and domain name,
+    /// once read from a Milan entity.
+    pub fn media_clock_reference(&self, domain: u16) -> Option<&MediaClockReference> {
+        self.media_clock_references.get(&domain)
+    }
+
+    /// The sampling rate of the first audio unit a clock domain clocks.
+    pub fn sampling_rate(&self, domain: u16) -> Option<SamplingRate> {
+        self.audio_units()
+            .find(|unit| unit.clock_domain_index == domain)
+            .map(|unit| unit.current_sampling_rate)
     }
 
     /// What the stream input with `index` is bound to, once known.

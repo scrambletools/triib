@@ -2,6 +2,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod app;
+mod clock_view;
 mod describe;
 mod mapping_view;
 mod matrix;
