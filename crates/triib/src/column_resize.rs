@@ -4,12 +4,11 @@
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::mouse::click;
-use iced::advanced::renderer::{self, Quad};
+use iced::advanced::renderer;
 use iced::advanced::widget::{Operation, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Shell, overlay};
 use iced::mouse::{self, Cursor};
-use iced::{Background, Element, Event, Length, Rectangle, Size, Theme, Vector};
-use scramble_ui::Scheme;
+use iced::{Element, Event, Length, Rectangle, Size, Theme, Vector};
 
 /// How far either side of the divider it can be grabbed.
 const GRAB: f32 = 4.0;
@@ -65,7 +64,6 @@ impl<Message> Resizable<'_, Message> {
 struct State {
     /// Where the drag started and the width then.
     drag: Option<(f32, f32)>,
-    hovered: bool,
     last_click: Option<click::Click>,
 }
 
@@ -143,10 +141,6 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
         let bounds = layout.bounds();
         let state = tree.state.downcast_mut::<State>();
         let hovered = cursor.is_over(edge(bounds, self.divider));
-        if hovered != state.hovered {
-            state.hovered = hovered;
-            shell.request_redraw();
-        }
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if hovered => {
                 if let Some(position) = cursor.position() {
@@ -206,7 +200,6 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        use iced::advanced::Renderer as _;
         if let Some(content) = layout.children().next() {
             self.content.as_widget().draw(
                 &tree.children[0],
@@ -218,29 +211,6 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
                 viewport,
             );
         }
-        let state = tree.state.downcast_ref::<State>();
-        if !state.hovered && state.drag.is_none() {
-            return;
-        }
-        // The divider being grabbed, drawn over the table's line.
-        let scheme = Scheme::of(theme);
-        let bounds = layout.bounds();
-        let color = if state.drag.is_some() {
-            scheme.primary
-        } else {
-            scheme.outline
-        };
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle {
-                    x: bounds.x + bounds.width + self.divider - 1.0,
-                    width: 2.0,
-                    ..bounds
-                },
-                ..Quad::default()
-            },
-            Background::Color(color),
-        );
     }
 
     fn mouse_interaction(
