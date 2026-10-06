@@ -9,7 +9,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use atdecc::aem::{AudioMapping, MappingChange, NAME_LENGTH, aem_name};
-use atdecc::blocking::Driver;
+use atdecc::blocking::{Driver, Frame};
 use atdecc::controller::{Advertise, CommandId, Outcome};
 use atdecc::descriptor::{DescriptorType, SamplingRate};
 use atdecc::model::EntityModel;
@@ -67,6 +67,9 @@ pub enum ReportKind {
     /// The bridge this computer is plugged into, as its gPTP messages show,
     /// or none heard.
     Neighbor(Option<Neighbor>),
+    /// ATDECC frames sent and received since the last report, oldest
+    /// first.
+    Frames(Vec<Frame>),
 }
 
 /// The bridge port this computer is plugged into, from the peer delay
@@ -268,6 +271,10 @@ impl Drop for Network {
     }
 }
 
+/// The most frames waiting between two turns of the loop, the oldest
+/// dropped past it.
+const FRAMES_WAITING: usize = 4096;
+
 fn report(generation: u64, kind: ReportKind) {
     crate::post(External::Network(Report { generation, kind }));
 }
@@ -286,6 +293,7 @@ fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<
             return;
         }
     };
+    driver.keep_frames(FRAMES_WAITING);
     report(
         generation,
         ReportKind::Started {
@@ -376,6 +384,10 @@ fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<
             && let Some(neighbor) = gptp.poll()
         {
             report(generation, ReportKind::Neighbor(neighbor));
+        }
+        let frames: Vec<Frame> = std::iter::from_fn(|| driver.poll_frame()).collect();
+        if !frames.is_empty() {
+            report(generation, ReportKind::Frames(frames));
         }
         while let Some(event) = driver.controller_mut().poll_event() {
             let controller = driver.controller();

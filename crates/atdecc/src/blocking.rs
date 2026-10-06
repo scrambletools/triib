@@ -1,10 +1,11 @@
 //! A blocking driver for apps without a loop of their own: one raw socket
 //! on one interface, feeding a [`Controller`] on the calling thread.
 
+use std::collections::VecDeque;
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-use avb_net::Socket;
+use avb_net::{MacAddress, Socket};
 
 use crate::controller::{Config, Controller};
 use crate::id::EntityId;
@@ -19,6 +20,22 @@ pub struct Driver {
     epoch: std::time::Instant,
     received: [u8; FRAME],
     sending: [u8; FRAME],
+    /// The ATDECC frames sent and received, when kept, and how many at
+    /// most.
+    frames: VecDeque<Frame>,
+    keep: usize,
+}
+
+/// An ATDECC frame the driver sent or received, kept when asked to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Frame {
+    pub at: SystemTime,
+    /// The driver sent it; else it was received.
+    pub sent: bool,
+    /// Where it went, or where it came from.
+    pub peer: MacAddress,
+    /// The octets after the Ethernet header.
+    pub bytes: Vec<u8>,
 }
 
 impl Driver {
@@ -50,6 +67,8 @@ impl Driver {
             epoch: std::time::Instant::now(),
             received: [0; FRAME],
             sending: [0; FRAME],
+            frames: VecDeque::new(),
+            keep: 0,
         })
     }
 
@@ -59,6 +78,37 @@ impl Driver {
 
     pub fn controller_mut(&mut self) -> &mut Controller {
         &mut self.controller
+    }
+
+    /// Keeps the ATDECC frames sent and received from here on, up to
+    /// `limit` of them waiting at once, the oldest dropped; zero keeps none.
+    pub fn keep_frames(&mut self, limit: usize) {
+        self.keep = limit;
+        while self.frames.len() > limit {
+            self.frames.pop_front();
+        }
+    }
+
+    /// The oldest frame kept and not yet taken.
+    pub fn poll_frame(&mut self) -> Option<Frame> {
+        self.frames.pop_front()
+    }
+
+    /// Whether frames like `bytes` are kept: ATDECC ones, while asked to.
+    fn keeps(&self, bytes: &[u8]) -> bool {
+        self.keep > 0 && crate::pdu::is_atdecc(bytes)
+    }
+
+    fn kept(&mut self, sent: bool, peer: MacAddress, bytes: Vec<u8>) {
+        if self.frames.len() == self.keep {
+            self.frames.pop_front();
+        }
+        self.frames.push_back(Frame {
+            at: SystemTime::now(),
+            sent,
+            peer,
+            bytes,
+        });
     }
 
     /// The controller's clock: the time since the driver opened.
@@ -78,12 +128,13 @@ impl Driver {
         };
         if let Some(received) = self.socket.receive(&mut self.received, Some(wait))? {
             let now = self.now();
+            let bytes = &self.received[..received.length];
             // A frame that does not decode is counted by the controller.
-            let _ = self.controller.handle_frame(
-                now,
-                received.source,
-                &self.received[..received.length],
-            );
+            let _ = self.controller.handle_frame(now, received.source, bytes);
+            if self.keeps(&self.received[..received.length]) {
+                let bytes = self.received[..received.length].to_vec();
+                self.kept(false, received.source, bytes);
+            }
         }
         let now = self.now();
         self.controller.handle_timeout(now);
@@ -105,6 +156,10 @@ impl Driver {
         {
             self.socket
                 .send(transmit.destination, &self.sending[..transmit.length])?;
+            if self.keeps(&self.sending[..transmit.length]) {
+                let bytes = self.sending[..transmit.length].to_vec();
+                self.kept(true, transmit.destination, bytes);
+            }
         }
         Ok(())
     }

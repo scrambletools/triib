@@ -14,6 +14,7 @@ use scramble_ui::{desktop, motion, omarchy, scheme};
 use crate::External;
 use crate::controls_view::ControlDrag;
 use crate::entity_table::Column;
+use crate::log_view::{Log, LogMessage};
 use crate::matrix::{Hover, Side};
 use crate::netmap::{Focus, NodeKey};
 use crate::network::{Action, Failure, Name, NameTarget, Neighbor, Network, Report, ReportKind};
@@ -75,6 +76,8 @@ pub struct Triib {
     pub control_drag: Option<ControlDrag>,
     /// The inspector's open tab.
     pub inspector_tab: InspectorTab,
+    /// The ATDECC frames sent and heard.
+    pub log: Log,
     /// The Settings dialog is open, on this tab.
     pub settings_open: bool,
     pub settings_tab: SettingsTab,
@@ -106,6 +109,7 @@ pub enum Message {
     SelectionCleared,
     /// Open one of the inspector's tabs.
     InspectorTab(InspectorTab),
+    Log(LogMessage),
     /// A control's slider moved, not yet let go.
     ControlDragged(ControlDrag),
     /// The slider being dragged was let go: its value is sent.
@@ -204,6 +208,7 @@ impl Triib {
             tree_open: BTreeSet::new(),
             control_drag: None,
             inspector_tab: InspectorTab::default(),
+            log: Log::default(),
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error: None,
@@ -240,6 +245,7 @@ impl Triib {
             tree_open: BTreeSet::new(),
             control_drag: None,
             inspector_tab: InspectorTab::default(),
+            log: Log::default(),
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error,
@@ -333,6 +339,7 @@ impl Triib {
                 }
             }
             Message::InspectorTab(tab) => self.inspector_tab = tab,
+            Message::Log(message) => self.log.update(message),
             Message::ControlDragged(drag) => self.control_drag = Some(drag),
             Message::ControlReleased => {
                 if let Some(drag) = self.control_drag.take()
@@ -588,6 +595,18 @@ impl Triib {
                 self.models.insert(entity_id, *model);
             }
             ReportKind::Neighbor(neighbor) => self.neighbor = neighbor,
+            ReportKind::Frames(frames) => {
+                if !self.log.paused {
+                    let described = frames
+                        .into_iter()
+                        .map(|frame| {
+                            let line = crate::log_view::describe(self, &frame);
+                            (frame, line)
+                        })
+                        .collect();
+                    self.log.add(described);
+                }
+            }
             ReportKind::Finished(action, outcome) => {
                 if let Some(position) = self.pending.iter().position(|pending| *pending == action) {
                     self.pending.remove(position);

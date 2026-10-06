@@ -14,8 +14,9 @@ listeners, routed to the computer's audio. Built in Rust with
 > network from each entity's gPTP path, identifies entities, renames
 > them, changes their stream formats, sampling rates and clock sources
 > (each entity's media clock right in the entity list), shows and
-> changes how their channels map to streams, and shows and sets their
-> controls, such as gain and mute. See the [plan](docs/PLAN.md).
+> changes how their channels map to streams, shows and sets their
+> controls, such as gain and mute, and logs every ATDECC frame sent and
+> heard, marking those that break the rules. See the [plan](docs/PLAN.md).
 
 ## Building
 

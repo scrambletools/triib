@@ -472,10 +472,15 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   forward, and the panel beside the map explains it. Narrow windows show
   the map or the panel, and stack the map when its columns would be too
   small. Switch ports need LLDP tables over SNMP, a later addition.
-- Log view: what the controller did and heard, with warnings for
-  entities that break the rules, such as a control_data_length longer
-  than the frame. The decoder accepts those frames, so it needs to report
-  how many octets were claimed but missing.
+- Log view: the ATDECC frames the controller sent and heard, newest
+  first, the newest 5000 kept, each with its time, direction, entity and
+  what it says, refusals marked; filtered by protocol or to warnings,
+  paused and cleared, a line opening to its octets. Warnings mark frames
+  that do not decode, a control_data_length claiming octets past the end
+  of the frame (the decoder accepts those, and `pdu::missing_octets`
+  counts them), and the long ACMP form from a Milan entity. The blocking
+  driver keeps the frames when asked. Saving the log, and warnings for
+  timing rules such as an ENTITY_DISCOVER answered late, can follow.
 - AVB Lite status query, bandwidth view and alarms.
 - Presets, `triib-cli` at parity with `atdecc_controller.py`.
 

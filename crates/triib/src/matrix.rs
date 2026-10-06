@@ -355,7 +355,7 @@ fn groups(triib: &Triib, side: Side) -> Vec<Group<'_>> {
 }
 
 /// The last two octets of the entity's MAC address.
-fn tag(entity: &DiscoveredEntity) -> String {
+pub(crate) fn tag(entity: &DiscoveredEntity) -> String {
     let [.., fifth, sixth] = entity.mac.0;
     format!("{fifth:02x}:{sixth:02x}")
 }

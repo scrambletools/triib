@@ -8,6 +8,7 @@ mod describe;
 mod diagnostics_view;
 mod entity_table;
 mod header_band;
+mod log_view;
 mod mapping_view;
 mod matrix;
 mod netmap;

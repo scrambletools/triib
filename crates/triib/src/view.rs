@@ -184,8 +184,9 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 view_tool(Icon::GridOn, "Connections", View::Matrix),
                 view_tool(Icon::Hub, "Network", View::Network),
                 view_tool(Icon::ViewList, "Entities", View::Entities),
+                view_tool(Icon::History, "Log", View::Log),
             ]),
-            DIVIDER_WIDTH + TOOLBAR_GAP + tools(3.0),
+            DIVIDER_WIDTH + TOOLBAR_GAP + tools(4.0),
             Some(3),
             true,
         ),
@@ -350,6 +351,7 @@ fn content(triib: &Triib) -> Element<'_, Message> {
             NetworkState::Running { .. } | NetworkState::Starting => crate::netmap::view(triib),
             state => network_state_view(triib, state),
         },
+        View::Log => crate::log_view::view(triib),
     }
 }
 
@@ -1706,6 +1708,7 @@ pub(crate) mod tests {
                 Size::new(1280.0, 2000.0),
             ),
             ("inspector-controls", View::Entities, true, desktop),
+            ("log-desktop", View::Log, false, desktop),
             (
                 "inspector-mappings-phone",
                 View::Entities,
@@ -1771,6 +1774,10 @@ pub(crate) mod tests {
             };
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
+            }
+            if suffix.starts_with("log") {
+                let frames = crate::log_view::tests::bench_frames(&triib);
+                triib.log.add(frames);
             }
             if suffix.contains("narrow") {
                 // Columns dragged narrower than their text.

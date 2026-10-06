@@ -77,6 +77,8 @@ pub enum View {
     Entities,
     /// The network as gPTP paths show it.
     Network,
+    /// The ATDECC frames sent and heard.
+    Log,
 }
 
 /// What a column of the entity list after the name shows.
