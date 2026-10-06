@@ -215,12 +215,6 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         false,
     ));
     slots.push((
-        component::tool(Icon::Settings, "Settings", Some(Message::SettingsOpened)),
-        TOOL_WIDTH,
-        Some(4),
-        false,
-    ));
-    slots.push((
         component::toggle_tool(
             Icon::Info,
             "Inspector",
@@ -229,6 +223,12 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         ),
         TOOL_WIDTH,
         None,
+        false,
+    ));
+    slots.push((
+        component::tool(Icon::Settings, "Settings", Some(Message::SettingsOpened)),
+        TOOL_WIDTH,
+        Some(4),
         false,
     ));
 
