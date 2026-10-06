@@ -1033,14 +1033,16 @@ impl Matrix {
                     );
                 }
                 None => {
+                    // Close to the grid, as the columns' stream names are,
+                    // with the talker's or listener's name further out.
                     let detail_width = measure(&heading.detail, TEXT, 11.0);
                     let fitted = fitted(state, Side::Listener, index, || {
-                        fit(&heading.name, TEXT, 14.0, width - 52.0 - detail_width)
+                        fit(&heading.name, TEXT, 14.0, width - 32.0 - detail_width)
                     });
                     label(
                         frame,
                         fitted.name,
-                        Point::new(32.0, center),
+                        Point::new(12.0, center),
                         TEXT,
                         14.0,
                         colors.text,
