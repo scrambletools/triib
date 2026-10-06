@@ -3,7 +3,8 @@
 //! renames entities, changes stream formats, sampling rates and clock
 //! sources, shows the media clock each entity follows, shows and changes
 //! how channels map to streams, shows and sets controls, connects and
-//! disconnects streams, and reads what streams and descriptors hold.
+//! disconnects streams, reads what streams and descriptors hold, and
+//! shows how entities run AVB Lite.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::ExitCode;
@@ -14,12 +15,13 @@ use atdecc::blocking::Driver;
 use atdecc::control::{ControlDescriptor, Linear, Number, Selector, Shape, Unit, encode_values};
 use atdecc::controller::{Controller, Outcome, Refusal};
 use atdecc::descriptor::{ClockSourceType, DescriptorType, LocalizedStringRef, SamplingRate};
+use atdecc::lite::LiteFlags;
 use atdecc::media_clock::{Broken, ClockFrom, DomainClock, DomainId, media_clocks};
 use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::stream_format::StreamFormat;
 use atdecc::{
     ClockIdentity, ControllerCapabilities, DiscoveredEntity, EntityCapabilities, EntityId, Event,
-    ListenerCapabilities, OfflineReason, TalkerCapabilities,
+    ListenerCapabilities, OfflineReason, StreamId, TalkerCapabilities,
 };
 
 const USAGE: &str = "\
@@ -68,6 +70,12 @@ commands:
                                      ID, destination, VLAN, latency, and for
                                      outputs what the talker sends and their
                                      max transit time
+  lite <interface> <entity-id> [seconds]
+                                     print how each of an entity's interfaces
+                                     runs AVB Lite, as its status query
+                                     answers, with the octets of the answer,
+                                     then the streams it declares over CVU
+                                     SRP, heard for the seconds given
   transit <interface> <entity-id> <output> [nanoseconds]
                                      print or set a stream output's max transit
                                      time, 0 for the entity's default
@@ -209,6 +217,20 @@ fn main() -> ExitCode {
                 return usage();
             };
             streams(interface, entity).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("lite") => {
+            let (Some(interface), Some(Ok(entity))) =
+                (argument(1), argument(2).map(str::parse::<EntityId>))
+            else {
+                return usage();
+            };
+            let seconds = match argument(3).map(str::parse::<u64>) {
+                None => 0,
+                Some(Ok(seconds)) => seconds,
+                Some(Err(_)) => return usage(),
+            };
+            lite(interface, entity, Duration::from_secs(seconds))
+                .map_err(|error| format!("{interface}: {error}"))
         }
         Some("transit") => {
             let (Some(interface), Some(Ok(entity)), Some(Ok(output))) = (
@@ -728,6 +750,80 @@ fn streams(interface: &str, entity: EntityId) -> std::io::Result<()> {
                 }
             }
         }
+    }
+    driver.close()
+}
+
+/// Reads an entity, which asks it for its AVB Lite status, listens for
+/// `listen` more, then prints what each interface reports and the streams
+/// it declares over CVU SRP.
+fn lite(interface: &str, entity: EntityId, listen: Duration) -> std::io::Result<()> {
+    let mut driver = read(interface, Some(entity))?;
+    let started = Instant::now();
+    while started.elapsed() < listen {
+        driver.turn(Duration::from_millis(100))?;
+        while driver.controller_mut().poll_event().is_some() {}
+    }
+    let controller = driver.controller();
+    let (Some(found), Some(model)) = (controller.entity(entity), controller.model(entity)) else {
+        println!("{entity} not found or without an AEM model");
+        return driver.close();
+    };
+    println!("{}", summary(found));
+    for (index, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+        let name = model
+            .name_of(DescriptorType::AVB_INTERFACE, index)
+            .unwrap_or_default();
+        let Some(status) = model.lite_status(index) else {
+            let why = match model.lite_supported {
+                Some(false) => "does not implement the AVB Lite status query",
+                Some(true) => "reports no AVB Lite status",
+                None => "did not answer the AVB Lite status query",
+            };
+            println!("  interface {index} \"{name}\": {why}");
+            continue;
+        };
+        let mode = if status.flags.contains(LiteFlags::ACTIVE) {
+            format!(
+                "AVB Lite active, fallback reason {}",
+                status.fallback_reason.name().unwrap_or("unknown")
+            )
+        } else if status.flags.contains(LiteFlags::CAPABLE) {
+            "AVB Lite capable, running standard AVB".to_owned()
+        } else {
+            "not AVB Lite capable".to_owned()
+        };
+        println!("  interface {index} \"{name}\": {mode}");
+        let offset = status
+            .offset()
+            .map_or("not measured".to_owned(), |offset| format!("{offset} ns"));
+        println!(
+            "      PTP {} domain {}, grandmaster {}, offset {offset}",
+            status.ptp_profile.name().unwrap_or("unknown"),
+            status.ptp_domain,
+            status.grandmaster
+        );
+        let egress = status
+            .egress()
+            .map_or("not kept".to_owned(), |kilobits| format!("{kilobits} kb/s"));
+        println!(
+            "      media VLAN {}, unicast fan-out {}, link {} Mb/s, egress {egress}",
+            status.media_vlan_id, status.unicast_fanout_limit, status.link_speed
+        );
+        print_octets(&status.to_bytes());
+    }
+    for declaration in model.cvu_talkers() {
+        println!(
+            "  CVU SRP: stream {} to {}, VLAN {}, {} octets x {} a class interval, \
+             priority {}, {} us accumulated latency",
+            StreamId(declaration.stream_id),
+            declaration.destination,
+            declaration.vlan_id,
+            declaration.max_frame_size,
+            declaration.max_interval_frames,
+            declaration.priority,
+            declaration.accumulated_latency / 1000
+        );
     }
     driver.close()
 }
