@@ -412,7 +412,8 @@ triib is MIT OR Apache-2.0. Things to keep that true:
    after the name is picked from its heading's menu, which also removes
    it or moves it left or right, and a last heading adds one. Columns
    resize by dragging a heading's right edge, a double click there fitting
-   the text again. Fields, order and widths are kept in triib.toml.
+   the text again. Fields, order and widths are kept in triib.toml. The
+   heading row is shaded, and the Media clock cell picks the clock source.
 3. Stream matrix: connect and disconnect, status per cell.
 4. Identify.
 5. Inspector: AEM tree and dynamic values.
@@ -428,14 +429,13 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 
 ### P1: Hive parity and AVB Lite control
 
-- Media clock view: each media clock reference with the clock domains
-  following it, as a tree through the streams carrying its clock, each
-  with where its clock comes from, whether that stream flows, its rate
-  against the reference's and its Milan media clock reference priority
-  and domain name (GET_MEDIA_CLOCK_REFERENCE_INFO); then the domains whose
-  chain breaks (an unbound input, an unknown talker, a loop) and why. The
-  clock source of each is picked where it shows. Electing a reference by
-  priority and connecting the CRF streams to it can follow.
+- Media clock in the entity list: each entity's Media clock cell picks
+  its clock domain's clock source, in place of a view of its own (which
+  showed each media clock reference with the domains following it, and
+  went as the list does the job). atdecc still works out each domain's
+  chain (media_clock), with GET_MEDIA_CLOCK_REFERENCE_INFO's priority and
+  domain name, for `triib-cli clocks`. Electing a reference by priority
+  and connecting the CRF streams to it can follow.
 - Channel routing via audio maps (in the inspector,
   read with GET_AUDIO_MAP, changed with ADD_AUDIO_MAPPINGS and
   REMOVE_AUDIO_MAPPINGS, kept current from their notifications), generic

@@ -71,13 +71,12 @@ pub enum View {
     /// Talker streams against listener streams.
     #[default]
     Matrix,
-    // Host talkers and listeners are entities like any other.
-    #[serde(alias = "host")]
+    // Host talkers and listeners are entities like any other, and each
+    // entity's media clock is picked in its row.
+    #[serde(alias = "host", alias = "clocks")]
     Entities,
     /// The network as gPTP paths show it.
     Network,
-    /// Each media clock reference and the clock domains following it.
-    Clocks,
 }
 
 /// What a column of the entity list after the name shows.
@@ -92,9 +91,10 @@ pub enum EntityField {
     SerialNumber,
     Milan,
     Roles,
+    /// The clock source of the entity's clock domain, picked in its cell.
+    #[serde(alias = "clock-source")]
     MediaClock,
     SamplingRate,
-    ClockSource,
     Btc,
     State,
     EntityId,
@@ -107,7 +107,7 @@ pub enum EntityField {
 
 impl EntityField {
     /// Every field, in the order the column menus offer them.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 18] = [
         Self::Group,
         Self::Product,
         Self::Vendor,
@@ -118,7 +118,6 @@ impl EntityField {
         Self::Roles,
         Self::MediaClock,
         Self::SamplingRate,
-        Self::ClockSource,
         Self::Btc,
         Self::State,
         Self::EntityId,
@@ -155,7 +154,6 @@ impl EntityField {
             Self::Roles => "Roles",
             Self::MediaClock => "Media clock",
             Self::SamplingRate => "Sampling rate",
-            Self::ClockSource => "Clock source",
             Self::Btc => "BTC",
             Self::State => "State",
             Self::EntityId => "Entity ID",
@@ -206,13 +204,21 @@ impl Settings {
         let Some(path) = triib_store::paths::config_file() else {
             return (Self::default(), Some(NO_PLACE.to_owned()));
         };
-        match triib_store::load_or_create(&path) {
-            Ok(settings) => (settings, None),
+        match triib_store::load_or_create::<Self>(&path) {
+            Ok(settings) => (settings.tidied(), None),
             Err(error) => (
                 Self::default(),
                 Some(format!("Could not use {}: {error}.", path.display())),
             ),
         }
+    }
+
+    /// The settings with each entity list column once, as a field that
+    /// became another's name can leave two.
+    fn tidied(mut self) -> Self {
+        let mut seen = std::collections::BTreeSet::new();
+        self.entity_columns.retain(|field| seen.insert(*field));
+        self
     }
 
     /// Saves the settings, or says why they could not be saved.
@@ -230,3 +236,28 @@ impl Settings {
 
 /// Why there is no settings file to read or write.
 const NO_PLACE: &str = "There is nowhere to keep the settings: the home folder is not known.";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_given_up_load_as_what_took_their_place() {
+        let file = std::env::temp_dir().join(format!("triib-renamed-{}.toml", std::process::id()));
+        triib_store::save(&file, &Settings::default()).unwrap();
+        // The media clock view and the clock source column, as an older
+        // triib saved them, beside the media clock column.
+        let saved = std::fs::read_to_string(&file).unwrap();
+        let older = saved
+            .replace("view = \"matrix\"", "view = \"clocks\"")
+            .replace("\"media-clock\"", "\"clock-source\", \"media-clock\"");
+        assert_ne!(older, saved);
+        std::fs::write(&file, older).unwrap();
+        let loaded = triib_store::load_or_create::<Settings>(&file)
+            .unwrap()
+            .tidied();
+        let _ = std::fs::remove_file(&file);
+        assert_eq!(loaded.view, View::Entities);
+        assert_eq!(loaded.entity_columns, EntityField::DEFAULT_COLUMNS);
+    }
+}

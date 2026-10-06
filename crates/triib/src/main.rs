@@ -2,11 +2,11 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod app;
-mod clock_view;
 mod column_resize;
 mod describe;
 mod diagnostics_view;
 mod entity_table;
+mod header_band;
 mod mapping_view;
 mod matrix;
 mod netmap;

@@ -3,7 +3,6 @@
 //! the column or shows another field in it, and a last heading adds one.
 
 use atdecc::DiscoveredEntity;
-use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
 use iced::widget::text::Wrapping;
 use iced::widget::{container, scrollable, space, table};
@@ -17,6 +16,7 @@ use scramble_ui::{component, style};
 use crate::app::{Message, Triib};
 use crate::column_resize::{MIN_WIDTH, resizable};
 use crate::describe;
+use crate::header_band::header_band;
 use crate::settings::EntityField;
 use crate::text::{fit, measure};
 use crate::view::Rate;
@@ -24,6 +24,8 @@ use crate::view::Rate;
 /// Around each cell, around the table, and spare room for what measuring
 /// its text leaves out.
 const TABLE_PADDING: f32 = 12.0;
+/// Above and below each row's cells.
+const ROW_PADDING: f32 = 8.0;
 const TABLE_MARGIN: f32 = 16.0;
 const TABLE_SLACK: f32 = 24.0;
 /// What a heading's button adds to its label: padding, a gap and the
@@ -78,13 +80,6 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
             .map_or_else(String::new, |unit| {
                 Rate(unit.current_sampling_rate).to_string()
             }),
-        EntityField::ClockSource => model
-            .and_then(|model| {
-                let domain = model.clock_domains().next()?;
-                model.name_of(DescriptorType::CLOCK_SOURCE, domain.clock_source_index)
-            })
-            .unwrap_or_default()
-            .to_owned(),
         EntityField::Btc => describe::clock(&entity.adp),
         EntityField::State => describe::read_state(model),
         EntityField::EntityId => entity.entity_id().to_string(),
@@ -100,6 +95,34 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
             ),
         EntityField::TalkerStreams => count(entity.adp.talker_stream_sources),
         EntityField::ListenerStreams => count(entity.adp.listener_stream_sinks),
+    }
+}
+
+/// A cell's text on one line, cut short with an ellipsis to its column.
+fn cell<'a>(text: &str, width: f32) -> Element<'a, Message> {
+    container(styled(fit(text, TEXT, 14.0, width).name, Type::BodyMedium).wrapping(Wrapping::None))
+        .width(Length::Fixed(width))
+        .clip(true)
+        .into()
+}
+
+/// An entity's media clock: a picker of its clock domain's sources, or
+/// `shown` when it has only one or is not read.
+fn media_clock_cell<'a>(
+    triib: &'a Triib,
+    entity: &DiscoveredEntity,
+    shown: &str,
+    width: f32,
+) -> Element<'a, Message> {
+    let entity = entity.entity_id();
+    let picker = triib.models.get(&entity).and_then(|model| {
+        let domain = model.clock_domains().next()?;
+        crate::view::source_picker(triib, entity, model, &domain).ok()
+    });
+    match picker {
+        // As wide as its column, as the table lays fixed cells out apart.
+        Some(picker) => container(picker).width(Length::Fixed(width)).into(),
+        None => cell(shown, width),
     }
 }
 
@@ -167,10 +190,23 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         ) + NAME_ROOM,
     ];
     for (index, field) in columns.iter().enumerate() {
-        natural.push(widest(
-            measure(field.label(), MEDIUM, 14.0) + MENU_ROOM,
-            &mut rows.iter().map(|row| &row.values[index]),
-        ));
+        // A media clock's cell picks the source, with the picker's arrow.
+        let picker = if *field == EntityField::MediaClock {
+            MENU_ROOM
+        } else {
+            0.0
+        };
+        natural.push(
+            widest(
+                measure(field.label(), MEDIUM, 14.0) + MENU_ROOM - picker,
+                &mut rows.iter().map(|row| &row.values[index]),
+            ) + picker,
+        );
+    }
+    // A whole pixel spare, as text exactly a cell's width loses its last
+    // letter to the clip.
+    for width in &mut natural {
+        *width = width.ceil() + 1.0;
     }
     // The widths the user dragged columns to, which they keep.
     let settings = &triib.settings;
@@ -220,15 +256,6 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         .width(Length::Fixed(width))
         .divider(DIVIDER)
     };
-    // A cell's text on one line, cut short with an ellipsis to its column.
-    let cell = |text: &str, width: f32| {
-        container(
-            styled(fit(text, TEXT, 14.0, width).name, Type::BodyMedium).wrapping(Wrapping::None),
-        )
-        .width(Length::Fixed(width))
-        .clip(true)
-    };
-
     let name_width = widths[0];
     let mut table_columns = vec![
         table::column(
@@ -292,7 +319,13 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         table_columns.push(
             table::column(
                 heading(heading_menu.into(), Column::Field(field), width),
-                move |row: Row<'_>| cell(&row.values[index], width),
+                move |row: Row<'_>| {
+                    if field == EntityField::MediaClock {
+                        media_clock_cell(triib, row.entity, &row.values[index], width)
+                    } else {
+                        cell(&row.values[index], width)
+                    }
+                },
             )
             .width(Length::Fixed(width))
             .align_y(Center),
@@ -315,10 +348,11 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 .align_y(Center),
         );
     }
+    let column_count = table_columns.len();
     let table = table(table_columns, rows)
         .padding_x(TABLE_PADDING)
-        .padding_y(8);
-    let content = container(table).padding(TABLE_MARGIN);
+        .padding_y(ROW_PADDING);
+    let content = container(header_band(table, column_count, ROW_PADDING)).padding(TABLE_MARGIN);
     if fits {
         return component::scroll(content).height(Fill).into();
     }
@@ -534,7 +568,7 @@ mod tests {
         );
         assert_eq!(value(EntityField::Vendor, entity, model), "Apple Inc.");
         assert_eq!(
-            value(EntityField::ClockSource, entity, model),
+            value(EntityField::MediaClock, entity, model),
             "Mac System Clock"
         );
         assert!(!value(EntityField::SamplingRate, entity, model).is_empty());

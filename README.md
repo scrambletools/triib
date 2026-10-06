@@ -11,10 +11,10 @@ listeners, routed to the computer's audio. Built in Rust with
 > **Status:** early. On Linux, triib discovers ATDECC entities, reads their
 > entity models (names, streams, clocks, Milan support) and keeps them for
 > next time, shows and changes stream connections in a matrix, maps the
-> network from each entity's gPTP path, shows the media clock each entity
-> follows, identifies entities, renames them, changes their stream
-> formats, sampling rates and clock sources, and shows and changes how
-> their channels map to streams. See the [plan](docs/PLAN.md).
+> network from each entity's gPTP path, identifies entities, renames
+> them, changes their stream formats, sampling rates and clock sources
+> (each entity's media clock right in the entity list), and shows and
+> changes how their channels map to streams. See the [plan](docs/PLAN.md).
 
 ## Building
 

@@ -184,9 +184,8 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 view_tool(Icon::GridOn, "Connections", View::Matrix),
                 view_tool(Icon::ViewList, "Entities", View::Entities),
                 view_tool(Icon::Hub, "Network", View::Network),
-                view_tool(Icon::Timer, "Media clock", View::Clocks),
             ]),
-            DIVIDER_WIDTH + TOOLBAR_GAP + tools(4.0),
+            DIVIDER_WIDTH + TOOLBAR_GAP + tools(3.0),
             Some(3),
             true,
         ),
@@ -349,10 +348,6 @@ fn content(triib: &Triib) -> Element<'_, Message> {
         },
         View::Network => match &triib.network_state {
             NetworkState::Running { .. } | NetworkState::Starting => crate::netmap::view(triib),
-            state => network_state_view(triib, state),
-        },
-        View::Clocks => match &triib.network_state {
-            NetworkState::Running { .. } | NetworkState::Starting => crate::clock_view::view(triib),
             state => network_state_view(triib, state),
         },
     }
@@ -621,14 +616,14 @@ impl fmt::Display for Source {
     }
 }
 
-/// A clock domain's clock source, with a picker of the sources it can use
-/// when it has more than one.
+/// A picker of the clock sources a clock domain can use, or the name of
+/// its clock source when it has only that one.
 pub(crate) fn source_picker<'a>(
     triib: &'a Triib,
     entity: EntityId,
     model: &EntityModel,
     domain: &ClockDomainDescriptor<'_>,
-) -> Element<'a, Message> {
+) -> Result<Element<'a, Message>, String> {
     let domain_index = domain.index;
     let source = |index: u16| Source {
         index,
@@ -654,15 +649,15 @@ pub(crate) fn source_picker<'a>(
         sources.insert(0, source(domain.clock_source_index));
     }
     if sources.len() < 2 {
-        return styled(shown.name, Type::BodyMedium).into();
+        return Err(shown.name);
     }
-    picker(sources, shown, changing.is_some(), move |picked| {
+    Ok(picker(sources, shown, changing.is_some(), move |picked| {
         Action::SetClockSource {
             entity,
             domain: domain_index,
             source: picked.index,
         }
-    })
+    }))
 }
 
 fn property<'a>(label: impl Into<String>, value: String) -> Element<'a, Message> {
@@ -809,7 +804,8 @@ fn model_details<'a>(
                 .to_owned();
             items.push(stacked(
                 name,
-                source_picker(triib, entity_id, model, &domain),
+                source_picker(triib, entity_id, model, &domain)
+                    .unwrap_or_else(|name| styled(name, Type::BodyMedium).into()),
             ));
         }
         for unit in model.audio_units() {
@@ -1610,17 +1606,15 @@ pub(crate) mod tests {
                 Size::new(1280.0, 3200.0),
             ),
             ("matrix-filtered", View::Matrix, false, desktop),
-            ("clocks-desktop", View::Clocks, false, desktop),
             (
                 "inspector-diagnostics",
                 View::Entities,
                 true,
                 Size::new(1280.0, 2400.0),
             ),
-            ("clocks-phone", View::Clocks, false, phone),
             (
                 "media-clock-bench",
-                View::Clocks,
+                View::Entities,
                 false,
                 Size::new(1280.0, 500.0),
             ),
@@ -1661,7 +1655,7 @@ pub(crate) mod tests {
                 let model = dynamic_mac_mini(&entities, &models);
                 models.insert(MAC_MINI, model);
             }
-            if suffix.starts_with("clocks") {
+            if suffix.contains("media-clock") {
                 clocked_bench(&entities, &mut models);
             }
             if suffix.contains("diagnostics") {
