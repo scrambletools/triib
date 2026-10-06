@@ -1,6 +1,6 @@
-//! A table heading whose right edge drags to widen or narrow its column,
-//! reporting the width the column would have; a double click on the edge
-//! asks for the width that fits the column's text again.
+//! A table heading whose column divider drags to widen or narrow the
+//! column, reporting the width it would have; a double click on the
+//! divider asks for the width that fits the column's text again.
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::mouse::click;
@@ -11,14 +11,16 @@ use iced::mouse::{self, Cursor};
 use iced::{Background, Element, Event, Length, Rectangle, Size, Theme, Vector};
 use scramble_ui::Scheme;
 
-/// How far in from the heading's right edge it can be grabbed.
-const GRAB: f32 = 8.0;
+/// How far either side of the divider it can be grabbed.
+const GRAB: f32 = 4.0;
 /// The narrowest a column gets.
 pub const MIN_WIDTH: f32 = 48.0;
 
 pub struct Resizable<'a, Message> {
     content: Element<'a, Message>,
     width: Length,
+    /// How far right of the heading its column's divider is.
+    divider: f32,
     on_resize: Box<dyn Fn(f32) -> Message + 'a>,
     on_end: Message,
     on_reset: Message,
@@ -36,6 +38,7 @@ pub fn resizable<'a, Message>(
     Resizable {
         content: content.into(),
         width: Length::Fill,
+        divider: 0.0,
         on_resize: Box::new(on_resize),
         on_end,
         on_reset,
@@ -49,6 +52,13 @@ impl<Message> Resizable<'_, Message> {
         self.width = width;
         self
     }
+
+    /// How far right of the heading its column's divider is, as the
+    /// table's padding sets it: where it is grabbed.
+    pub fn divider(mut self, divider: f32) -> Self {
+        self.divider = divider;
+        self
+    }
 }
 
 #[derive(Default)]
@@ -59,10 +69,11 @@ struct State {
     last_click: Option<click::Click>,
 }
 
-fn edge(bounds: Rectangle) -> Rectangle {
+/// Where the divider right of `bounds`, `divider` away, is grabbed.
+fn edge(bounds: Rectangle, divider: f32) -> Rectangle {
     Rectangle {
-        x: bounds.x + bounds.width - GRAB,
-        width: GRAB,
+        x: bounds.x + bounds.width + divider - GRAB,
+        width: 2.0 * GRAB,
         ..bounds
     }
 }
@@ -131,7 +142,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
     ) {
         let bounds = layout.bounds();
         let state = tree.state.downcast_mut::<State>();
-        let hovered = cursor.is_over(edge(bounds));
+        let hovered = cursor.is_over(edge(bounds, self.divider));
         if hovered != state.hovered {
             state.hovered = hovered;
             shell.request_redraw();
@@ -211,7 +222,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
         if !state.hovered && state.drag.is_none() {
             return;
         }
-        // The edge being grabbed, as a line down the heading.
+        // The divider being grabbed, drawn over the table's line.
         let scheme = Scheme::of(theme);
         let bounds = layout.bounds();
         let color = if state.drag.is_some() {
@@ -222,7 +233,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle {
-                    x: bounds.x + bounds.width - 2.0,
+                    x: bounds.x + bounds.width + self.divider - 1.0,
                     width: 2.0,
                     ..bounds
                 },
@@ -241,7 +252,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
         renderer: &iced::Renderer,
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.drag.is_some() || cursor.is_over(edge(layout.bounds())) {
+        if state.drag.is_some() || cursor.is_over(edge(layout.bounds(), self.divider)) {
             return mouse::Interaction::ResizingHorizontally;
         }
         layout

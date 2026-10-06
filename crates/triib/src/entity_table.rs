@@ -2,25 +2,23 @@
 //! columns the user picked. Each column's heading is a menu that removes
 //! the column or shows another field in it, and a last heading adds one.
 
-use std::fmt;
-
 use atdecc::DiscoveredEntity;
 use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
 use iced::widget::text::Wrapping;
-use iced::widget::{container, pick_list, scrollable, table};
-use iced::{Background, Border, Center, Color, Element, Fill, Length, Theme};
-use scramble_ui::button::{self, Kind};
+use iced::widget::{column, container, row, rule, scrollable, space, table};
+use iced::{Center, Element, Fill, Length};
+use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component;
 use scramble_ui::font::{TEXT, Type, styled};
-use scramble_ui::icon;
-use scramble_ui::{Scheme, shape, style};
+use scramble_ui::icon::{self, Icon};
+use scramble_ui::{popover, style};
 
 use crate::app::{Message, Triib};
 use crate::column_resize::{MIN_WIDTH, resizable};
 use crate::describe;
 use crate::settings::EntityField;
-use crate::text::measure;
+use crate::text::{fit, measure};
 use crate::view::Rate;
 
 /// Around each cell, around the table, and spare room for what measuring
@@ -28,10 +26,45 @@ use crate::view::Rate;
 const TABLE_PADDING: f32 = 12.0;
 const TABLE_MARGIN: f32 = 16.0;
 const TABLE_SLACK: f32 = 24.0;
-/// What a heading's menu adds to its label: padding and the arrow.
-const MENU_ROOM: f32 = 36.0;
+/// What a heading's button adds to its label: padding, a gap and the
+/// arrow.
+const MENU_ROOM: f32 = 2.0 * 12.0 + 4.0 + 18.0;
+/// What the name column adds to a name: the icon, a gap and the row
+/// button's padding.
+const NAME_ROOM: f32 = 20.0 + 8.0 + 32.0;
 /// The width of the heading that adds a column.
 const ADD_WIDTH: f32 = 40.0;
+/// How far right of a heading its column's divider is: the cell's padding
+/// and half the line.
+const DIVIDER: f32 = TABLE_PADDING + 0.5;
+/// What a menu row adds to its label: the row's padding, and for a row
+/// with one its icon and the gap after it.
+const MENU_ROW_ROOM: f32 = 2.0 * 16.0 + 8.0;
+const MENU_ICON_ROOM: f32 = 20.0 + 12.0;
+
+/// A menu wide enough for its longest row, each row an optional icon and
+/// a label.
+fn menu<'a>(rows: Vec<(Option<Icon>, &'static str, Message)>) -> Element<'a, Message> {
+    let width = rows
+        .iter()
+        .map(|(glyph, label, _)| {
+            measure(label, MEDIUM, 14.0)
+                + MENU_ROW_ROOM
+                + if glyph.is_some() { MENU_ICON_ROOM } else { 0.0 }
+        })
+        .fold(0.0, f32::max);
+    let mut items = column![].spacing(2);
+    let mut after_icons = false;
+    for (glyph, label, message) in rows {
+        // A line between the column's own actions and the fields.
+        if after_icons && glyph.is_none() {
+            items = items.push(rule::horizontal(1));
+        }
+        after_icons = glyph.is_some();
+        items = items.push(component::list_row(glyph, label, 0.0, false, Some(message)));
+    }
+    popover::surface(container(items).width(Length::Fixed(width)))
+}
 const MEDIUM: iced::Font = iced::Font {
     weight: iced::font::Weight::Medium,
     ..TEXT
@@ -114,24 +147,13 @@ pub enum Column {
     Field(EntityField),
 }
 
-/// What a heading's menu offers.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Choice {
-    Remove,
-    MoveLeft,
-    MoveRight,
-    Field(EntityField),
-}
-
-impl fmt::Display for Choice {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Choice::Remove => formatter.write_str("Remove column"),
-            Choice::MoveLeft => formatter.write_str("Move left"),
-            Choice::MoveRight => formatter.write_str("Move right"),
-            Choice::Field(field) => formatter.write_str(field.label()),
-        }
-    }
+/// Which heading's menu is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeadingMenu {
+    /// The menu of the column at this place after the name.
+    Column(usize),
+    /// The menu that adds a column.
+    Add,
 }
 
 /// The fields no column shows, in the menus' order.
@@ -139,27 +161,6 @@ fn unshown(columns: &[EntityField]) -> impl Iterator<Item = EntityField> + '_ {
     EntityField::ALL
         .into_iter()
         .filter(|field| !columns.contains(field))
-}
-
-/// A heading as a menu: quiet like the other headings until pointed at.
-fn heading_menu(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
-    let scheme = Scheme::of(theme);
-    let border = match status {
-        pick_list::Status::Active => Color::TRANSPARENT,
-        pick_list::Status::Hovered => scheme.outline_variant,
-        pick_list::Status::Opened { .. } => scheme.primary,
-    };
-    pick_list::Style {
-        text_color: scheme.on_surface_variant,
-        placeholder_color: scheme.on_surface_variant,
-        handle_color: scheme.on_surface_variant,
-        background: Background::Color(Color::TRANSPARENT),
-        border: Border {
-            color: border,
-            width: 1.0,
-            radius: shape::EXTRA_SMALL.into(),
-        },
-    }
 }
 
 /// The table for `width` pixels: across the whole width when its columns
@@ -200,9 +201,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         widest(
             measure("Name", MEDIUM, 14.0),
             &mut rows.iter().map(|row| &row.name),
-        ) + 20.0
-            + 8.0
-            + 32.0,
+        ) + NAME_ROOM,
     ];
     for (index, field) in columns.iter().enumerate() {
         natural.push(widest(
@@ -220,58 +219,73 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     );
     if can_add {
         natural.push(ADD_WIDTH);
-        dragged.push(None);
+        dragged.push(Some(ADD_WIDTH));
     }
-    let needed = natural
+    // Each column's width: dragged, or its own, the room left in the window
+    // shared out among those not dragged in proportion to their own.
+    let mut widths: Vec<f32> = natural
         .iter()
         .zip(&dragged)
-        .map(|(natural, dragged)| dragged.unwrap_or(*natural))
-        .sum::<f32>()
-        + natural.len() as f32 * (2.0 * TABLE_PADDING + 1.0)
-        + 2.0 * TABLE_MARGIN
-        + TABLE_SLACK;
-    let fits = width >= needed;
-    let column_width = |column: usize| match dragged[column] {
-        Some(dragged) => Length::Fixed(dragged.max(MIN_WIDTH)),
-        None if fits => Length::FillPortion(natural[column].ceil().max(1.0) as u16),
-        None => Length::Fixed(natural[column].ceil()),
-    };
-    // Headings and cells as wide as their columns: a table lays out a cell
-    // that fills apart from its column's width.
-    let heading = |content: Element<'static, Message>, column: Column, width: Length| {
+        .map(|(natural, dragged)| dragged.unwrap_or(*natural).max(MIN_WIDTH))
+        .collect();
+    let room = width
+        - 2.0 * TABLE_MARGIN
+        - TABLE_SLACK
+        - widths.len() as f32 * (2.0 * TABLE_PADDING + 1.0);
+    let used: f32 = widths.iter().sum();
+    let fits = used <= room;
+    let stretchy: f32 = natural
+        .iter()
+        .zip(&dragged)
+        .filter(|(_, dragged)| dragged.is_none())
+        .map(|(natural, _)| natural)
+        .sum();
+    if fits && stretchy > 0.0 {
+        for (width, (natural, dragged)) in widths.iter_mut().zip(natural.iter().zip(&dragged)) {
+            if dragged.is_none() {
+                *width += (room - used) * natural / stretchy;
+            }
+        }
+    }
+    let heading = |content: Element<'static, Message>, column: Column, width: f32| {
         resizable(
             content,
             move |width| Message::EntityColumnResized(column, width),
             Message::EntityColumnResizeEnded,
             Message::EntityColumnWidthReset(column),
         )
-        .width(width)
+        .width(Length::Fixed(width))
+        .divider(DIVIDER)
     };
-    // A cell's text on one line, cut off at the column's edge.
-    let cell = |text: String, width: Length| {
-        container(styled(text, Type::BodyMedium).wrapping(Wrapping::None))
-            .width(width)
-            .clip(true)
+    // A cell's text on one line, cut short with an ellipsis to its column.
+    let cell = |text: &str, width: f32| {
+        container(
+            styled(fit(text, TEXT, 14.0, width).name, Type::BodyMedium).wrapping(Wrapping::None),
+        )
+        .width(Length::Fixed(width))
+        .clip(true)
     };
-    let name_width = column_width(0);
 
+    let name_width = widths[0];
     let mut table_columns = vec![
         table::column(
             heading(
-                styled("Name", Type::LabelLarge)
+                styled(fit("Name", MEDIUM, 14.0, name_width).name, Type::LabelLarge)
                     .style(style::on_surface_variant)
+                    .wrapping(Wrapping::None)
                     .into(),
                 Column::Name,
                 name_width,
             ),
             move |row: Row<'_>| {
                 let entity_id = row.entity.entity_id();
+                let name = fit(&row.name, TEXT, 14.0, name_width - NAME_ROOM).name;
                 container(
                     button::custom(
                         Kind::Row,
                         iced::widget::row![
                             icon::icon(describe::glyph(&row.entity.adp), 20),
-                            styled(row.name, Type::BodyMedium).wrapping(Wrapping::None),
+                            styled(name, Type::BodyMedium).wrapping(Wrapping::None),
                         ]
                         .spacing(8)
                         .align_y(Center),
@@ -279,78 +293,105 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                     .selected(triib.selected == Some(entity_id))
                     .on_press(Message::EntitySelected(entity_id)),
                 )
-                .width(name_width)
+                .width(Length::Fixed(name_width))
                 .clip(true)
             },
         )
-        .width(column_width(0))
+        .width(Length::Fixed(name_width))
         .align_y(Center),
     ];
     let last = columns.len().saturating_sub(1);
     for (index, &field) in columns.iter().enumerate() {
-        let mut choices = vec![Choice::Remove];
-        if index > 0 {
-            choices.push(Choice::MoveLeft);
-        }
-        if index < last {
-            choices.push(Choice::MoveRight);
-        }
-        choices.extend(unshown(columns).map(Choice::Field));
-        let menu = pick_list(
-            choices,
-            Some(Choice::Field(field)),
-            move |choice| match choice {
-                Choice::Remove => Message::EntityColumn(index, None),
-                Choice::MoveLeft => Message::EntityColumnMoved(index, false),
-                Choice::MoveRight => Message::EntityColumnMoved(index, true),
-                Choice::Field(field) => Message::EntityColumn(index, Some(field)),
-            },
+        let width = widths[index + 1];
+        let open = triib.entity_menu == Some(HeadingMenu::Column(index));
+        let label = fit(field.label(), MEDIUM, 14.0, width - MENU_ROOM).name;
+        let anchor = button::custom(
+            Kind::Row,
+            row![
+                styled(label, Type::LabelLarge).wrapping(Wrapping::None),
+                space::horizontal(),
+                icon::icon(Icon::ArrowDropDown, 18),
+            ]
+            .spacing(4)
+            .align_y(Center),
         )
-        .font(MEDIUM)
-        .text_size(14)
-        .padding([2, 6])
-        .style(heading_menu)
-        .menu_style(style::select_menu);
-        let width = column_width(index + 1);
+        .size(Size::ExtraSmall)
+        .width(Fill)
+        .selected(open)
+        .on_press(Message::EntityColumnMenu(
+            (!open).then_some(HeadingMenu::Column(index)),
+        ));
+        let menu = open.then(|| {
+            let mut rows = vec![(
+                Some(Icon::Close),
+                "Remove column",
+                Message::EntityColumn(index, None),
+            )];
+            if index > 0 {
+                rows.push((
+                    Some(Icon::ArrowBack),
+                    "Move left",
+                    Message::EntityColumnMoved(index, false),
+                ));
+            }
+            if index < last {
+                rows.push((
+                    Some(Icon::ArrowForward),
+                    "Move right",
+                    Message::EntityColumnMoved(index, true),
+                ));
+            }
+            rows.extend(unshown(columns).map(|other| {
+                (
+                    None,
+                    other.label(),
+                    Message::EntityColumn(index, Some(other)),
+                )
+            }));
+            menu(rows)
+        });
+        let heading_menu =
+            popover::popover(anchor, menu, Message::EntityColumnMenu(None)).close_on_choice();
         table_columns.push(
             table::column(
-                heading(menu.into(), Column::Field(field), width),
-                move |row: Row<'_>| cell(row.values[index].clone(), width),
+                heading(heading_menu.into(), Column::Field(field), width),
+                move |row: Row<'_>| cell(&row.values[index], width),
             )
-            .width(width)
+            .width(Length::Fixed(width))
             .align_y(Center),
         );
     }
     if can_add {
-        let add = pick_list(
-            unshown(columns).map(Choice::Field).collect::<Vec<_>>(),
-            None::<Choice>,
-            |choice| match choice {
-                Choice::Field(field) => Message::EntityColumnAdded(field),
-                _ => Message::Nothing,
-            },
-        )
-        .placeholder("+")
-        .handle(pick_list::Handle::None)
-        .font(MEDIUM)
-        .text_size(16)
-        .padding([2, 6])
-        .style(heading_menu)
-        .menu_style(style::select_menu);
+        let open = triib.entity_menu == Some(HeadingMenu::Add);
+        let anchor = component::tip(
+            button::icon_button(Icon::Add)
+                .size(Size::ExtraSmall)
+                .selected(open)
+                .on_press(Message::EntityColumnMenu(
+                    (!open).then_some(HeadingMenu::Add),
+                )),
+            "Add a column",
+        );
+        let menu = open.then(|| {
+            menu(
+                unshown(columns)
+                    .map(|field| (None, field.label(), Message::EntityColumnAdded(field)))
+                    .collect(),
+            )
+        });
+        let add_width = widths[columns.len() + 1];
         table_columns.push(
-            table::column(component::tip(add, "Add a column"), |_row: Row<'_>| {
-                iced::widget::space()
-            })
-            .width(column_width(columns.len() + 1))
+            table::column(
+                popover::popover(anchor, menu, Message::EntityColumnMenu(None)).close_on_choice(),
+                |_row: Row<'_>| space(),
+            )
+            .width(Length::Fixed(add_width))
             .align_y(Center),
         );
     }
-    let mut table = table(table_columns, rows)
+    let table = table(table_columns, rows)
         .padding_x(TABLE_PADDING)
         .padding_y(8);
-    if fits {
-        table = table.width(Fill);
-    }
     let content = container(table).padding(TABLE_MARGIN);
     if fits {
         return component::scroll(content).height(Fill).into();

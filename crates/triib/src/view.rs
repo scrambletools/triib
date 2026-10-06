@@ -1601,6 +1601,12 @@ pub(crate) mod tests {
                 Size::new(2200.0, 420.0),
             ),
             (
+                "entities-narrow",
+                View::Entities,
+                false,
+                Size::new(1280.0, 420.0),
+            ),
+            (
                 "entities-menu",
                 View::Entities,
                 false,
@@ -1689,6 +1695,22 @@ pub(crate) mod tests {
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
             }
+            if suffix.contains("narrow") {
+                // Columns dragged narrower than their text.
+                triib.settings.entity_name_width = Some(130.0);
+                triib
+                    .settings
+                    .entity_column_widths
+                    .insert(crate::settings::EntityField::Product, 100.0);
+                triib
+                    .settings
+                    .entity_column_widths
+                    .insert(crate::settings::EntityField::Milan, 70.0);
+            }
+            if suffix.contains("menu") {
+                // The Group column's menu, open.
+                triib.entity_menu = Some(crate::entity_table::HeadingMenu::Column(0));
+            }
             if suffix.contains("hover-own") {
                 // The Mac mini's audio output against its own audio input.
                 triib.hover = crate::matrix::Hover {
@@ -1732,12 +1754,6 @@ pub(crate) mod tests {
             };
             let mut simulator =
                 iced_test::Simulator::with_size(iced_settings, size, window(&triib));
-            if suffix.contains("menu") {
-                // The Group column's menu, open; its heading draws its own
-                // label, so it is clicked where it shows.
-                simulator.point_at(iced::Point::new(350.0, 92.0));
-                let _ = simulator.simulate(iced_test::simulator::click());
-            }
             let snapshot = simulator.snapshot(&theme).expect("draws");
             assert!(snapshot.matches_image(&file).expect("writes"));
         }
