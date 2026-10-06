@@ -893,6 +893,18 @@ fn stream_sections<'a>(
             if let Some(state) = describe::stream_state(triib, model, &stream) {
                 lines = lines.push(styled(state, Type::BodySmall).style(style::on_surface_variant));
             }
+            if let Some(nanoseconds) = (!input)
+                .then(|| model.max_transit_time(stream.index))
+                .flatten()
+            {
+                lines = lines.push(
+                    styled(
+                        format!("Max transit time {}", describe::milliseconds(nanoseconds)),
+                        Type::BodySmall,
+                    )
+                    .style(style::on_surface_variant),
+                );
+            }
             items.push(lines.into());
         }
     }
@@ -1378,6 +1390,7 @@ pub(crate) mod tests {
         config.network_info = false;
         config.media_clock_info = false;
         config.read_counters = false;
+        config.read_transit_times = false;
         config.first_sequence_id = first_sequence_id;
         let mut controller = Controller::new(config);
         let mut buffer = [0; 1500];

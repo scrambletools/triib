@@ -102,6 +102,14 @@ pub fn media_clock(model: &EntityModel) -> String {
         .unwrap_or_default()
 }
 
+/// Nanoseconds as milliseconds, with no more decimals than they need:
+/// "12 ms", "2.5 ms".
+pub fn milliseconds(nanoseconds: u64) -> String {
+    let text = format!("{:.3}", nanoseconds as f64 / 1e6);
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    format!("{text} ms")
+}
+
 /// How far reading an entity's model got, in a few words.
 pub fn read_state(model: Option<&EntityModel>) -> String {
     let Some(model) = model else {
@@ -301,8 +309,16 @@ pub fn failure(failure: EnumerationFailure) -> String {
 /// A capability's name from the standard in words: `AEM_SUPPORTED`
 /// becomes "AEM supported".
 pub fn flag_name(name: &str) -> String {
-    const ACRONYMS: [&str; 13] = [
-        "AEM", "ACMP", "ATDECC", "AVB", "AVC", "EFU", "ID", "MIDI", "PTP", "SMPTE", "SRP", "A", "B",
+    name_words(name, true)
+}
+
+/// A standard's name in words, capitalized when it starts a sentence:
+/// "READ_DESCRIPTOR" as "Read descriptor", "STREAM_INPUT" in a sentence
+/// as "stream input", keeping acronyms such as AVB and gPTP.
+pub fn name_words(name: &str, capital: bool) -> String {
+    const ACRONYMS: [&str; 19] = [
+        "AEM", "ACMP", "ATDECC", "AVB", "AVC", "EFU", "ID", "MIDI", "PTP", "SMPTE", "SRP", "MSRP",
+        "MVU", "CRF", "RX", "TX", "AS", "A", "B",
     ];
     let words: Vec<String> = name
         .split('_')
@@ -318,7 +334,7 @@ pub fn flag_name(name: &str) -> String {
     // Only a lowercased first word is capitalized; acronyms keep their
     // own case, as in "gPTP".
     match words.first() {
-        Some(first) if first.chars().all(|character| character.is_lowercase()) => {
+        Some(first) if capital && first.chars().all(|character| character.is_lowercase()) => {
             capitalized(&text)
         }
         _ => text,
@@ -383,6 +399,13 @@ mod tests {
         assert_eq!(flag_name("GPTP_SUPPORTED"), "gPTP supported");
         assert_eq!(flag_name("ENTITY_NOT_READY"), "Entity not ready");
         assert_eq!(flag_name("AVB_INTERFACE"), "AVB interface");
+        assert_eq!(
+            name_words("GET_RX_STATE_RESPONSE", true),
+            "Get RX state response"
+        );
+        assert_eq!(name_words("STREAM_INPUT", false), "stream input");
+        assert_eq!(milliseconds(12_000_000), "12 ms");
+        assert_eq!(milliseconds(2_500_000), "2.5 ms");
     }
 
     #[test]

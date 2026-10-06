@@ -484,7 +484,15 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   driver keeps the frames when asked. Saving the log, and warnings for
   timing rules such as an ENTITY_DISCOVER answered late, can follow.
 - AVB Lite status query, bandwidth view and alarms.
-- Presets, `triib-cli` at parity with `atdecc_controller.py`.
+- Presets.
+- `triib-cli` at parity with `atdecc_controller.py`: besides reading,
+  naming, formats, rates, clock sources, mappings and controls, it
+  connects and disconnects, tells a talker to stop sending (DISCONNECT_TX),
+  identifies, prints each stream's state with what the talker sends
+  (GET_TX_STATE) and its max transit time (GET_MAX_TRANSIT_TIME, read
+  from Milan talkers once read and settable), reads a descriptor again
+  and prints its octets, and times a read of each descriptor type. The
+  inspector shows each stream output's max transit time.
 
 ### P1.1: every language prev speaks
 

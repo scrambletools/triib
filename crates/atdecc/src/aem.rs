@@ -317,6 +317,50 @@ impl SetClockSource {
     }
 }
 
+/// A stream output's max transit time (7.4.77 and 7.4.78): how long its
+/// frames may take to reach the listeners, which sets their presentation
+/// time. SET_MAX_TRANSIT_TIME carries the new one; both responses hold
+/// the one the output now has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaxTransitTime {
+    /// The STREAM_OUTPUT.
+    pub output: u16,
+    pub nanoseconds: u64,
+}
+
+impl MaxTransitTime {
+    const LEN: usize = 12;
+
+    pub fn decode(payload: &[u8]) -> Result<Self, DecodeError> {
+        truncated(Self::LEN, payload)?;
+        Ok(Self {
+            output: read_u16(payload, 2),
+            nanoseconds: read_u64(payload, 4),
+        })
+    }
+
+    /// Encodes SET_MAX_TRANSIT_TIME.
+    pub fn encode(&self, addressing: Addressing, out: &mut [u8]) -> Result<usize, EncodeError> {
+        let mut payload = [0; Self::LEN];
+        payload[0..2].copy_from_slice(&DescriptorType::STREAM_OUTPUT.0.to_be_bytes());
+        payload[2..4].copy_from_slice(&self.output.to_be_bytes());
+        payload[4..12].copy_from_slice(&self.nanoseconds.to_be_bytes());
+        command(addressing, AemCommandType::SET_MAX_TRANSIT_TIME, &payload).encode(out)
+    }
+}
+
+/// Encodes GET_MAX_TRANSIT_TIME for a STREAM_OUTPUT.
+pub fn encode_get_max_transit_time(
+    addressing: Addressing,
+    output: u16,
+    out: &mut [u8],
+) -> Result<usize, EncodeError> {
+    let mut payload = [0; 4];
+    payload[0..2].copy_from_slice(&DescriptorType::STREAM_OUTPUT.0.to_be_bytes());
+    payload[2..4].copy_from_slice(&output.to_be_bytes());
+    command(addressing, AemCommandType::GET_MAX_TRANSIT_TIME, &payload).encode(out)
+}
+
 /// The most octets of command specific data an AEM response carries: a
 /// control_data_length of at most 524 (9.2.1.1.7), less the controller
 /// ID, sequence ID and command type.

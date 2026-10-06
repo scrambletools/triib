@@ -90,6 +90,10 @@ struct FakeEntity {
     map_parts: u16,
     /// Its clock domains' user media clock reference priority.
     user_priority: u8,
+    /// Its stream output's max transit time, in nanoseconds.
+    transit: u64,
+    /// DISCONNECT_TX commands seen: the output and the listener's input.
+    tx_disconnects: Vec<(u16, EntityId, u16)>,
 }
 
 fn descriptor(descriptor_type: DescriptorType, index: u16, length: usize) -> Vec<u8> {
@@ -218,6 +222,8 @@ impl FakeEntity {
             mappings: Vec::new(),
             map_parts: 1,
             user_priority: 192,
+            transit: 2_000_000,
+            tx_disconnects: Vec::new(),
         }
     }
 
@@ -422,7 +428,15 @@ impl FakeEntity {
 
     /// The response to an ACMP command for this entity's stream inputs.
     fn respond_acmp(&mut self, command: &Acmpdu) -> Option<Acmpdu> {
-        if command.listener_entity_id != TALKER || !self.answers_acmp {
+        // TX commands go to the talker, RX ones to the listener; the
+        // entity is both.
+        let addressed = match command.message_type {
+            AcmpMessageType::GET_TX_STATE_COMMAND | AcmpMessageType::DISCONNECT_TX_COMMAND => {
+                command.talker_entity_id
+            }
+            _ => command.listener_entity_id,
+        };
+        if addressed != TALKER || !self.answers_acmp {
             return None;
         }
         let mut response = Acmpdu {
@@ -450,6 +464,20 @@ impl FakeEntity {
                 response.talker_entity_id = talker;
                 response.talker_unique_id = talker_unique_id;
                 response.connection_count = u16::from(bound.is_some());
+            }
+            AcmpMessageType::GET_TX_STATE_COMMAND => {
+                response.stream_id = crate::id::StreamId(0x0011_2233_4455_0000);
+                response.stream_dest_mac = MacAddress([0x91, 0xe0, 0xf0, 0x00, 0xfe, 0x01]);
+                response.connection_count = 2;
+                response.stream_vlan_id = 2;
+            }
+            AcmpMessageType::DISCONNECT_TX_COMMAND => {
+                self.tx_disconnects.push((
+                    command.talker_unique_id,
+                    command.listener_entity_id,
+                    command.listener_unique_id,
+                ));
+                response.connection_count = 1;
             }
             _ => return None,
         }
@@ -550,6 +578,21 @@ impl FakeEntity {
             if command.command_type == AemCommandType::SET_CONTROL {
                 let index = u16::from_be_bytes([payload[2], payload[3]]);
                 self.controls.push((index, payload[4..].to_vec()));
+            }
+            if matches!(
+                command.command_type,
+                AemCommandType::GET_MAX_TRANSIT_TIME | AemCommandType::SET_MAX_TRANSIT_TIME
+            ) {
+                if command.command_type == AemCommandType::SET_MAX_TRANSIT_TIME {
+                    if self.streaming {
+                        status = AemStatus::STREAM_IS_RUNNING;
+                    } else {
+                        self.transit = u64::from_be_bytes(payload[4..12].try_into().unwrap());
+                    }
+                }
+                // Either response holds the time the output has.
+                payload.truncate(4);
+                payload.extend_from_slice(&self.transit.to_be_bytes());
             }
             let response = AemPdu {
                 header: AecpHeader {
@@ -1548,6 +1591,84 @@ fn controls_are_set_and_kept_current_without_reading() {
         [(empty, Outcome::NotPossible), (long, Outcome::NotPossible)]
     );
     assert!(controller.control_values.is_empty());
+}
+
+/// A listener that went away, the talker still sending to it.
+const GONE_LISTENER: EntityId = EntityId(0x0011_22ff_fe33_4455);
+
+#[test]
+fn talkers_say_what_they_send_and_stop_when_told() {
+    let (mut controller, mut entity) = enumerated();
+    events(&mut controller);
+    let asked = controller.tx_state(at(1), (TALKER, 0));
+    let stopped = controller.disconnect_talker(at(1), (TALKER, 0), (GONE_LISTENER, 1));
+    exchange(&mut controller, &mut entity, at(1));
+    assert_eq!(
+        finished(&mut controller),
+        [(asked, Outcome::Done), (stopped, Outcome::Done)]
+    );
+    let state = controller
+        .model(TALKER)
+        .unwrap()
+        .tx_state(0)
+        .copied()
+        .unwrap();
+    assert_eq!(state.connection_count, 2);
+    assert_eq!(state.vlan_id, 2);
+    assert_eq!(
+        state.destination,
+        MacAddress([0x91, 0xe0, 0xf0, 0x00, 0xfe, 0x01])
+    );
+    assert_eq!(entity.tx_disconnects, [(0, GONE_LISTENER, 1)]);
+}
+
+#[test]
+fn max_transit_times_are_read_and_set_while_not_streaming() {
+    let (mut controller, mut entity) = enumerated();
+    events(&mut controller);
+    let time = |controller: &Controller| controller.model(TALKER).unwrap().max_transit_time(0);
+    // Read with the rest of a Milan entity.
+    assert_eq!(time(&controller), Some(2_000_000));
+    let set = controller.set_max_transit_time(at(1), TALKER, 0, 1_500_000);
+    exchange(&mut controller, &mut entity, at(1));
+    assert_eq!(finished(&mut controller), [(set, Outcome::Done)]);
+    assert_eq!(time(&controller), Some(1_500_000));
+    entity.streaming = true;
+    let refused = controller.set_max_transit_time(at(2), TALKER, 0, 500_000);
+    exchange(&mut controller, &mut entity, at(2));
+    assert_eq!(
+        finished(&mut controller),
+        [(
+            refused,
+            Outcome::Refused(Refusal::Aem(AemStatus::STREAM_IS_RUNNING))
+        )]
+    );
+    assert_eq!(time(&controller), Some(1_500_000), "the old time kept");
+}
+
+#[test]
+fn descriptors_are_read_on_request() {
+    let (mut controller, mut entity) = enumerated();
+    events(&mut controller);
+    entity.rename(DescriptorType::STREAM_INPUT, 1, "Vocal");
+    let read = controller.read_descriptor(at(1), TALKER, DescriptorType::STREAM_INPUT, 1);
+    let missing = controller.read_descriptor(at(1), TALKER, DescriptorType::STREAM_INPUT, 9);
+    exchange(&mut controller, &mut entity, at(1));
+    assert_eq!(
+        finished(&mut controller),
+        [
+            (read, Outcome::Done),
+            (
+                missing,
+                Outcome::Refused(Refusal::Aem(AemStatus::NO_SUCH_DESCRIPTOR))
+            ),
+        ]
+    );
+    let model = controller.model(TALKER).unwrap();
+    assert_eq!(
+        model.name_of(DescriptorType::STREAM_INPUT, 1),
+        Some("Vocal")
+    );
 }
 
 /// Reads the entity with a controller that knows a model cached from an

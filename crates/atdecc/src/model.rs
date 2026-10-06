@@ -5,6 +5,8 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
+use avb_net::MacAddress;
+
 use crate::acmp::AcmpFlags;
 use crate::aecp::AemStatus;
 use crate::aem::{
@@ -19,7 +21,7 @@ use crate::descriptor::{
     EntityDescriptor, LocaleDescriptor, LocalizedStringRef, SamplingRate, StreamDescriptor,
     StreamPortDescriptor, StringsDescriptor, names,
 };
-use crate::id::{ClockIdentity, EntityId};
+use crate::id::{ClockIdentity, EntityId, StreamId};
 use crate::mvu::{MediaClockReference, MilanInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -64,6 +66,17 @@ impl Binding {
     }
 }
 
+/// What a talker says of a stream output in a GET_TX_STATE response
+/// (8.2.2.6.3): the stream, where it goes and how many listen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TxState {
+    pub stream_id: StreamId,
+    pub destination: MacAddress,
+    pub connection_count: u16,
+    /// Zero when the SRP domain's VLAN applies.
+    pub vlan_id: u16,
+}
+
 /// A stream port's dynamic mappings.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct DynamicMap {
@@ -98,6 +111,8 @@ pub struct EntityModel {
     counters: BTreeMap<(DescriptorType, u16), Counters>,
     audio_maps: BTreeMap<(DescriptorType, u16), DynamicMap>,
     media_clock_references: BTreeMap<u16, MediaClockReference>,
+    tx_states: BTreeMap<u16, TxState>,
+    max_transit_times: BTreeMap<u16, u64>,
 }
 
 impl EntityModel {
@@ -207,6 +222,18 @@ impl EntityModel {
         crate::control::write_current(bytes, values) && *bytes != before
     }
 
+    /// Records what the talker says of a stream output, returning whether
+    /// it changed.
+    pub(crate) fn set_tx_state(&mut self, output: u16, state: TxState) -> bool {
+        self.tx_states.insert(output, state) != Some(state)
+    }
+
+    /// Records a stream output's max transit time, returning whether it
+    /// changed.
+    pub(crate) fn set_max_transit_time(&mut self, output: u16, nanoseconds: u64) -> bool {
+        self.max_transit_times.insert(output, nanoseconds) != Some(nanoseconds)
+    }
+
     /// Records a stream input's binding, returning whether it changed.
     pub(crate) fn set_binding(&mut self, input: u16, binding: Binding) -> bool {
         self.bindings.insert(input, binding) != Some(binding)
@@ -310,6 +337,16 @@ impl EntityModel {
     /// What the stream input with `index` is bound to, once known.
     pub fn binding(&self, input: u16) -> Option<&Binding> {
         self.bindings.get(&input)
+    }
+
+    /// What the talker last said of a stream output, when asked.
+    pub fn tx_state(&self, output: u16) -> Option<&TxState> {
+        self.tx_states.get(&output)
+    }
+
+    /// A stream output's max transit time in nanoseconds, once read.
+    pub fn max_transit_time(&self, output: u16) -> Option<u64> {
+        self.max_transit_times.get(&output).copied()
     }
 
     /// The dynamic state of a STREAM_INPUT or STREAM_OUTPUT, once read.

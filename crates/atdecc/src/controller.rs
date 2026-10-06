@@ -20,8 +20,8 @@ use crate::adp::{AdpMessageType, Adpdu, ControllerCapabilities, EntityCapabiliti
 use crate::aecp::{AecpMessageType, AemCommandType, AemPdu, AemStatus, VendorUniquePdu};
 use crate::aem::{
     self, Addressing, AsPath, AudioMap, AudioMapping, AudioMappings, AvbInfo, Counters,
-    DynamicQuery, MappingChange, ReadDescriptorResponse, SetClockSource, SetName, SetSamplingRate,
-    SetStreamFormat, StreamInfo,
+    DynamicQuery, MappingChange, MaxTransitTime, ReadDescriptorResponse, SetClockSource, SetName,
+    SetSamplingRate, SetStreamFormat, StreamInfo,
 };
 use crate::cache::{CachedModel, ModelKey};
 use crate::descriptor::{
@@ -30,7 +30,7 @@ use crate::descriptor::{
 };
 use crate::error::{DecodeError, EncodeError};
 use crate::id::{EntityId, EntityModelId};
-use crate::model::{Binding, EntityModel, EnumerationFailure, EnumerationState};
+use crate::model::{Binding, EntityModel, EnumerationFailure, EnumerationState, TxState};
 use crate::mvu::{self, MediaClockReference, MilanInfo, MvuCommandType, MvuMessage};
 use crate::pdu::{self, Pdu};
 use crate::stream_format::StreamFormat;
@@ -108,6 +108,9 @@ pub struct Config {
     /// counters once an entity is read; Milan entities then report
     /// changes.
     pub read_counters: bool,
+    /// Ask each Milan entity's stream outputs for their max transit time
+    /// once it is read.
+    pub read_transit_times: bool,
     /// Advertise the controller with ADP.
     pub advertise: Option<Advertise>,
     /// The first sequence ID of AEM and of MVU commands.
@@ -126,6 +129,7 @@ impl Config {
             read_mappings: true,
             media_clock_info: true,
             read_counters: true,
+            read_transit_times: true,
             advertise: None,
             first_sequence_id: 0,
             random_seed: entity_id.0,
@@ -307,6 +311,33 @@ enum Request {
         index: u16,
         command: CommandId,
     },
+    /// GET_TX_STATE to a talker about a stream output.
+    GetTxState {
+        output: u16,
+        command: Option<CommandId>,
+    },
+    /// DISCONNECT_TX to a talker, for a listener's stream input, without
+    /// the listener taking part.
+    DisconnectTx {
+        output: u16,
+        listener: EntityId,
+        listener_unique_id: u16,
+        command: CommandId,
+    },
+    GetMaxTransitTime {
+        output: u16,
+        command: Option<CommandId>,
+    },
+    SetMaxTransitTime {
+        set: MaxTransitTime,
+        command: CommandId,
+    },
+    /// READ_DESCRIPTOR the caller asked for, outside enumeration.
+    ReadForCaller {
+        descriptor_type: DescriptorType,
+        index: u16,
+        command: CommandId,
+    },
     /// What changes on an entity whose descriptors came from the cache.
     GetDynamicInfo {
         queries: [DynamicQuery; MAX_DYNAMIC_QUERIES],
@@ -326,9 +357,11 @@ impl Request {
     fn channel(self) -> Channel {
         match self {
             Request::GetMilanInfo | Request::GetMediaClockReference { .. } => Channel::Mvu,
-            Request::GetRxState { .. } | Request::Bind { .. } | Request::Unbind { .. } => {
-                Channel::Acmp
-            }
+            Request::GetRxState { .. }
+            | Request::Bind { .. }
+            | Request::Unbind { .. }
+            | Request::GetTxState { .. }
+            | Request::DisconnectTx { .. } => Channel::Acmp,
             _ => Channel::Aem,
         }
     }
@@ -338,6 +371,8 @@ impl Request {
         match self {
             Request::GetRxState { .. } => Some(AcmpMessageType::GET_RX_STATE_COMMAND),
             Request::Bind { .. } => Some(AcmpMessageType::CONNECT_RX_COMMAND),
+            Request::GetTxState { .. } => Some(AcmpMessageType::GET_TX_STATE_COMMAND),
+            Request::DisconnectTx { .. } => Some(AcmpMessageType::DISCONNECT_TX_COMMAND),
             Request::Unbind { .. } => Some(AcmpMessageType::DISCONNECT_RX_COMMAND),
             _ => None,
         }
@@ -353,8 +388,13 @@ impl Request {
             | Request::SetSamplingRate { command, .. }
             | Request::SetClockSource { command, .. }
             | Request::SetControl { command, .. }
+            | Request::DisconnectTx { command, .. }
+            | Request::SetMaxTransitTime { command, .. }
+            | Request::ReadForCaller { command, .. }
             | Request::ChangeMappings { command, .. } => Some(command),
-            Request::Identify { command, .. } => command,
+            Request::Identify { command, .. }
+            | Request::GetTxState { command, .. }
+            | Request::GetMaxTransitTime { command, .. } => command,
             _ => None,
         }
     }
@@ -879,6 +919,39 @@ impl Controller {
             Request::GetDynamicInfo { queries, count } => {
                 self.dynamic_info_answered(entity_id, &queries[..usize::from(count)], Some(aem));
             }
+            Request::GetMaxTransitTime { output, command } => {
+                if aem.status().is_success() {
+                    self.store_max_transit_time(entity_id, output, aem.payload);
+                }
+                if let Some(command) = command {
+                    self.events
+                        .push_back(Event::CommandFinished(command, aem_outcome(aem)));
+                }
+            }
+            Request::SetMaxTransitTime { set, command } => {
+                // The response holds the time the output has after, set
+                // or not.
+                self.store_max_transit_time(entity_id, set.output, aem.payload);
+                self.events
+                    .push_back(Event::CommandFinished(command, aem_outcome(aem)));
+            }
+            Request::ReadForCaller {
+                descriptor_type,
+                index,
+                command,
+            } => {
+                let response = ReadDescriptorResponse::decode(aem.payload);
+                if aem.status().is_success()
+                    && let Some(response) = matching(response, descriptor_type, index)
+                    && let Some(model) = self.models.get_mut(&entity_id)
+                    && model.store(descriptor_type, index, response.descriptor)
+                    && model.state == EnumerationState::Complete
+                {
+                    self.events.push_back(Event::EntityModelChanged(entity_id));
+                }
+                self.events
+                    .push_back(Event::CommandFinished(command, aem_outcome(aem)));
+            }
             Request::GetAudioMap {
                 descriptor_type,
                 index,
@@ -931,7 +1004,9 @@ impl Controller {
             | Request::GetMediaClockReference { .. }
             | Request::GetRxState { .. }
             | Request::Bind { .. }
-            | Request::Unbind { .. } => {}
+            | Request::Unbind { .. }
+            | Request::GetTxState { .. }
+            | Request::DisconnectTx { .. } => {}
         }
         self.check_complete(entity_id);
     }
@@ -1101,9 +1176,15 @@ impl Controller {
             return;
         }
         let key = (Channel::Acmp, acmpdu.sequence_id);
+        // TX commands go to the talker, RX ones to the listener.
+        let addressed = if to_talker(acmpdu.message_type) {
+            acmpdu.talker_entity_id
+        } else {
+            acmpdu.listener_entity_id
+        };
         if acmpdu.controller_entity_id == self.config.entity_id
             && let Some(inflight) = self.inflight.get(&key).copied()
-            && inflight.entity_id == acmpdu.listener_entity_id
+            && inflight.entity_id == addressed
             && inflight
                 .request
                 .acmp_message()
@@ -1111,6 +1192,22 @@ impl Controller {
                 == Some(acmpdu.message_type)
         {
             self.complete(key, inflight);
+            if let Request::GetTxState { output, .. } = inflight.request
+                && acmpdu.status.is_success()
+                && acmpdu.talker_unique_id == output
+            {
+                let state = TxState {
+                    stream_id: acmpdu.stream_id,
+                    destination: acmpdu.stream_dest_mac,
+                    connection_count: acmpdu.connection_count,
+                    vlan_id: acmpdu.stream_vlan_id,
+                };
+                if let Some(model) = self.models.get_mut(&addressed)
+                    && model.set_tx_state(output, state)
+                {
+                    self.events.push_back(Event::EntityModelChanged(addressed));
+                }
+            }
             if let Some(command) = inflight.request.command() {
                 let outcome = if acmpdu.status.is_success() {
                     Outcome::Done
@@ -1606,6 +1703,16 @@ impl Controller {
                 }
             }
         }
+        // How long each stream output's frames may take, which Milan
+        // talkers report.
+        if self.config.read_transit_times && model.milan.is_some() {
+            for (output, _) in model.descriptors(DescriptorType::STREAM_OUTPUT) {
+                session.queue.push_back(Request::GetMaxTransitTime {
+                    output,
+                    command: None,
+                });
+            }
+        }
         // How each clock domain stands in media clock management.
         if self.config.media_clock_info && model.milan.is_some() {
             for (domain, _) in model.descriptors(DescriptorType::CLOCK_DOMAIN) {
@@ -1683,6 +1790,12 @@ impl Controller {
             }
             // Reading a map changes nothing; its descriptor needs no read.
             AemCommandType::GET_AUDIO_MAP => return,
+            AemCommandType::SET_MAX_TRANSIT_TIME | AemCommandType::GET_MAX_TRANSIT_TIME => {
+                if let Ok(time) = MaxTransitTime::decode(aem.payload) {
+                    self.store_max_transit_time(entity_id, time.output, aem.payload);
+                }
+                return;
+            }
             AemCommandType::SET_CONTROL | AemCommandType::GET_CONTROL => {
                 if let Some((DescriptorType::CONTROL, index)) = aem::target_descriptor(aem.payload)
                     && let Some(values) = control_values(aem.payload, index)
@@ -1830,6 +1943,48 @@ impl Controller {
             Request::SetStreamFormat { set, .. } => set.encode(addressing, &mut out),
             Request::SetSamplingRate { set, .. } => set.encode(addressing, &mut out),
             Request::SetClockSource { set, .. } => set.encode(addressing, &mut out),
+            Request::GetMaxTransitTime { output, .. } => {
+                aem::encode_get_max_transit_time(addressing, output, &mut out)
+            }
+            Request::SetMaxTransitTime { set, .. } => set.encode(addressing, &mut out),
+            Request::ReadForCaller {
+                descriptor_type,
+                index,
+                ..
+            } => {
+                let configuration = self
+                    .models
+                    .get(&inflight.entity_id)
+                    .map_or(0, |model| model.configuration);
+                aem::encode_read_descriptor(
+                    addressing,
+                    configuration,
+                    descriptor_type,
+                    index,
+                    &mut out,
+                )
+            }
+            Request::GetTxState { output, .. } => Acmpdu::command(
+                AcmpMessageType::GET_TX_STATE_COMMAND,
+                addressing.controller,
+                (addressing.target, output),
+                (EntityId(0), 0),
+                sequence_id,
+            )
+            .encode(&mut out),
+            Request::DisconnectTx {
+                output,
+                listener,
+                listener_unique_id,
+                ..
+            } => Acmpdu::command(
+                AcmpMessageType::DISCONNECT_TX_COMMAND,
+                addressing.controller,
+                (addressing.target, output),
+                (listener, listener_unique_id),
+                sequence_id,
+            )
+            .encode(&mut out),
             Request::SetControl { index, command } => aem::encode_set_control(
                 addressing,
                 index,
@@ -2075,6 +2230,111 @@ impl Controller {
             self.control_values.remove(&command);
         }
         command
+    }
+
+    /// Asks a talker what it has of a stream output (GET_TX_STATE): its
+    /// stream ID, destination, VLAN and how many listen, which the model
+    /// then holds.
+    pub fn tx_state(&mut self, now: Instant, talker: (EntityId, u16)) -> CommandId {
+        let command = self.next_command();
+        let request = Request::GetTxState {
+            output: talker.1,
+            command: Some(command),
+        };
+        self.queue_command(now, talker.0, command, request);
+        command
+    }
+
+    /// Tells a talker to stop sending a stream output to a listener's
+    /// stream input (DISCONNECT_TX), without the listener: for a talker
+    /// still sending to a listener that went away.
+    pub fn disconnect_talker(
+        &mut self,
+        now: Instant,
+        talker: (EntityId, u16),
+        listener: (EntityId, u16),
+    ) -> CommandId {
+        let command = self.next_command();
+        let request = Request::DisconnectTx {
+            output: talker.1,
+            listener: listener.0,
+            listener_unique_id: listener.1,
+            command,
+        };
+        self.queue_command(now, talker.0, command, request);
+        command
+    }
+
+    /// Reads a stream output's max transit time (GET_MAX_TRANSIT_TIME)
+    /// into the model.
+    pub fn max_transit_time(
+        &mut self,
+        now: Instant,
+        entity_id: EntityId,
+        output: u16,
+    ) -> CommandId {
+        let command = self.next_command();
+        let request = Request::GetMaxTransitTime {
+            output,
+            command: Some(command),
+        };
+        self.queue_command(now, entity_id, command, request);
+        command
+    }
+
+    /// Sets a stream output's max transit time in nanoseconds
+    /// (SET_MAX_TRANSIT_TIME), zero for the entity's default; only while
+    /// the stream is not running.
+    pub fn set_max_transit_time(
+        &mut self,
+        now: Instant,
+        entity_id: EntityId,
+        output: u16,
+        nanoseconds: u64,
+    ) -> CommandId {
+        let command = self.next_command();
+        let request = Request::SetMaxTransitTime {
+            set: MaxTransitTime {
+                output,
+                nanoseconds,
+            },
+            command,
+        };
+        self.queue_command(now, entity_id, command, request);
+        command
+    }
+
+    /// Reads a descriptor again (READ_DESCRIPTOR) into the model, whatever
+    /// enumeration read; the command finishes when the entity answers.
+    pub fn read_descriptor(
+        &mut self,
+        now: Instant,
+        entity_id: EntityId,
+        descriptor_type: DescriptorType,
+        index: u16,
+    ) -> CommandId {
+        let command = self.next_command();
+        let request = Request::ReadForCaller {
+            descriptor_type,
+            index,
+            command,
+        };
+        self.queue_command(now, entity_id, command, request);
+        command
+    }
+
+    /// Takes the max transit time a response or notification carries for
+    /// a stream output into the model.
+    fn store_max_transit_time(&mut self, entity_id: EntityId, output: u16, payload: &[u8]) {
+        if let Ok(time) = MaxTransitTime::decode(payload)
+            && time.output == output
+            && let Some(model) = self.models.get_mut(&entity_id)
+            && model.has(DescriptorType::STREAM_OUTPUT, output)
+            && model.set_max_transit_time(output, time.nanoseconds)
+            && model.state == EnumerationState::Complete
+        {
+            self.events.push_back(Event::EntityModelChanged(entity_id));
+        }
     }
 
     /// Forgets what a caller's command was to send, once it is answered or
@@ -2415,6 +2675,15 @@ impl Controller {
     }
 }
 
+/// Whether an ACMP message goes to or comes from the talker: the TX
+/// commands and their responses.
+fn to_talker(message: AcmpMessageType) -> bool {
+    matches!(
+        message.0 & !1,
+        0 | 2 | 4 | 12 // CONNECT_TX, DISCONNECT_TX, GET_TX_STATE, GET_TX_CONNECTION
+    )
+}
+
 /// The values a SET_CONTROL or GET_CONTROL response or notification for
 /// CONTROL `index` carries.
 fn control_values(payload: &[u8], index: u16) -> Option<&[u8]> {
@@ -2439,6 +2708,9 @@ fn command_type_of(request: Request) -> AemCommandType {
         Request::SetSamplingRate { .. } => AemCommandType::SET_SAMPLING_RATE,
         Request::SetClockSource { .. } => AemCommandType::SET_CLOCK_SOURCE,
         Request::SetControl { .. } => AemCommandType::SET_CONTROL,
+        Request::GetMaxTransitTime { .. } => AemCommandType::GET_MAX_TRANSIT_TIME,
+        Request::SetMaxTransitTime { .. } => AemCommandType::SET_MAX_TRANSIT_TIME,
+        Request::ReadForCaller { .. } => AemCommandType::READ_DESCRIPTOR,
         Request::GetDynamicInfo { .. } => AemCommandType::GET_DYNAMIC_INFO,
         Request::GetAudioMap { .. } => AemCommandType::GET_AUDIO_MAP,
         Request::ChangeMappings { change, .. } => change.command_type(),
@@ -2447,7 +2719,9 @@ fn command_type_of(request: Request) -> AemCommandType {
         | Request::GetMediaClockReference { .. }
         | Request::GetRxState { .. }
         | Request::Bind { .. }
-        | Request::Unbind { .. } => AemCommandType(0xffff),
+        | Request::Unbind { .. }
+        | Request::GetTxState { .. }
+        | Request::DisconnectTx { .. } => AemCommandType(0xffff),
     }
 }
 

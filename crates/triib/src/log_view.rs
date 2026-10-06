@@ -22,6 +22,7 @@ use scramble_ui::icon::{self, Icon};
 use scramble_ui::{component, style};
 
 use crate::app::{Message, Triib};
+use crate::describe;
 
 /// The most frames kept, the oldest dropped past it.
 pub const LIMIT: usize = 5000;
@@ -151,38 +152,8 @@ impl Line {
     }
 }
 
-/// A standard name in words: "READ_DESCRIPTOR" as "Read descriptor",
-/// keeping acronyms.
-fn words(name: &str) -> String {
-    sentence(name, true)
-}
-
-/// A standard name in words, capitalized when it starts a sentence:
-/// "AVB_INTERFACE" as "AVB interface", "STREAM_INPUT" as "stream input".
-fn sentence(name: &str, capital: bool) -> String {
-    const ACRONYMS: [&str; 9] = ["RX", "TX", "AVB", "AS", "ID", "MVU", "AEM", "ACMP", "MSRP"];
-    let mut text = String::new();
-    for (place, word) in name.split('_').enumerate() {
-        if place > 0 {
-            text.push(' ');
-        }
-        if ACRONYMS.contains(&word) {
-            text.push_str(word);
-        } else if place == 0 && capital {
-            let mut letters = word.chars();
-            if let Some(first) = letters.next() {
-                text.push(first);
-                text.push_str(&letters.as_str().to_lowercase());
-            }
-        } else {
-            text.push_str(&word.to_lowercase());
-        }
-    }
-    text
-}
-
 fn named(name: Option<&str>, raw: impl std::fmt::Display) -> String {
-    name.map_or_else(|| format!("type {raw}"), words)
+    name.map_or_else(|| format!("type {raw}"), describe::flag_name)
 }
 
 /// The descriptor an AEM command or response is about, where its
@@ -256,7 +227,7 @@ pub fn describe(triib: &Triib, frame: &Frame) -> Line {
             if let Some((descriptor_type, index)) = aem_target(&aem) {
                 let kind = descriptor_type.name().map_or_else(
                     || format!("descriptor {}", descriptor_type.0),
-                    |name| sentence(name, false),
+                    |name| describe::name_words(name, false),
                 );
                 summary.push_str(&format!(", {kind} {index}"));
             }

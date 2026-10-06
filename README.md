@@ -37,6 +37,14 @@ cargo run -p triib-cli -- maps <interface> [entity-id]
 cargo run -p triib-cli -- map <interface> <entity-id> <add|remove> <stream-port-input:N|stream-port-output:N> <stream:channel=cluster:channel>...
 cargo run -p triib-cli -- controls <interface> [entity-id]
 cargo run -p triib-cli -- control <interface> <entity-id> <control> <value>...
+cargo run -p triib-cli -- connect <interface> <talker-id>:<output> <listener-id>:<input>
+cargo run -p triib-cli -- disconnect <interface> <listener-id>:<input>
+cargo run -p triib-cli -- disconnect-talker <interface> <talker-id>:<output> <listener-id>:<input>
+cargo run -p triib-cli -- identify <interface> <entity-id> [seconds]
+cargo run -p triib-cli -- streams <interface> <entity-id>
+cargo run -p triib-cli -- transit <interface> <entity-id> <output> [nanoseconds]
+cargo run -p triib-cli -- descriptor <interface> <entity-id> <type:index>
+cargo run -p triib-cli -- harvest <interface> <entity-id> [repeat]
 ```
 
 triib uses [scramble-ui](https://github.com/scrambletools/scramble-ui)

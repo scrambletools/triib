@@ -2,8 +2,8 @@
 //! reads their descriptors, maps the network from their gPTP paths,
 //! renames entities, changes stream formats, sampling rates and clock
 //! sources, shows the media clock each entity follows, shows and changes
-//! how channels map to streams, and shows and sets controls; connections
-//! follow as the engine grows.
+//! how channels map to streams, shows and sets controls, connects and
+//! disconnects streams, and reads what streams and descriptors hold.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::ExitCode;
@@ -53,6 +53,30 @@ commands:
                                      the port as stream-port-input:0 and each
                                      mapping as stream:channel=cluster:channel,
                                      the cluster counted from the port's first
+  connect <interface> <talker-id>:<output> <listener-id>:<input>
+                                     bind a listener's stream input to a
+                                     talker's stream output
+  disconnect <interface> <listener-id>:<input>
+                                     unbind a listener's stream input
+  disconnect-talker <interface> <talker-id>:<output> <listener-id>:<input>
+                                     tell a talker to stop sending to a
+                                     listener, as when the listener is gone
+  identify <interface> <entity-id> [seconds]
+                                     make an entity identify itself, for 5
+                                     seconds by default
+  streams <interface> <entity-id>    print each stream's state: binding, stream
+                                     ID, destination, VLAN, latency, and for
+                                     outputs what the talker sends and their
+                                     max transit time
+  transit <interface> <entity-id> <output> [nanoseconds]
+                                     print or set a stream output's max transit
+                                     time, 0 for the entity's default
+  descriptor <interface> <entity-id> <type:index>
+                                     read a descriptor again and print its
+                                     octets, the type as in name
+  harvest <interface> <entity-id> [repeat]
+                                     read index 0 of each descriptor type the
+                                     entity has and print how long each took
   controls <interface> [entity-id]   print each control's values and ranges
   control <interface> <entity-id> <control> <value>...
                                      set a control by its index, each value in
@@ -126,6 +150,111 @@ fn main() -> ExitCode {
                 return usage();
             };
             set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("connect") => {
+            let (Some(interface), Some(Some(talker)), Some(Some(listener))) = (
+                argument(1),
+                argument(2).map(stream_reference),
+                argument(3).map(stream_reference),
+            ) else {
+                return usage();
+            };
+            let change = Change::Connect {
+                talker,
+                input: listener.1,
+            };
+            set(interface, listener.0, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("disconnect") => {
+            let (Some(interface), Some(Some(listener))) =
+                (argument(1), argument(2).map(stream_reference))
+            else {
+                return usage();
+            };
+            let change = Change::Disconnect { input: listener.1 };
+            set(interface, listener.0, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("disconnect-talker") => {
+            let (Some(interface), Some(Some(talker)), Some(Some(listener))) = (
+                argument(1),
+                argument(2).map(stream_reference),
+                argument(3).map(stream_reference),
+            ) else {
+                return usage();
+            };
+            let change = Change::DisconnectTalker {
+                output: talker.1,
+                listener,
+            };
+            set(interface, talker.0, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("identify") => {
+            let (Some(interface), Some(Ok(entity))) =
+                (argument(1), argument(2).map(str::parse::<EntityId>))
+            else {
+                return usage();
+            };
+            let seconds = match argument(3).map(str::parse::<u64>) {
+                None => 5,
+                Some(Ok(seconds)) => seconds,
+                Some(Err(_)) => return usage(),
+            };
+            set(interface, entity, Change::Identify { seconds })
+                .map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("streams") => {
+            let (Some(interface), Some(Ok(entity))) =
+                (argument(1), argument(2).map(str::parse::<EntityId>))
+            else {
+                return usage();
+            };
+            streams(interface, entity).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("transit") => {
+            let (Some(interface), Some(Ok(entity)), Some(Ok(output))) = (
+                argument(1),
+                argument(2).map(str::parse::<EntityId>),
+                argument(3).map(str::parse::<u16>),
+            ) else {
+                return usage();
+            };
+            let nanoseconds = match argument(4).map(str::parse::<u64>) {
+                None => None,
+                Some(Ok(nanoseconds)) => Some(nanoseconds),
+                Some(Err(_)) => return usage(),
+            };
+            let change = Change::Transit {
+                output,
+                nanoseconds,
+            };
+            set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("descriptor") => {
+            let (Some(interface), Some(Ok(entity)), Some(Some((descriptor_type, index)))) = (
+                argument(1),
+                argument(2).map(str::parse::<EntityId>),
+                argument(3).map(descriptor),
+            ) else {
+                return usage();
+            };
+            let change = Change::Read {
+                descriptor_type,
+                index,
+            };
+            set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
+        }
+        Some("harvest") => {
+            let (Some(interface), Some(Ok(entity))) =
+                (argument(1), argument(2).map(str::parse::<EntityId>))
+            else {
+                return usage();
+            };
+            let repeat = match argument(3).map(str::parse::<u32>) {
+                None => 1,
+                Some(Ok(repeat)) if repeat > 0 => repeat,
+                Some(_) => return usage(),
+            };
+            harvest(interface, entity, repeat).map_err(|error| format!("{interface}: {error}"))
         }
         Some("controls") => {
             let Some(interface) = argument(1) else {
@@ -387,6 +516,33 @@ enum Change {
         index: u16,
         values: Vec<String>,
     },
+    /// Bind the entity's stream input to a talker's stream output.
+    Connect {
+        talker: (EntityId, u16),
+        input: u16,
+    },
+    Disconnect {
+        input: u16,
+    },
+    /// Tell the entity, a talker, to stop sending a stream output to a
+    /// listener's stream input.
+    DisconnectTalker {
+        output: u16,
+        listener: (EntityId, u16),
+    },
+    Identify {
+        seconds: u64,
+    },
+    /// Read a stream output's max transit time, or set it.
+    Transit {
+        output: u16,
+        nanoseconds: Option<u64>,
+    },
+    /// Read a descriptor again.
+    Read {
+        descriptor_type: DescriptorType,
+        index: u16,
+    },
 }
 
 impl Change {
@@ -474,6 +630,175 @@ impl Change {
 
 /// A descriptor named as type:index, the type as the standard names it in
 /// lower case with dashes, such as stream-input:1.
+/// An entity and one of its streams, as `0xe8f60ae092200000:1`.
+fn stream_reference(text: &str) -> Option<(EntityId, u16)> {
+    let (entity, index) = text.rsplit_once(':')?;
+    Some((entity.parse().ok()?, index.parse().ok()?))
+}
+
+/// Octets as rows of 16 in hex, each with its offset.
+fn print_octets(bytes: &[u8]) {
+    for (row, chunk) in bytes.chunks(16).enumerate() {
+        let octets: Vec<String> = chunk.iter().map(|octet| format!("{octet:02x}")).collect();
+        println!("  {:04x}  {}", row * 16, octets.join(" "));
+    }
+}
+
+/// Reads an entity and prints each stream's state, asking the talker
+/// what it sends of each output first.
+fn streams(interface: &str, entity: EntityId) -> std::io::Result<()> {
+    const LIMIT: Duration = Duration::from_secs(10);
+    let mut driver = read(interface, Some(entity))?;
+    let Some(found) = driver.controller().entity(entity).copied() else {
+        println!("{entity} not found");
+        return driver.close();
+    };
+    let outputs: Vec<u16> = driver
+        .controller()
+        .model(entity)
+        .map(|model| model.streams(false).map(|stream| stream.index).collect())
+        .unwrap_or_default();
+    let now = driver.now();
+    let mut waiting: BTreeSet<_> = outputs
+        .iter()
+        .map(|&output| driver.controller_mut().tx_state(now, (entity, output)))
+        .collect();
+    let started = Instant::now();
+    while !waiting.is_empty() && started.elapsed() < LIMIT {
+        driver.turn(Duration::from_millis(100))?;
+        while let Some(event) = driver.controller_mut().poll_event() {
+            if let Event::CommandFinished(command, _) = event {
+                waiting.remove(&command);
+            }
+        }
+    }
+    println!("{}", summary(&found));
+    let controller = driver.controller();
+    let Some(model) = controller.model(entity) else {
+        println!("  no AEM model");
+        return driver.close();
+    };
+    for input in [true, false] {
+        for stream in model.streams(input) {
+            let side = if input { "input " } else { "output" };
+            let name = model
+                .name_of(stream.descriptor_type, stream.index)
+                .unwrap_or_default();
+            println!(
+                "  {side} {:<3} \"{name}\"  {}",
+                stream.index, stream.current_format
+            );
+            if input {
+                match model
+                    .binding(stream.index)
+                    .and_then(|binding| binding.talker_stream())
+                {
+                    Some((talker, output)) => println!("      bound to {talker} output {output}"),
+                    None => println!("      not bound"),
+                }
+            }
+            if let Some(info) = model.stream_info(stream.descriptor_type, stream.index) {
+                println!(
+                    "      stream {}  to {}  VLAN {}  flags {}",
+                    info.stream_id,
+                    info.stream_dest_mac,
+                    info.stream_vlan_id,
+                    info.flags.names().collect::<Vec<_>>().join(" ")
+                );
+                if input && info.registering() {
+                    println!(
+                        "      {} us accumulated latency",
+                        info.msrp_accumulated_latency / 1000
+                    );
+                }
+            }
+            if !input {
+                if let Some(state) = model.tx_state(stream.index) {
+                    let plural = if state.connection_count == 1 { "" } else { "s" };
+                    println!(
+                        "      sends {} to {}, VLAN {}, {} listener{plural}",
+                        state.stream_id, state.destination, state.vlan_id, state.connection_count
+                    );
+                }
+                if let Some(nanoseconds) = model.max_transit_time(stream.index) {
+                    println!(
+                        "      max transit time {nanoseconds} ns ({:.3} ms)",
+                        nanoseconds as f64 / 1e6
+                    );
+                }
+            }
+        }
+    }
+    driver.close()
+}
+
+/// Reads an entity, then index 0 of each descriptor type it has, `repeat`
+/// times, printing how each read went and how long it took.
+fn harvest(interface: &str, entity: EntityId, repeat: u32) -> std::io::Result<()> {
+    const LIMIT: Duration = Duration::from_secs(10);
+    let mut driver = read(interface, Some(entity))?;
+    let Some(model) = driver.controller().model(entity) else {
+        println!("{entity} not found or without an AEM model");
+        return driver.close();
+    };
+    let mut types = vec![
+        (DescriptorType::ENTITY, 0),
+        (DescriptorType::CONFIGURATION, model.configuration),
+    ];
+    if let Some(configuration) = model.configuration() {
+        types.extend(
+            configuration
+                .descriptor_counts()
+                .filter(|&(_, count)| count > 0)
+                .map(|(descriptor_type, _)| (descriptor_type, 0)),
+        );
+    }
+    println!(
+        "{:<24} {:<22} {:>9} {:>7}",
+        "descriptor", "status", "ms", "octets"
+    );
+    for (descriptor_type, index) in types {
+        for _ in 0..repeat {
+            let started = Instant::now();
+            let now = driver.now();
+            let command =
+                driver
+                    .controller_mut()
+                    .read_descriptor(now, entity, descriptor_type, index);
+            let outcome = loop {
+                driver.turn(Duration::from_millis(20))?;
+                let finished = std::iter::from_fn(|| driver.controller_mut().poll_event())
+                    .find_map(|event| match event {
+                        Event::CommandFinished(finished, outcome) if finished == command => {
+                            Some(outcome)
+                        }
+                        _ => None,
+                    });
+                if finished.is_some() || started.elapsed() >= LIMIT {
+                    break finished;
+                }
+            };
+            let elapsed = started.elapsed().as_secs_f64() * 1000.0;
+            let status = match outcome {
+                Some(Outcome::Done) => "done".to_owned(),
+                Some(Outcome::Refused(Refusal::Aem(status))) => format!("{status:?}"),
+                Some(other) => format!("{other:?}"),
+                None => "no answer".to_owned(),
+            };
+            let octets = driver
+                .controller()
+                .model(entity)
+                .and_then(|model| model.descriptor(descriptor_type, index))
+                .map_or(0, <[u8]>::len);
+            println!(
+                "{:<24} {status:<22} {elapsed:>9.1} {octets:>7}",
+                format!("{descriptor_type:?} {index}")
+            );
+        }
+    }
+    driver.close()
+}
+
 fn descriptor(text: &str) -> Option<(DescriptorType, u16)> {
     let (name, index) = text.split_once(':')?;
     let wanted = name.replace('-', "_").to_uppercase();
@@ -541,6 +866,23 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
         Change::Control { index, .. } => {
             controller.set_control(now, entity, *index, &control_values)
         }
+        Change::Connect { talker, input } => controller.connect(now, *talker, (entity, *input)),
+        Change::Disconnect { input } => controller.disconnect(now, (entity, *input)),
+        Change::DisconnectTalker { output, listener } => {
+            controller.disconnect_talker(now, (entity, *output), *listener)
+        }
+        Change::Identify { seconds } => {
+            controller.identify(now, entity, Duration::from_secs(*seconds))
+        }
+        Change::Transit {
+            output,
+            nanoseconds: Some(nanoseconds),
+        } => controller.set_max_transit_time(now, entity, *output, *nanoseconds),
+        Change::Transit { output, .. } => controller.max_transit_time(now, entity, *output),
+        Change::Read {
+            descriptor_type,
+            index,
+        } => controller.read_descriptor(now, entity, *descriptor_type, *index),
     };
     let started = Instant::now();
     let outcome = loop {
@@ -631,6 +973,38 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
                     print_control(model, &control);
                 }
             }
+            Change::Connect { input, .. } | Change::Disconnect { input } => {
+                match model
+                    .binding(input)
+                    .and_then(|binding| binding.talker_stream())
+                {
+                    Some((talker, output)) => {
+                        println!("input {input} now bound to {talker} output {output}")
+                    }
+                    None => println!("input {input} now not bound"),
+                }
+            }
+            Change::Transit { output, .. } => match model.max_transit_time(output) {
+                Some(nanoseconds) => println!(
+                    "output {output} max transit time now {nanoseconds} ns ({:.3} ms)",
+                    nanoseconds as f64 / 1e6
+                ),
+                None => println!("output {output} max transit time not known"),
+            },
+            Change::Read {
+                descriptor_type,
+                index,
+            } => {
+                if let Some(bytes) = model.descriptor(descriptor_type, index) {
+                    let name = model
+                        .name_of(descriptor_type, index)
+                        .map(|name| format!(", \"{name}\""))
+                        .unwrap_or_default();
+                    println!("{descriptor_type:?} {index}{name}, {} octets", bytes.len());
+                    print_octets(bytes);
+                }
+            }
+            Change::DisconnectTalker { .. } | Change::Identify { .. } => {}
         }
     }
     driver.close()
