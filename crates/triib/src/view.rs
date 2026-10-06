@@ -14,7 +14,7 @@ use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::stream_format::StreamFormat;
 use atdecc::{DiscoveredEntity, EntityCapabilities, EntityId};
 use avb_net::Interface;
-use iced::widget::{container, rule, space, text_input};
+use iced::widget::{container, space, text_input};
 use iced::{Center, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component::{self, TOOLBAR_HEIGHT};
@@ -1165,7 +1165,7 @@ fn flags_text<'a>(names: impl Iterator<Item = &'a str>) -> String {
 
 fn status_bar(triib: &Triib) -> Element<'_, Message> {
     iced::widget::responsive(move |size| status_bar_at(triib, size.width))
-        .height(STATUS_BAR_HEIGHT + 1.0)
+        .height(STATUS_BAR_HEIGHT)
         .into()
 }
 
@@ -1197,43 +1197,40 @@ fn status_bar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         NetworkState::Failed(failure) if failure.fix.is_some() => "Permission needed".to_owned(),
         NetworkState::Failed(_) => "Stopped by an error".to_owned(),
     };
-    iced::widget::column![
-        rule::horizontal(1).style(style::divider),
-        container(
-            iced::widget::row![
-                if full {
-                    Element::from(label(link))
-                } else {
-                    Element::from(space())
-                },
-                space::horizontal(),
-                match notice {
-                    Some(notice) => iced::widget::row![
-                        styled(notice, Type::LabelMedium).style(style::error_text),
-                        button::icon_button(Icon::Close).on_press(Message::DismissNotice),
-                    ]
-                    .spacing(4)
-                    .align_y(Center)
-                    .into(),
-                    None => Element::from(space()),
-                },
-                label(entities),
-                label(state),
-            ]
-            .spacing(if full { 24 } else { 16 })
-            .align_y(Center),
-        )
-        .padding([0, 16])
-        .height(STATUS_BAR_HEIGHT)
-        .align_y(Center)
-        .style(|theme: &Theme| {
-            let scheme = Scheme::of(theme);
-            container::Style {
-                background: Some(scheme.chrome.into()),
-                ..Default::default()
-            }
-        }),
-    ]
+    container(
+        iced::widget::row![
+            if full {
+                Element::from(label(link))
+            } else {
+                Element::from(space())
+            },
+            space::horizontal(),
+            match notice {
+                Some(notice) => iced::widget::row![
+                    styled(notice, Type::LabelMedium).style(style::error_text),
+                    button::icon_button(Icon::Close).on_press(Message::DismissNotice),
+                ]
+                .spacing(4)
+                .align_y(Center)
+                .into(),
+                None => Element::from(space()),
+            },
+            label(entities),
+            label(state),
+        ]
+        .spacing(if full { 24 } else { 16 })
+        .align_y(Center),
+    )
+    .padding([0, 16])
+    .height(STATUS_BAR_HEIGHT)
+    .align_y(Center)
+    .style(|theme: &Theme| {
+        let scheme = Scheme::of(theme);
+        container::Style {
+            background: Some(scheme.chrome.into()),
+            ..Default::default()
+        }
+    })
     .into()
 }
 
