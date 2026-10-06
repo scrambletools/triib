@@ -43,10 +43,9 @@ const NARROWEST_HEADING: f32 = 150.0;
 const SLANT_MAX: f32 = 220.0;
 /// How far along a talker's or listener's heading its chevron reaches.
 const CHEVRON_REACH: f32 = 24.0;
-/// Where a talker's slanted heading starts, from its column's left edge:
-/// a little inside the column's right edge, as a listener's sits beside
-/// its row.
-const TALKER_HEADING: f32 = CELL - 4.0;
+/// How far back along its slant, toward the grid, a talker's heading is
+/// drawn, so it starts about where a listener's does beside its row.
+const TALKER_PULL: f32 = 5.0;
 const RADIUS: f32 = 16.0;
 const SCROLLBAR: f32 = 6.0;
 const SCROLLBAR_MARGIN: f32 = 2.0;
@@ -268,12 +267,9 @@ impl Matrix {
             if self.grid.columns[column].collapsed.is_some() {
                 // How far up the slanted name the point is, from where
                 // the name starts.
-                let start = Point::new(
-                    column as f32 * CELL - offset.x + TALKER_HEADING,
-                    HEADER - 6.0,
-                );
+                let start = Point::new(column as f32 * CELL - offset.x + CELL, HEADER - 6.0);
                 let along = ((point.x - start.x) - (point.y - start.y)) * FRAC_1_SQRT_2;
-                if along < CHEVRON_REACH {
+                if along < CHEVRON_REACH - TALKER_PULL {
                     return Target::Chevron(Side::Talker, column);
                 }
             }
@@ -890,41 +886,37 @@ impl Matrix {
                     fit(&heading.name, BOLD, 13.0, SLANT_MAX - 24.0 - tag_width)
                 });
                 let name_color = self.name_color(heading.line, colors);
-                slanted(
-                    frame,
-                    Point::new(x + TALKER_HEADING, HEADER - 6.0),
-                    |frame| {
-                        let chevron = if collapsed {
-                            Icon::ChevronRight
-                        } else {
-                            Icon::ExpandMore
-                        };
-                        icon(
-                            frame,
-                            chevron,
-                            false,
-                            Point::new(8.0, -10.0),
-                            16.0,
-                            colors.text,
-                        );
-                        label(
-                            frame,
-                            fitted.name,
-                            Point::new(20.0, -10.0),
-                            BOLD,
-                            13.0,
-                            name_color,
-                        );
-                        label(
-                            frame,
-                            heading.detail.clone(),
-                            Point::new(24.0 + fitted.name_width, -10.0),
-                            MONOSPACE,
-                            11.0,
-                            colors.detail,
-                        );
-                    },
-                );
+                slanted(frame, Point::new(x + CELL, HEADER - 6.0), |frame| {
+                    let chevron = if collapsed {
+                        Icon::ChevronRight
+                    } else {
+                        Icon::ExpandMore
+                    };
+                    icon(
+                        frame,
+                        chevron,
+                        false,
+                        Point::new(8.0 - TALKER_PULL, -10.0),
+                        16.0,
+                        colors.text,
+                    );
+                    label(
+                        frame,
+                        fitted.name,
+                        Point::new(20.0 - TALKER_PULL, -10.0),
+                        BOLD,
+                        13.0,
+                        name_color,
+                    );
+                    label(
+                        frame,
+                        heading.detail.clone(),
+                        Point::new(24.0 - TALKER_PULL + fitted.name_width, -10.0),
+                        MONOSPACE,
+                        11.0,
+                        colors.detail,
+                    );
+                });
             }
         }
     }
