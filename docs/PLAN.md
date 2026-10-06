@@ -41,7 +41,7 @@ dependency.
 | Concurrency | No tokio. Network thread per interface with a poll loop and timer wheel; real time threads for streaming and audio; `std::sync::mpsc` into an iced subscription (prev's `External` + `post()` pattern) |
 | Processes | GUI process (controller) and an optional `triib-endpointd` process for host talkers and listeners, so audio survives GUI restarts and only the daemon holds the extra privileges |
 | Platform layer | `avb-net`: raw Ethernet frames, interfaces, hardware timestamps and launch time per operating system, the only platform code the protocol crates use. Audio (cpal) and clock discipline live in triib's streaming crates. Everything else is shared |
-| Settings, cache, presets | TOML settings via a `prev-store` style crate; the entity model cache keeps raw descriptor bytes, decoded by `atdecc` on load, so the protocol crates need no serde; JSON presets |
+| Settings, cache, presets | TOML settings via a `prev-store` style crate; the entity model cache keeps raw descriptor bytes, decoded by `atdecc` on load, so the protocol crates need no serde; TOML presets beside the settings |
 | Interface text | Fluent `i18n/` like prev, English only at first |
 
 ## ATDECC: our own stack, not la_avdecc
@@ -484,7 +484,13 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   driver keeps the frames when asked. Saving the log, and warnings for
   timing rules such as an ENTITY_DISCOVER answered late, can follow.
 - AVB Lite status query, bandwidth view and alarms.
-- Presets.
+- Presets, from a toolbar button: each a TOML file in the data folder
+  (copyable between computers) keeping each entity's clock sources,
+  sampling rates, stream formats, settable level and selector controls
+  and stream input bindings, entity IDs and formats as hex. Recalling
+  one sends what differs, formats, rates and clock sources first, then
+  controls, then unbinds and binds, and names the entities it holds that
+  are not here. Virtual endpoints join them with P3.
 - `triib-cli` at parity with `atdecc_controller.py`: besides reading,
   naming, formats, rates, clock sources, mappings and controls, it
   connects and disconnects, tells a talker to stop sending (DISCONNECT_TX),

@@ -13,6 +13,7 @@ mod mapping_view;
 mod matrix;
 mod netmap;
 mod network;
+mod presets;
 mod settings;
 mod settings_view;
 mod text;

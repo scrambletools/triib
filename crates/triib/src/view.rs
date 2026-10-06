@@ -53,6 +53,8 @@ pub fn window(triib: &Triib) -> Element<'_, Message> {
     .into();
     if triib.settings_open {
         crate::settings_view::dialog(triib, window)
+    } else if triib.presets_open {
+        crate::presets::dialog(triib, window)
     } else {
         window
     }
@@ -212,6 +214,12 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         ),
         SEARCH_WIDTH,
         Some(2),
+        false,
+    ));
+    slots.push((
+        component::tool(Icon::Bookmarks, "Presets", Some(Message::PresetsOpened)),
+        TOOL_WIDTH,
+        Some(1),
         false,
     ));
     slots.push((
@@ -1722,6 +1730,7 @@ pub(crate) mod tests {
             ),
             ("inspector-controls", View::Entities, true, desktop),
             ("log-desktop", View::Log, false, desktop),
+            ("presets-desktop", View::Matrix, false, desktop),
             (
                 "inspector-mappings-phone",
                 View::Entities,
@@ -1787,6 +1796,15 @@ pub(crate) mod tests {
             };
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
+            }
+            if suffix.starts_with("presets") {
+                triib.presets = vec![
+                    crate::presets::capture(&triib, "Rehearsal"),
+                    crate::presets::capture(&triib, "Sunday service"),
+                ];
+                triib.presets_open = true;
+                triib.preset_name = "Matinee".to_owned();
+                triib.preset_report = Some("Recalling \"Rehearsal\": 3 changes.".to_owned());
             }
             if suffix.starts_with("log") {
                 let frames = crate::log_view::tests::bench_frames(&triib);

@@ -55,6 +55,12 @@ where
     Ok(settings)
 }
 
+/// Loads the TOML file at `path`, as it is.
+pub fn load<T: DeserializeOwned>(path: &Path) -> Result<T, LoadError> {
+    let text = std::fs::read_to_string(path).map_err(LoadError::Io)?;
+    toml::from_str(&text).map_err(LoadError::Parse)
+}
+
 /// Writes `value` as TOML, creating the folder first.
 pub fn save<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
     let text = toml::to_string_pretty(value).map_err(io::Error::other)?;

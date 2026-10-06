@@ -1,0 +1,625 @@
+//! Presets: how the network was set up when saved, as each entity's clock
+//! sources, sampling rates, stream formats and controls and what each of
+//! its stream inputs is bound to; recalled by changing what differs now.
+//! Each is a TOML file in triib's data folder, so it can be copied to
+//! another computer.
+
+use std::path::PathBuf;
+
+use atdecc::EntityId;
+use atdecc::control::{ControlDescriptor, ControlType, Shape, encode_values};
+use atdecc::descriptor::{DescriptorType, SamplingRate, StreamFormat};
+use atdecc::model::{EntityModel, EnumerationState};
+use iced::widget::{column, container, mouse_area, opaque, row, text_input};
+use iced::{Center, Element, Fill};
+use scramble_ui::button::{self, Kind};
+use scramble_ui::font::{Type, aligned, styled};
+use scramble_ui::icon::Icon;
+use scramble_ui::{component, enter, style};
+use serde::{Deserialize, Serialize};
+
+use crate::app::{Message, Triib};
+use crate::network::{Action, ControlValues};
+
+const WIDTH: f32 = 560.0;
+const HEIGHT: f32 = 640.0;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Preset {
+    pub name: String,
+    #[serde(default)]
+    pub entities: Vec<EntityPreset>,
+}
+
+/// What one entity had. IDs and formats are kept as hex, as TOML's
+/// integers stop short of them.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct EntityPreset {
+    pub entity: String,
+    /// Its name when saved, to say which is missing.
+    pub name: String,
+    #[serde(default)]
+    pub clock_sources: Vec<ClockSourcePreset>,
+    #[serde(default)]
+    pub sampling_rates: Vec<RatePreset>,
+    #[serde(default)]
+    pub stream_formats: Vec<FormatPreset>,
+    #[serde(default)]
+    pub controls: Vec<ControlPreset>,
+    #[serde(default)]
+    pub bindings: Vec<BindingPreset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClockSourcePreset {
+    pub domain: u16,
+    pub source: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RatePreset {
+    pub unit: u16,
+    /// The sampling rate's 32 bits, its pull included.
+    pub rate: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FormatPreset {
+    pub input: bool,
+    pub index: u16,
+    pub format: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlPreset {
+    pub index: u16,
+    /// Its current values as SET_CONTROL carries them.
+    pub values: String,
+}
+
+/// A stream input and the talker's stream output it is bound to, or
+/// nothing for one not bound.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BindingPreset {
+    pub input: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub talker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<u16>,
+}
+
+impl Preset {
+    /// How many stream inputs it binds.
+    pub fn connections(&self) -> usize {
+        self.entities
+            .iter()
+            .flat_map(|entity| &entity.bindings)
+            .filter(|binding| binding.talker.is_some())
+            .count()
+    }
+}
+
+fn hex(value: u64) -> String {
+    format!("{value:#018x}")
+}
+
+fn number(text: &str) -> Option<u64> {
+    u64::from_str_radix(text.trim_start_matches("0x"), 16).ok()
+}
+
+fn octets_hex(octets: &[u8]) -> String {
+    octets.iter().map(|octet| format!("{octet:02x}")).collect()
+}
+
+fn octets(text: &str) -> Option<Vec<u8>> {
+    (0..text.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(text.get(at..at + 2)?, 16).ok())
+        .collect()
+}
+
+/// A control's current values as SET_CONTROL carries them, for one a
+/// preset keeps: a level or a selector that can be set, not identify.
+fn kept_values(control: &ControlDescriptor<'_>) -> Option<Vec<u8>> {
+    if control.read_only || control.control_type == ControlType::IDENTIFY {
+        return None;
+    }
+    if !matches!(control.value_type.shape(), Shape::Linear | Shape::Selector) {
+        return None;
+    }
+    let mut buffer = [0; atdecc::aem::MAX_CONTROL_VALUES];
+    let length = encode_values(control.value_type.scalar()?, control.current(), &mut buffer)?;
+    ControlValues::new(&buffer[..length]).map(|values| values.as_slice().to_vec())
+}
+
+/// The network as it is set up now, named `name`: every entity read in
+/// full.
+pub fn capture(triib: &Triib, name: &str) -> Preset {
+    let mut entities = Vec::new();
+    for (entity_id, model) in &triib.models {
+        let Some(found) = triib.entities.get(entity_id) else {
+            continue;
+        };
+        if model.state != EnumerationState::Complete {
+            continue;
+        }
+        let mut entity = EntityPreset {
+            entity: hex(entity_id.0),
+            name: triib.entity_name(found),
+            ..EntityPreset::default()
+        };
+        for domain in model.clock_domains() {
+            entity.clock_sources.push(ClockSourcePreset {
+                domain: domain.index,
+                source: domain.clock_source_index,
+            });
+        }
+        for unit in model.audio_units() {
+            entity.sampling_rates.push(RatePreset {
+                unit: unit.index,
+                rate: unit.current_sampling_rate.0,
+            });
+        }
+        for input in [true, false] {
+            for stream in model.streams(input) {
+                entity.stream_formats.push(FormatPreset {
+                    input,
+                    index: stream.index,
+                    format: hex(stream.current_format.0),
+                });
+            }
+        }
+        for control in model.controls() {
+            if let Some(values) = kept_values(&control) {
+                entity.controls.push(ControlPreset {
+                    index: control.index,
+                    values: octets_hex(&values),
+                });
+            }
+        }
+        for stream in model.streams(true) {
+            let Some(binding) = model.binding(stream.index) else {
+                continue;
+            };
+            let talker = binding.talker_stream();
+            entity.bindings.push(BindingPreset {
+                input: stream.index,
+                talker: talker.map(|(talker, _)| hex(talker.0)),
+                output: talker.map(|(_, output)| output),
+            });
+        }
+        entities.push(entity);
+    }
+    Preset {
+        name: name.to_owned(),
+        entities,
+    }
+}
+
+/// What recalling a preset changes, in the order to send it, and the
+/// entities it names that are not here or not read.
+#[derive(Debug, Default, PartialEq)]
+pub struct Recall {
+    pub actions: Vec<Action>,
+    pub missing: Vec<String>,
+}
+
+/// The changes that bring the network to `preset`: formats, rates and
+/// clock sources first, then controls, then bindings, unbinding before
+/// binding.
+pub fn recall(triib: &Triib, preset: &Preset) -> Recall {
+    let mut recall = Recall::default();
+    let (mut settings, mut controls, mut unbinds, mut binds) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for wanted in &preset.entities {
+        let model = number(&wanted.entity).map(EntityId).and_then(|entity| {
+            let model = triib.models.get(&entity)?;
+            (triib.entities.contains_key(&entity) && model.state == EnumerationState::Complete)
+                .then_some((entity, model))
+        });
+        let Some((entity, model)) = model else {
+            recall.missing.push(wanted.name.clone());
+            continue;
+        };
+        settings.extend(setting_changes(entity, model, wanted));
+        for control in &wanted.controls {
+            let Some(current) = model.control(control.index) else {
+                continue;
+            };
+            let (Some(now), Some(values)) = (kept_values(&current), octets(&control.values)) else {
+                continue;
+            };
+            if now != values
+                && let Some(values) = ControlValues::new(&values)
+            {
+                controls.push(Action::SetControl {
+                    entity,
+                    index: control.index,
+                    values,
+                });
+            }
+        }
+        for binding in &wanted.bindings {
+            if model
+                .descriptor(DescriptorType::STREAM_INPUT, binding.input)
+                .is_none()
+            {
+                continue;
+            }
+            let now = model
+                .binding(binding.input)
+                .and_then(|bound| bound.talker_stream());
+            let talker = binding
+                .talker
+                .as_deref()
+                .and_then(number)
+                .zip(binding.output)
+                .map(|(talker, output)| (EntityId(talker), output));
+            if now == talker {
+                continue;
+            }
+            let listener = (entity, binding.input);
+            match talker {
+                Some(talker) => binds.push(Action::Connect { talker, listener }),
+                None => unbinds.push(Action::Disconnect { listener }),
+            }
+        }
+    }
+    recall.actions = [settings, controls, unbinds, binds].concat();
+    recall
+}
+
+/// The clock sources, sampling rates and stream formats that differ.
+fn setting_changes(entity: EntityId, model: &EntityModel, wanted: &EntityPreset) -> Vec<Action> {
+    let mut actions = Vec::new();
+    for clock in &wanted.clock_sources {
+        if model
+            .clock_domains()
+            .any(|domain| domain.index == clock.domain && domain.clock_source_index != clock.source)
+        {
+            actions.push(Action::SetClockSource {
+                entity,
+                domain: clock.domain,
+                source: clock.source,
+            });
+        }
+    }
+    for rate in &wanted.sampling_rates {
+        if model
+            .audio_units()
+            .any(|unit| unit.index == rate.unit && unit.current_sampling_rate.0 != rate.rate)
+        {
+            actions.push(Action::SetSamplingRate {
+                entity,
+                unit: rate.unit,
+                rate: SamplingRate(rate.rate),
+            });
+        }
+    }
+    for format in &wanted.stream_formats {
+        let Some(wanted_format) = number(&format.format).map(StreamFormat) else {
+            continue;
+        };
+        if model
+            .streams(format.input)
+            .any(|stream| stream.index == format.index && stream.current_format != wanted_format)
+        {
+            actions.push(Action::SetStreamFormat {
+                entity,
+                descriptor_type: if format.input {
+                    DescriptorType::STREAM_INPUT
+                } else {
+                    DescriptorType::STREAM_OUTPUT
+                },
+                index: format.index,
+                format: wanted_format,
+            });
+        }
+    }
+    actions
+}
+
+fn folder() -> Option<PathBuf> {
+    triib_store::paths::data_dir().map(|dir| dir.join("presets"))
+}
+
+/// A preset's file name from its name: letters and digits, the rest dashes.
+fn file_name(name: &str) -> String {
+    let mut file = String::new();
+    for character in name.trim().chars() {
+        if character.is_alphanumeric() {
+            file.extend(character.to_lowercase());
+        } else if !file.ends_with('-') {
+            file.push('-');
+        }
+    }
+    let file = file.trim_matches('-');
+    if file.is_empty() {
+        "preset.toml".to_owned()
+    } else {
+        format!("{file}.toml")
+    }
+}
+
+/// The presets saved, by name; none in tests, which never touch the
+/// user's.
+pub fn load_all() -> Vec<Preset> {
+    if cfg!(test) {
+        return Vec::new();
+    }
+    let Some(entries) = folder().and_then(|folder| std::fs::read_dir(folder).ok()) else {
+        return Vec::new();
+    };
+    let mut presets: Vec<Preset> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "toml")
+        })
+        .filter_map(|path| triib_store::load(&path).ok())
+        .collect();
+    presets.sort_by_key(|preset| preset.name.to_lowercase());
+    presets
+}
+
+/// Saves a preset, replacing one of the same name.
+pub fn save(preset: &Preset) -> Result<(), String> {
+    if cfg!(test) {
+        return Ok(());
+    }
+    let path = folder()
+        .ok_or("There is nowhere to keep presets: the home folder is not known.")?
+        .join(file_name(&preset.name));
+    triib_store::save(&path, preset)
+        .map_err(|error| format!("Could not save {}: {error}.", path.display()))
+}
+
+pub fn delete(name: &str) -> Result<(), String> {
+    if cfg!(test) {
+        return Ok(());
+    }
+    let Some(path) = folder().map(|folder| folder.join(file_name(name))) else {
+        return Ok(());
+    };
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Could not delete {}: {error}.", path.display())),
+    }
+}
+
+/// The presets dialog over `base`: a name to save the network as, and
+/// each preset saved, to recall or delete.
+pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, Message> {
+    let name = triib.preset_name.trim();
+    let save = (!name.is_empty()).then_some(Message::PresetSaved);
+    let header = row![
+        styled("Presets", Type::HeadlineSmall).width(Fill),
+        component::tip(
+            button::icon_button(Icon::Close).on_press(Message::PresetsClosed),
+            "Close",
+        ),
+    ]
+    .align_y(Center);
+    let mut content = column![
+        aligned(
+            styled(
+                "A preset keeps each entity's clock sources, sampling rates, stream formats, \
+                 controls and connections. Recalling it changes what differs.",
+                Type::BodyMedium,
+            )
+            .style(style::on_surface_variant),
+        ),
+        row![
+            text_input("Name", &triib.preset_name)
+                .on_input(Message::PresetNameChanged)
+                .on_submit_maybe(save.clone())
+                .padding([8, 12])
+                .style(style::outlined_field)
+                .width(Fill),
+            button::with_icon(Kind::Filled, Icon::BookmarkAdd, "Save").on_press_maybe(save),
+        ]
+        .spacing(8)
+        .align_y(Center),
+    ]
+    .spacing(16);
+    if let Some(report) = &triib.preset_report {
+        content = content.push(aligned(styled(report.as_str(), Type::BodyMedium)));
+    }
+    if triib.presets.is_empty() {
+        content = content.push(
+            styled("No presets saved yet.", Type::BodyMedium).style(style::on_surface_variant),
+        );
+    }
+    for preset in &triib.presets {
+        let entities = preset.entities.len();
+        let connections = preset.connections();
+        let plural = |count: usize, one: &str, many: &str| {
+            format!("{count} {}", if count == 1 { one } else { many })
+        };
+        content = content.push(
+            row![
+                column![
+                    styled(preset.name.clone(), Type::BodyLarge),
+                    styled(
+                        format!(
+                            "{}, {}",
+                            plural(entities, "entity", "entities"),
+                            plural(connections, "connection", "connections")
+                        ),
+                        Type::BodySmall,
+                    )
+                    .style(style::on_surface_variant),
+                ]
+                .spacing(2)
+                .width(Fill),
+                button::button(Kind::Tonal, "Recall")
+                    .on_press(Message::PresetRecalled(preset.name.clone())),
+                component::tip(
+                    button::icon_button(Icon::Delete)
+                        .on_press(Message::PresetDeleted(preset.name.clone())),
+                    "Delete",
+                ),
+            ]
+            .spacing(8)
+            .align_y(Center),
+        );
+    }
+    let card = container(column![
+        container(header).padding(iced::Padding {
+            top: 24.0,
+            right: 24.0,
+            bottom: 0.0,
+            left: 24.0,
+        }),
+        container(component::scroll(container(content).padding([16, 24]))).height(Fill),
+    ])
+    .max_width(WIDTH)
+    .max_height(HEIGHT)
+    .width(Fill)
+    .height(Fill)
+    .style(style::dialog);
+    iced::widget::stack![
+        base,
+        mouse_area(
+            container(enter::grow(opaque(card)))
+                .padding(24)
+                .center(Fill)
+                .style(style::scrim),
+        )
+        .on_press(Message::PresetsClosed),
+    ]
+    .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MAC_MINI: EntityId = EntityId(0xd111_e597_f544_8000);
+    const WIRED_ESP: EntityId = EntityId(0xe8f6_0ae0_9220_0000);
+
+    fn sample() -> Triib {
+        let (entities, models) = crate::view::tests::bench();
+        let interface = avb_net::Interface {
+            name: "enp6s0".to_owned(),
+            mac: avb_net::MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]),
+            up: true,
+            speed: None,
+            physical: true,
+            wireless: false,
+            hardware_clock: None,
+        };
+        Triib::sample(
+            crate::settings::Settings::default(),
+            interface,
+            entities,
+            models,
+        )
+    }
+
+    #[test]
+    fn a_preset_of_the_network_as_it_is_changes_nothing() {
+        let triib = sample();
+        let preset = capture(&triib, "Show");
+        assert_eq!(preset.entities.len(), 3);
+        let wired = preset
+            .entities
+            .iter()
+            .find(|entity| entity.entity == hex(WIRED_ESP.0))
+            .unwrap();
+        assert!(!wired.stream_formats.is_empty());
+        assert!(!wired.clock_sources.is_empty());
+        // Volume and gain, not identify.
+        assert_eq!(wired.controls.len(), 2);
+        assert_eq!(recall(&triib, &preset), Recall::default());
+        // It survives being written and read back.
+        let text = toml_round_trip(&preset);
+        assert_eq!(text, preset);
+    }
+
+    fn toml_round_trip(preset: &Preset) -> Preset {
+        let file = std::env::temp_dir().join(format!("triib-preset-{}.toml", std::process::id()));
+        triib_store::save(&file, preset).unwrap();
+        let loaded = triib_store::load(&file).unwrap();
+        let _ = std::fs::remove_file(&file);
+        loaded
+    }
+
+    #[test]
+    fn recalling_changes_what_differs_in_order() {
+        let triib = sample();
+        let mut preset = capture(&triib, "Show");
+        let wired = preset
+            .entities
+            .iter_mut()
+            .find(|entity| entity.entity == hex(WIRED_ESP.0))
+            .unwrap();
+        // Bind the first input to the Mac mini, set a control and pick the
+        // other clock source.
+        wired.bindings[0].talker = Some(hex(MAC_MINI.0));
+        wired.bindings[0].output = Some(0);
+        wired.controls[0].values = "ff9c".to_owned();
+        let source = wired.clock_sources[0].source;
+        wired.clock_sources[0].source = if source == 0 { 1 } else { 0 };
+        // An entity no longer here.
+        preset.entities.push(EntityPreset {
+            entity: hex(0x0011_2233_4455_6677),
+            name: "Stage box".to_owned(),
+            ..EntityPreset::default()
+        });
+        let recall = recall(&triib, &preset);
+        assert_eq!(recall.missing, ["Stage box"]);
+        assert!(
+            matches!(
+                recall.actions[..],
+                [
+                    Action::SetClockSource {
+                        entity: WIRED_ESP,
+                        ..
+                    },
+                    Action::SetControl {
+                        entity: WIRED_ESP,
+                        ..
+                    },
+                    Action::Connect {
+                        talker: (MAC_MINI, 0),
+                        listener: (WIRED_ESP, 0)
+                    },
+                ]
+            ),
+            "{:?}",
+            recall.actions
+        );
+    }
+
+    #[test]
+    fn presets_are_saved_recalled_and_deleted() {
+        let mut triib = sample();
+        let _ = triib.update(Message::PresetNameChanged("Show".to_owned()));
+        let _ = triib.update(Message::PresetSaved);
+        assert_eq!(triib.presets.len(), 1);
+        assert_eq!(
+            triib.preset_report.as_deref(),
+            Some("Saved \"Show\" with 3 entities.")
+        );
+        assert!(triib.preset_name.is_empty());
+        let _ = triib.update(Message::PresetRecalled("Show".to_owned()));
+        assert_eq!(
+            triib.preset_report.as_deref(),
+            Some("Nothing differs from \"Show\".")
+        );
+        let _ = triib.update(Message::PresetDeleted("Show".to_owned()));
+        assert!(triib.presets.is_empty());
+    }
+
+    #[test]
+    fn file_names_come_from_preset_names() {
+        assert_eq!(file_name("Sunday Service"), "sunday-service.toml");
+        assert_eq!(file_name("  Show #2 / FOH "), "show-2-foh.toml");
+        assert_eq!(file_name("!!"), "preset.toml");
+        assert_eq!(octets("ff9c"), Some(vec![0xff, 0x9c]));
+        assert_eq!(number(&hex(WIRED_ESP.0)), Some(WIRED_ESP.0));
+    }
+}

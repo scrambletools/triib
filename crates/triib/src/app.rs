@@ -18,6 +18,7 @@ use crate::log_view::{Log, LogMessage};
 use crate::matrix::{Hover, Side};
 use crate::netmap::{Focus, NodeKey};
 use crate::network::{Action, Failure, Name, NameTarget, Neighbor, Network, Report, ReportKind};
+use crate::presets::Preset;
 use crate::settings::{EntityField, NetworkShows, Settings, Streams, View};
 use crate::settings_view::SettingsTab;
 use crate::view::InspectorTab;
@@ -80,6 +81,12 @@ pub struct Triib {
     pub log: Log,
     /// The Settings dialog is open, on this tab.
     pub settings_open: bool,
+    /// The presets saved, the presets dialog is open, the name typed in
+    /// it, and what the last save, recall or delete did.
+    pub presets: Vec<Preset>,
+    pub presets_open: bool,
+    pub preset_name: String,
+    pub preset_report: Option<String>,
     pub settings_tab: SettingsTab,
     /// Why the settings could not be read or saved, shown in Settings.
     pub settings_error: Option<String>,
@@ -153,6 +160,13 @@ pub enum Message {
     /// Open or close a descriptor type in the inspector's tree.
     TreeToggled(EntityId, DescriptorType),
     SettingsOpened,
+    PresetsOpened,
+    PresetsClosed,
+    PresetNameChanged(String),
+    /// Save the network as a preset under the name typed.
+    PresetSaved,
+    PresetRecalled(String),
+    PresetDeleted(String),
     SettingsClosed,
     SettingsTab(SettingsTab),
     LanguageSelected(String),
@@ -209,6 +223,10 @@ impl Triib {
             control_drag: None,
             inspector_tab: InspectorTab::default(),
             log: Log::default(),
+            presets: crate::presets::load_all(),
+            presets_open: false,
+            preset_name: String::new(),
+            preset_report: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error: None,
@@ -246,6 +264,10 @@ impl Triib {
             control_drag: None,
             inspector_tab: InspectorTab::default(),
             log: Log::default(),
+            presets: crate::presets::load_all(),
+            presets_open: false,
+            preset_name: String::new(),
+            preset_report: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error,
@@ -476,6 +498,62 @@ impl Triib {
                 }
             }
             Message::EditCancelled => self.editing = None,
+            Message::PresetsOpened => {
+                self.presets_open = true;
+                self.preset_report = None;
+            }
+            Message::PresetsClosed => self.presets_open = false,
+            Message::PresetNameChanged(name) => self.preset_name = name,
+            Message::PresetSaved => {
+                let name = self.preset_name.trim().to_owned();
+                if name.is_empty() {
+                    return Task::none();
+                }
+                let preset = crate::presets::capture(self, &name);
+                let entities = preset.entities.len();
+                self.preset_report = Some(match crate::presets::save(&preset) {
+                    Ok(()) => {
+                        self.presets.retain(|kept| kept.name != name);
+                        self.presets.push(preset);
+                        self.presets.sort_by_key(|kept| kept.name.to_lowercase());
+                        self.preset_name.clear();
+                        let plural = if entities == 1 { "entity" } else { "entities" };
+                        format!("Saved \"{name}\" with {entities} {plural}.")
+                    }
+                    Err(error) => error,
+                });
+            }
+            Message::PresetRecalled(name) => {
+                let Some(preset) = self.presets.iter().find(|preset| preset.name == name) else {
+                    return Task::none();
+                };
+                let recall = crate::presets::recall(self, preset);
+                let changes = recall.actions.len();
+                let mut report = match changes {
+                    0 => format!("Nothing differs from \"{name}\"."),
+                    1 => format!("Recalling \"{name}\": 1 change."),
+                    _ => format!("Recalling \"{name}\": {changes} changes."),
+                };
+                if !recall.missing.is_empty() {
+                    report.push_str(&format!(
+                        " Not here or not read: {}.",
+                        recall.missing.join(", ")
+                    ));
+                }
+                self.preset_report = Some(report);
+                if changes > 0 {
+                    return self.update(Message::ActInOrder(recall.actions));
+                }
+            }
+            Message::PresetDeleted(name) => {
+                self.preset_report = Some(match crate::presets::delete(&name) {
+                    Ok(()) => {
+                        self.presets.retain(|preset| preset.name != name);
+                        format!("Deleted \"{name}\".")
+                    }
+                    Err(error) => error,
+                });
+            }
             Message::SettingsOpened => {
                 self.settings_open = true;
                 self.overflow_open = false;
