@@ -354,18 +354,28 @@ fn content(triib: &Triib) -> Element<'_, Message> {
 }
 
 fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
+    let open = triib.inspector_tab;
     let body: Element<'_, Message> = match triib.selected {
-        None => styled("Select an entity to see its details.", Type::BodyMedium)
-            .style(style::on_surface_variant)
-            .into(),
+        None => note("Select an entity to see its details."),
         Some(entity_id) => match triib.entities.get(&entity_id) {
-            None => styled(format!("{entity_id} is offline."), Type::BodyMedium)
-                .style(style::on_surface_variant)
-                .into(),
-            Some(entity) => entity_details(triib, entity, triib.models.get(&entity_id)),
+            None => note(format!("{entity_id} is offline.")),
+            Some(entity) => entity_details(triib, entity, triib.models.get(&entity_id), open),
         },
     };
-    component::side_sheet_sized("Inspector", Message::InspectorToggled, body, width)
+    let tab = |label, glyph, tab: InspectorTab| component::Tab {
+        label,
+        icon: Some(glyph),
+        selected: open == tab,
+        on_press: Message::InspectorTab(tab),
+    };
+    let tabs = component::tabs(vec![
+        tab("Entity", Icon::Info, InspectorTab::Entity),
+        tab("Streams", Icon::Stream, InspectorTab::Streams),
+        tab("Controls", Icon::Tune, InspectorTab::Controls),
+        tab("Diagnostics", Icon::MonitorHeart, InspectorTab::Diagnostics),
+        tab("Descriptors", Icon::AccountTree, InspectorTab::Descriptors),
+    ]);
+    component::side_sheet_tabbed("Inspector", Message::InspectorToggled, tabs, body, width)
 }
 
 /// A label and its value, in the inspector.
@@ -674,39 +684,86 @@ fn property<'a>(label: impl Into<String>, value: String) -> Element<'a, Message>
 
 /// Everything read from an entity and everything it advertises, in
 /// sections.
+/// The inspector's tabs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InspectorTab {
+    /// Names, product, media clock and what the entity advertises.
+    #[default]
+    Entity,
+    Streams,
+    Controls,
+    /// AVB interfaces and counters.
+    Diagnostics,
+    Descriptors,
+}
+
+/// The selected entity's details on the inspector's open tab.
 fn entity_details<'a>(
     triib: &'a Triib,
     entity: &'a DiscoveredEntity,
     model: Option<&'a EntityModel>,
+    tab: InspectorTab,
 ) -> Element<'a, Message> {
+    let entity_id = entity.entity_id();
     let mut column = iced::widget::column![].spacing(6);
-    if entity
-        .adp
-        .entity_capabilities
-        .contains(EntityCapabilities::AEM_IDENTIFY_CONTROL_INDEX_VALID)
+    if tab == InspectorTab::Entity
+        && entity
+            .adp
+            .entity_capabilities
+            .contains(EntityCapabilities::AEM_IDENTIFY_CONTROL_INDEX_VALID)
     {
-        let action = Action::Identify(entity.entity_id());
+        let action = Action::Identify(entity_id);
         let busy = triib.pending.contains(&action);
         column = column.push(
             button::with_icon(Kind::Tonal, Icon::Lightbulb, "Identify")
                 .on_press_maybe((!busy).then_some(Message::Act(action))),
         );
     }
-    if let Some(model) = model {
-        column = column.extend(model_details(triib, entity.entity_id(), model));
-    }
-    column.extend(advertisement_details(entity)).into()
+    let Some(model) = model else {
+        return match tab {
+            InspectorTab::Entity => column.extend(advertisement_details(entity)).into(),
+            _ => column.push(note("Its entity model is not read.")).into(),
+        };
+    };
+    column = column.extend(model_state(model));
+    let items = match tab {
+        InspectorTab::Entity => {
+            let mut items = entity_sections(triib, entity_id, model);
+            items.extend(advertisement_details(entity));
+            items
+        }
+        InspectorTab::Streams => or_note(stream_sections(triib, entity_id, model), "No streams."),
+        InspectorTab::Controls => or_note(
+            crate::controls_view::controls(triib, entity_id, model),
+            "No controls to show.",
+        ),
+        InspectorTab::Diagnostics => {
+            let mut items = interface_sections(model);
+            items.extend(crate::diagnostics_view::diagnostics(model));
+            or_note(items, "No interfaces or counters reported.")
+        }
+        InspectorTab::Descriptors => descriptor_tree(triib, entity_id, model),
+    };
+    column.extend(items).into()
 }
 
-/// What the entity's descriptors say: its names, product, firmware,
-/// Milan support, streams, channel mappings, interfaces and clocks, with
-/// the names, stream formats, dynamic mappings, sampling rate and clock
-/// source editable.
-fn model_details<'a>(
-    triib: &'a Triib,
-    entity_id: EntityId,
-    model: &'a EntityModel,
-) -> Vec<Element<'a, Message>> {
+/// `items`, or `text` when there are none.
+fn or_note<'a>(items: Vec<Element<'a, Message>>, text: &'static str) -> Vec<Element<'a, Message>> {
+    if items.is_empty() {
+        vec![note(text)]
+    } else {
+        items
+    }
+}
+
+fn note<'a>(text: impl Into<String>) -> Element<'a, Message> {
+    styled(text.into(), Type::BodyMedium)
+        .style(style::on_surface_variant)
+        .into()
+}
+
+/// How reading the model goes, while it is read or when it failed.
+fn model_state<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
     let mut items = Vec::new();
     match model.state {
         EnumerationState::Reading => items.push(
@@ -730,6 +787,18 @@ fn model_details<'a>(
         ),
         EnumerationState::Complete | EnumerationState::NotRead => {}
     }
+    items
+}
+
+/// The entity's names, product, firmware, configuration and Milan
+/// support, then its media clock, with the names, clock source and
+/// sampling rate editable.
+fn entity_sections<'a>(
+    triib: &'a Triib,
+    entity_id: EntityId,
+    model: &'a EntityModel,
+) -> Vec<Element<'a, Message>> {
+    let mut items = Vec::new();
     let or_unset = |text: &str| {
         if text.is_empty() {
             "Not set".to_owned()
@@ -769,6 +838,38 @@ fn model_details<'a>(
         items.push(property("Configuration", configuration));
         items.push(property("Milan", describe::milan(model)));
     }
+    let domains: Vec<_> = model.clock_domains().collect();
+    if !domains.is_empty() {
+        items.push(component::section("Media clock"));
+        for domain in domains {
+            let name = model
+                .name_of(DescriptorType::CLOCK_DOMAIN, domain.index)
+                .unwrap_or("Clock domain")
+                .to_owned();
+            items.push(stacked(
+                name,
+                source_picker(triib, entity_id, model, &domain)
+                    .unwrap_or_else(|name| styled(name, Type::BodyMedium).into()),
+            ));
+        }
+        for unit in model.audio_units() {
+            items.push(stacked(
+                "Sampling rate",
+                rate_picker(triib, entity_id, &unit),
+            ));
+        }
+    }
+    items
+}
+
+/// The entity's streams with their formats and state, then its channel
+/// mappings.
+fn stream_sections<'a>(
+    triib: &'a Triib,
+    entity_id: EntityId,
+    model: &'a EntityModel,
+) -> Vec<Element<'a, Message>> {
+    let mut items = Vec::new();
     for (input, title) in [(true, "Stream inputs"), (false, "Stream outputs")] {
         let streams: Vec<_> = model.streams(input).collect();
         if streams.is_empty() {
@@ -794,28 +895,12 @@ fn model_details<'a>(
         }
     }
     items.extend(mapping_view::mapping_details(triib, entity_id, model));
-    let domains: Vec<_> = model.clock_domains().collect();
-    if !domains.is_empty() {
-        items.push(component::section("Media clock"));
-        for domain in domains {
-            let name = model
-                .name_of(DescriptorType::CLOCK_DOMAIN, domain.index)
-                .unwrap_or("Clock domain")
-                .to_owned();
-            items.push(stacked(
-                name,
-                source_picker(triib, entity_id, model, &domain)
-                    .unwrap_or_else(|name| styled(name, Type::BodyMedium).into()),
-            ));
-        }
-        for unit in model.audio_units() {
-            items.push(stacked(
-                "Sampling rate",
-                rate_picker(triib, entity_id, &unit),
-            ));
-        }
-    }
-    items.extend(crate::controls_view::controls(triib, entity_id, model));
+    items
+}
+
+/// Each AVB interface with what it reports of gPTP and its counters.
+fn interface_sections<'a>(model: &'a EntityModel) -> Vec<Element<'a, Message>> {
+    let mut items = Vec::new();
     let interfaces: Vec<_> = model.avb_interfaces().collect();
     if !interfaces.is_empty() {
         items.push(component::section("AVB interfaces"));
@@ -823,8 +908,6 @@ fn model_details<'a>(
             items.extend(interface_details(model, &interface));
         }
     }
-    items.extend(crate::diagnostics_view::diagnostics(model));
-    items.extend(descriptor_tree(triib, entity_id, model));
     items
 }
 
@@ -934,7 +1017,7 @@ fn descriptor_tree<'a>(
     entity_id: EntityId,
     model: &'a EntityModel,
 ) -> Vec<Element<'a, Message>> {
-    let mut items = vec![component::section("Descriptors")];
+    let mut items = Vec::new();
     for descriptor_type in TREE {
         let descriptors: Vec<(u16, &[u8])> = model.descriptors(descriptor_type).collect();
         if descriptors.is_empty() {
@@ -1622,6 +1705,7 @@ pub(crate) mod tests {
                 true,
                 Size::new(1280.0, 2000.0),
             ),
+            ("inspector-controls", View::Entities, true, desktop),
             (
                 "inspector-mappings-phone",
                 View::Entities,
@@ -1669,10 +1753,21 @@ pub(crate) mod tests {
                 models.insert(WIRED_ESP, model);
             }
             let mut triib = Triib::sample(settings, interface.clone(), entities.clone(), models);
-            triib.selected = if suffix.contains("diagnostics") {
+            triib.selected = if suffix.contains("diagnostics") || suffix.contains("controls") {
                 Some(WIRED_ESP)
             } else {
                 entities.keys().next().copied()
+            };
+            triib.inspector_tab = if suffix.contains("tree") {
+                InspectorTab::Descriptors
+            } else if suffix.contains("diagnostics") {
+                InspectorTab::Diagnostics
+            } else if suffix.contains("mappings") {
+                InspectorTab::Streams
+            } else if suffix.contains("controls") {
+                InspectorTab::Controls
+            } else {
+                InspectorTab::Entity
             };
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
@@ -1824,6 +1919,54 @@ pub(crate) mod tests {
         // The network map's empty corner.
         let network = presses(View::Network, &[(60.0, 700.0)]);
         assert!(clears(&network[0]), "{:?}", network[0]);
+    }
+
+    #[test]
+    fn each_inspector_tab_shows_its_part() {
+        let (entities, models) = bench();
+        let interface = Interface {
+            name: "enp6s0".to_owned(),
+            mac: MacAddress(HOST_MAC),
+            up: true,
+            speed: Some(2500),
+            physical: true,
+            wireless: false,
+            hardware_clock: Some(0),
+        };
+        let settings = Settings {
+            interface: Some(interface.name.clone()),
+            view: View::Entities,
+            inspector: true,
+            ..Settings::default()
+        };
+        let mut triib = Triib::sample(settings, interface, entities, models);
+        triib.selected = Some(WIRED_ESP);
+        let tabs = [
+            (InspectorTab::Entity, "Serial number"),
+            (InspectorTab::Streams, "Stream inputs"),
+            (InspectorTab::Controls, "Speaker Volume"),
+            (InspectorTab::Diagnostics, "AVB interfaces"),
+            (InspectorTab::Descriptors, "Clock source"),
+        ];
+        for (tab, _) in tabs {
+            let _ = triib.update(Message::InspectorTab(tab));
+            let mut simulator = iced_test::Simulator::with_size(
+                iced::Settings {
+                    fonts: scramble_ui::font::files().collect(),
+                    default_font: scramble_ui::font::TEXT,
+                    ..iced::Settings::default()
+                },
+                Size::new(1280.0, 3000.0),
+                window(&triib),
+            );
+            for (other, part) in tabs {
+                assert_eq!(
+                    simulator.find(part).is_ok(),
+                    other == tab,
+                    "{part} on the {tab:?} tab"
+                );
+            }
+        }
     }
 
     #[test]

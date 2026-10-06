@@ -19,6 +19,7 @@ use crate::netmap::{Focus, NodeKey};
 use crate::network::{Action, Failure, Name, NameTarget, Neighbor, Network, Report, ReportKind};
 use crate::settings::{EntityField, NetworkShows, Settings, Streams, View};
 use crate::settings_view::SettingsTab;
+use crate::view::InspectorTab;
 
 /// The desktop app ID, also the Wayland app ID.
 pub const APP_ID: &str = if triib_store::paths::PRODUCTION {
@@ -72,6 +73,8 @@ pub struct Triib {
     pub tree_open: BTreeSet<(EntityId, DescriptorType)>,
     /// The control slider being dragged.
     pub control_drag: Option<ControlDrag>,
+    /// The inspector's open tab.
+    pub inspector_tab: InspectorTab,
     /// The Settings dialog is open, on this tab.
     pub settings_open: bool,
     pub settings_tab: SettingsTab,
@@ -101,6 +104,8 @@ pub enum Message {
     EntitySelected(EntityId),
     /// A press on a view's empty space: nothing selected.
     SelectionCleared,
+    /// Open one of the inspector's tabs.
+    InspectorTab(InspectorTab),
     /// A control's slider moved, not yet let go.
     ControlDragged(ControlDrag),
     /// The slider being dragged was let go: its value is sent.
@@ -198,6 +203,7 @@ impl Triib {
             editing: None,
             tree_open: BTreeSet::new(),
             control_drag: None,
+            inspector_tab: InspectorTab::default(),
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error: None,
@@ -233,6 +239,7 @@ impl Triib {
             editing: None,
             tree_open: BTreeSet::new(),
             control_drag: None,
+            inspector_tab: InspectorTab::default(),
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error,
@@ -325,6 +332,7 @@ impl Triib {
                     self.save_settings();
                 }
             }
+            Message::InspectorTab(tab) => self.inspector_tab = tab,
             Message::ControlDragged(drag) => self.control_drag = Some(drag),
             Message::ControlReleased => {
                 if let Some(drag) = self.control_drag.take()

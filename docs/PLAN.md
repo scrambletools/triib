@@ -416,7 +416,10 @@ triib is MIT OR Apache-2.0. Things to keep that true:
    heading row is shaded, and the Media clock cell picks the clock source.
 3. Stream matrix: connect and disconnect, status per cell.
 4. Identify.
-5. Inspector: AEM tree and dynamic values.
+5. Inspector: AEM tree and dynamic values, in tabs under its title:
+   the entity (names, product, media clock, advertisement), its streams
+   and channel mappings, its controls, its interfaces and counters, and
+   its descriptors.
 6. Edit names, stream format, sampling rate, clock source.
 7. Unsolicited notifications; changes from Hive or the Mac mini show live.
 8. Entity model cache: models kept by entity model ID, firmware and

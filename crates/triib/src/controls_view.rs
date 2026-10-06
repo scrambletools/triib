@@ -13,7 +13,7 @@ use atdecc::descriptor::{DescriptorType, LocalizedStringRef};
 use atdecc::model::EntityModel;
 use iced::widget::{slider, toggler};
 use iced::{Center, Element, Fill, Length, Theme};
-use scramble_ui::component::{self, Backdrop};
+use scramble_ui::component::Backdrop;
 use scramble_ui::font::{Type, styled};
 use scramble_ui::{Scheme, button, dropdown, style};
 
@@ -34,8 +34,8 @@ pub struct ControlDrag {
     pub shown: f64,
 }
 
-/// The controls section, or nothing when the entity has no control to
-/// show; an identify control the Identify button stands for is left out.
+/// The entity's controls, each with what sets it; an identify control
+/// the Identify button stands for is left out.
 pub fn controls<'a>(
     triib: &'a Triib,
     entity: EntityId,
@@ -51,15 +51,15 @@ pub fn controls<'a>(
         .controls()
         .filter(|control| !(identify_button && control.control_type == ControlType::IDENTIFY))
         .collect();
-    if shown.is_empty() {
-        return Vec::new();
-    }
-    let mut items = vec![component::section("Controls")];
-    for control in shown {
-        let name = control_name(model, &control);
-        items.push(stacked(name, editor(triib, entity, model, &control)));
-    }
-    items
+    shown
+        .iter()
+        .map(|control| {
+            stacked(
+                control_name(model, control),
+                editor(triib, entity, model, control),
+            )
+        })
+        .collect()
 }
 
 /// The control's name: the one it holds, else its kind.
@@ -412,8 +412,8 @@ mod tests {
     fn the_identify_button_stands_for_the_identify_control() {
         let triib = sample();
         let model = &triib.models[&WIRED_ESP];
-        // The section's heading, then volume and gain without identify.
-        assert_eq!(controls(&triib, WIRED_ESP, model).len(), 3);
+        // Volume and gain, without identify.
+        assert_eq!(controls(&triib, WIRED_ESP, model).len(), 2);
         assert_eq!(model.controls().count(), 3);
     }
 }
