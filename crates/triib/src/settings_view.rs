@@ -4,14 +4,14 @@
 
 use std::fmt;
 
-use iced::widget::{container, mouse_area, opaque, pick_list, space, toggler};
+use iced::widget::{container, mouse_area, opaque, space, toggler};
 use iced::{Center, Color, Element, Fill, Length, Theme};
 use scramble_ui::appearance::{Appearance, hex_to_color};
 use scramble_ui::button::{self, Kind};
 use scramble_ui::component;
 use scramble_ui::font::{Type, aligned, styled};
 use scramble_ui::icon::Icon;
-use scramble_ui::{Scheme, enter, scheme, shape, style};
+use scramble_ui::{Scheme, dropdown, enter, scheme, shape, style};
 
 use crate::app::{Message, TRIIB_SEED, Triib};
 use crate::settings::SYSTEM_LANGUAGE;
@@ -152,14 +152,10 @@ fn general(triib: &Triib) -> iced::widget::Column<'_, Message> {
         .clone();
     iced::widget::column![
         component::section("Language"),
-        pick_list(choices, Some(selected), |choice: Language| {
+        dropdown::pick(choices, Some(selected), |choice: Language| {
             Message::LanguageSelected(choice.tag.to_owned())
         })
-        .text_size(16)
-        .padding([10, 12])
-        .width(Fill)
-        .style(style::outlined_select)
-        .menu_style(style::select_menu),
+        .width(Fill),
         aligned(
             styled(
                 "triib speaks English for now; more languages are coming.",

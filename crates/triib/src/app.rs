@@ -12,7 +12,7 @@ use scramble_ui::appearance::{self, Appearance, Inputs};
 use scramble_ui::{desktop, motion, omarchy, scheme};
 
 use crate::External;
-use crate::entity_table::{Column, HeadingMenu};
+use crate::entity_table::Column;
 use crate::matrix::{Hover, Side};
 use crate::netmap::{Focus, NodeKey};
 use crate::network::{Action, Failure, Name, NameTarget, Neighbor, Network, Report, ReportKind};
@@ -69,8 +69,6 @@ pub struct Triib {
     pub editing: Option<(NameTarget, String)>,
     /// The descriptor types opened in the inspector's tree, by entity.
     pub tree_open: BTreeSet<(EntityId, DescriptorType)>,
-    /// The entity list heading whose menu is open.
-    pub entity_menu: Option<HeadingMenu>,
     /// The Settings dialog is open, on this tab.
     pub settings_open: bool,
     pub settings_tab: SettingsTab,
@@ -112,8 +110,6 @@ pub enum Message {
     EntityColumn(usize, Option<EntityField>),
     /// Add a column showing this field at the entity list's right.
     EntityColumnAdded(EntityField),
-    /// Open a heading's menu in the entity list, or close it.
-    EntityColumnMenu(Option<HeadingMenu>),
     /// Move the entity list's column at this place right, or left when
     /// false.
     EntityColumnMoved(usize, bool),
@@ -192,7 +188,6 @@ impl Triib {
             network_list: false,
             editing: None,
             tree_open: BTreeSet::new(),
-            entity_menu: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error: None,
@@ -227,7 +222,6 @@ impl Triib {
             network_list: false,
             editing: None,
             tree_open: BTreeSet::new(),
-            entity_menu: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error,
@@ -344,7 +338,6 @@ impl Triib {
             }
             Message::DismissNotice => self.notice = None,
             Message::EntityColumn(index, field) => {
-                self.entity_menu = None;
                 let columns = &mut self.settings.entity_columns;
                 if index < columns.len() {
                     match field {
@@ -357,9 +350,7 @@ impl Triib {
                     self.save_settings();
                 }
             }
-            Message::EntityColumnMenu(menu) => self.entity_menu = menu,
             Message::EntityColumnMoved(index, right) => {
-                self.entity_menu = None;
                 let columns = &mut self.settings.entity_columns;
                 let other = if right {
                     index.checked_add(1)
@@ -390,7 +381,6 @@ impl Triib {
                 self.save_settings();
             }
             Message::EntityColumnAdded(field) => {
-                self.entity_menu = None;
                 if !self.settings.entity_columns.contains(&field) {
                     self.settings.entity_columns.push(field);
                     self.save_settings();

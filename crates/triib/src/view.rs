@@ -14,13 +14,13 @@ use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::stream_format::StreamFormat;
 use atdecc::{DiscoveredEntity, EntityCapabilities, EntityId};
 use avb_net::Interface;
-use iced::widget::{container, pick_list, rule, space, text_input};
+use iced::widget::{container, rule, space, text_input};
 use iced::{Center, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component::{self, TOOLBAR_HEIGHT};
 use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
-use scramble_ui::{Scheme, style};
+use scramble_ui::{Scheme, dropdown, style};
 
 use crate::app::{Message, NetworkState, Triib};
 use crate::describe;
@@ -143,14 +143,12 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let selected = triib
         .interface()
         .map(|interface| Choice::new(interface, brief));
-    let picker = pick_list(choices, selected, |choice: Choice| {
+    let picker = dropdown::pick(choices, selected, |choice: Choice| {
         Message::InterfacePicked(choice.name)
     })
     .placeholder("Choose an interface")
-    .width(picker_width)
-    .padding([8, 12])
-    .style(style::outlined_select)
-    .menu_style(style::select_menu);
+    .size(button::Size::ExtraSmall)
+    .width(picker_width);
 
     let view = triib.settings.view;
     let view_tool = |glyph, label, target| {
@@ -504,20 +502,17 @@ fn picker<'a, T>(
     pick: impl Fn(T) -> Action + 'a,
 ) -> Element<'a, Message>
 where
-    T: ToString + PartialEq + Clone + 'a,
+    T: ToString + PartialEq + 'a,
 {
-    pick_list(choices, Some(shown), move |choice| {
+    dropdown::pick(choices, Some(shown), move |choice| {
         if busy {
             Message::Nothing
         } else {
             Message::Act(pick(choice))
         }
     })
-    .text_size(13)
-    .padding([4, 8])
+    .size(button::Size::ExtraSmall)
     .width(Fill)
-    .style(style::outlined_select)
-    .menu_style(style::select_menu)
     .into()
 }
 
@@ -1707,10 +1702,6 @@ pub(crate) mod tests {
                     .entity_column_widths
                     .insert(crate::settings::EntityField::Milan, 70.0);
             }
-            if suffix.contains("menu") {
-                // The Group column's menu, open.
-                triib.entity_menu = Some(crate::entity_table::HeadingMenu::Column(0));
-            }
             if suffix.contains("hover-own") {
                 // The Mac mini's audio output against its own audio input.
                 triib.hover = crate::matrix::Hover {
@@ -1754,6 +1745,10 @@ pub(crate) mod tests {
             };
             let mut simulator =
                 iced_test::Simulator::with_size(iced_settings, size, window(&triib));
+            if suffix.contains("menu") {
+                // The Group column's menu, open.
+                simulator.click("Group").expect("the Group heading");
+            }
             let snapshot = simulator.snapshot(&theme).expect("draws");
             assert!(snapshot.matches_image(&file).expect("writes"));
         }

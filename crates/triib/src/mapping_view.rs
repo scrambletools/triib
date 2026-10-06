@@ -8,11 +8,11 @@ use atdecc::EntityId;
 use atdecc::aem::{AudioMapping, MappingChange};
 use atdecc::descriptor::{DescriptorType, StreamPortDescriptor};
 use atdecc::model::EntityModel;
-use iced::widget::{container, pick_list};
+use iced::widget::container;
 use iced::{Center, Element, Fill, Length};
-use scramble_ui::component;
 use scramble_ui::font::{Type, styled};
 use scramble_ui::style;
+use scramble_ui::{button, component, dropdown};
 
 use crate::app::{Message, Triib};
 use crate::network::Action;
@@ -271,18 +271,15 @@ fn dynamic_mappings<'a>(
                 here,
                 current,
             };
-            let picker = pick_list(choices.clone(), Some(shown), move |choice: Choice| {
+            let picker = dropdown::pick(choices.clone(), Some(shown), move |choice: Choice| {
                 if busy {
                     Message::Nothing
                 } else {
                     row_channel.pick(choice.at)
                 }
             })
-            .text_size(13)
-            .padding([4, 8])
-            .width(Fill)
-            .style(style::outlined_select)
-            .menu_style(style::select_menu);
+            .size(button::Size::ExtraSmall)
+            .width(Fill);
             items.push(if row.count > 1 {
                 numbered(channel, picker)
             } else {
