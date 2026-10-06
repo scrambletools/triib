@@ -492,61 +492,64 @@ mod tests {
         use iced::{Event, Point, Size};
 
         let triib = sample();
-        let settings = iced::Settings {
-            fonts: scramble_ui::font::files().collect(),
-            default_font: TEXT,
-            ..iced::Settings::default()
+        // Presses at `from`, moves `by`, and releases, in a fresh window,
+        // returning what the window sent.
+        let gesture = |from: Point, by: f32, presses: usize| {
+            let mut simulator = iced_test::Simulator::with_size(
+                iced::Settings {
+                    fonts: scramble_ui::font::files().collect(),
+                    default_font: TEXT,
+                    ..iced::Settings::default()
+                },
+                Size::new(2200.0, 420.0),
+                crate::view::window(&triib),
+            );
+            simulator.point_at(from);
+            for _ in 0..presses {
+                let _ = simulator.simulate([Event::Mouse(Mouse::ButtonPressed(Button::Left))]);
+                if by != 0.0 {
+                    let to = Point::new(from.x + by, from.y);
+                    simulator.point_at(to);
+                    let _ = simulator.simulate([Event::Mouse(Mouse::CursorMoved { position: to })]);
+                }
+                let _ = simulator.simulate([Event::Mouse(Mouse::ButtonReleased(Button::Left))]);
+            }
+            simulator.into_messages().collect::<Vec<Message>>()
         };
-        let mut simulator = iced_test::Simulator::with_size(
-            settings,
-            Size::new(2200.0, 420.0),
-            crate::view::window(&triib),
-        );
-        // The Group heading's right edge, then 50 pixels further right.
-        let edge = Point::new(436.0, 92.0);
-        let moved = Point::new(486.0, 92.0);
-        simulator.point_at(edge);
-        let _ = simulator.simulate([Event::Mouse(Mouse::ButtonPressed(Button::Left))]);
-        simulator.point_at(moved);
-        let _ = simulator.simulate([Event::Mouse(Mouse::CursorMoved { position: moved })]);
-        let _ = simulator.simulate([Event::Mouse(Mouse::ButtonReleased(Button::Left))]);
-        let messages: Vec<Message> = simulator.into_messages().collect();
-        let widths: Vec<f32> = messages
-            .iter()
-            .filter_map(|message| match message {
+        let group_width = |messages: &[Message]| {
+            messages.iter().find_map(|message| match message {
                 Message::EntityColumnResized(Column::Field(EntityField::Group), width) => {
                     Some(*width)
                 }
                 _ => None,
             })
-            .collect();
-        assert_eq!(widths.len(), 1, "{messages:?}");
-        // The heading was about 117 pixels wide inside its padding.
-        assert!((150.0..190.0).contains(&widths[0]), "{widths:?}");
+        };
+        // Where the Group heading's edge is depends on the fonts measuring
+        // the columns, so it is found along the heading row.
+        let row = 92.0;
+        // Steps narrower than the edge's grab area cannot miss it.
+        let (edge, messages) = (200..900)
+            .step_by(6)
+            .map(|x| Point::new(x as f32, row))
+            .find_map(|edge| {
+                let messages = gesture(edge, 50.0, 1);
+                group_width(&messages).is_some().then_some((edge, messages))
+            })
+            .expect("the Group heading's edge");
+        let width = group_width(&messages).unwrap();
+        assert!(width > 50.0 + MIN_WIDTH, "{width}");
         assert!(
             messages
                 .iter()
                 .any(|message| matches!(message, Message::EntityColumnResizeEnded))
         );
-
-        // A double click on the edge asks for the column to fit its text.
-        let mut simulator = iced_test::Simulator::with_size(
-            iced::Settings {
-                fonts: scramble_ui::font::files().collect(),
-                default_font: TEXT,
-                ..iced::Settings::default()
-            },
-            Size::new(2200.0, 420.0),
-            crate::view::window(&triib),
+        // Dragging from further in, over the heading's menu, does not.
+        assert_eq!(
+            group_width(&gesture(Point::new(edge.x - 40.0, row), 50.0, 1)),
+            None
         );
-        simulator.point_at(edge);
-        for _ in 0..2 {
-            let _ = simulator.simulate([
-                Event::Mouse(Mouse::ButtonPressed(Button::Left)),
-                Event::Mouse(Mouse::ButtonReleased(Button::Left)),
-            ]);
-        }
-        assert!(simulator.into_messages().any(|message| matches!(
+        // A double click on the edge asks for the column to fit its text.
+        assert!(gesture(edge, 0.0, 2).iter().any(|message| matches!(
             message,
             Message::EntityColumnWidthReset(Column::Field(EntityField::Group))
         )));
