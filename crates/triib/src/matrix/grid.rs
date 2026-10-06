@@ -1247,10 +1247,10 @@ mod tests {
         let rows = vec![
             group(1, "Mac mini", "f5:44", false),
             stream(1, 0, "Audio Input Stream 1", "192k 8ch"),
-            stream(1, 1, "Media Clock Input Stream", "CRF 48k"),
+            stream(1, 1, "Media Clock Input Stream", "48k CRF"),
             group(2, "AVB Example Entity", "92:20", false),
             stream(2, 0, "Audio Stream In", "48k 8ch"),
-            stream(2, 1, "CRF Media Clock In", "CRF 48k"),
+            stream(2, 1, "CRF Media Clock In", "48k CRF"),
             group(3, "AVB Example Entity", "fe:80", true),
         ];
         let action = Some(Action::Identify(entity(1)));

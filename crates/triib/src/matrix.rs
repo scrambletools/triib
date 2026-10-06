@@ -270,10 +270,16 @@ fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
             choice("Audio", Streams::Audio),
             choice("Media clock", Streams::Clock),
         ]),
-        button::with_icon(Kind::Filled, Icon::FilterAlt, "Hide what cannot connect")
-            .size(Size::ExtraSmall)
-            .selected(hidden.is_some())
-            .on_press(Message::MatrixConnectableOnlyToggled),
+        // A secondary option, so a quiet tonal fill when on rather than
+        // the stream choices' strong one.
+        if hidden.is_some() {
+            button::with_icon(Kind::Tonal, Icon::FilterAlt, "Hide what cannot connect")
+        } else {
+            button::with_icon(Kind::Filled, Icon::FilterAlt, "Hide what cannot connect")
+                .selected(false)
+        }
+        .size(Size::ExtraSmall)
+        .on_press(Message::MatrixConnectableOnlyToggled),
     ];
     if let Some(hidden) = hidden {
         filters = filters.push(
@@ -388,7 +394,7 @@ fn connectable_only<'a>(talkers: &mut Vec<Group<'a>>, listeners: &mut Vec<Group<
     }
 }
 
-/// A stream format in a few characters, such as "48k 8ch" or "CRF 48k".
+/// A stream format in a few characters, such as "48k 8ch" or "48k CRF".
 fn short(format: StreamFormat) -> String {
     let rate = format.sample_rate().map(|hertz| {
         if hertz.is_multiple_of(1000) {
@@ -398,7 +404,7 @@ fn short(format: StreamFormat) -> String {
         }
     });
     if format.is_clock() {
-        return rate.map_or_else(|| "CRF".to_owned(), |rate| format!("CRF {rate}"));
+        return rate.map_or_else(|| "CRF".to_owned(), |rate| format!("{rate} CRF"));
     }
     match (rate, format.channels()) {
         (Some(rate), Some(channels)) => format!("{rate} {channels}ch"),
@@ -834,6 +840,6 @@ mod tests {
         assert_eq!(short(aaf), "48k 8ch");
         // CRF audio sample, 48 kHz.
         let crf = StreamFormat(0x0410_6001_0000_bb80);
-        assert_eq!(short(crf), "CRF 48k");
+        assert_eq!(short(crf), "48k CRF");
     }
 }
