@@ -845,10 +845,11 @@ impl Matrix {
         let heading = &self.grid.columns[index];
         match heading.collapsed {
             None => {
-                // The stream's format after its name, as the rows have it.
+                // The stream's format at the far end of its heading, so the
+                // formats line up, as the rows have them at their right.
                 let detail_width = measure(&heading.detail, TEXT, 11.0);
                 let fitted = fitted(state, Side::Talker, index, || {
-                    fit(&heading.name, TEXT, 12.0, SLANT_MAX - 6.0 - detail_width)
+                    fit(&heading.name, TEXT, 12.0, SLANT_MAX - 8.0 - detail_width)
                 });
                 slanted(frame, Point::new(x + 37.0, HEADER - 6.0), |frame| {
                     frame.fill_text(Text {
@@ -864,11 +865,12 @@ impl Matrix {
                     });
                     frame.fill_text(Text {
                         content: heading.detail.clone(),
-                        position: Point::new(fitted.name_width + 6.0, 0.0),
+                        position: Point::new(SLANT_MAX, 0.0),
                         color: colors.detail,
                         size: Pixels(11.0),
                         line_height: LineHeight::Absolute(Pixels(16.0)),
                         font: TEXT,
+                        align_x: Alignment::Right,
                         align_y: Vertical::Bottom,
                         shaping: Shaping::Advanced,
                         ..Text::default()
