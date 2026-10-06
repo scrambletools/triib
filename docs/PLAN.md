@@ -33,7 +33,7 @@ dependency.
 | GUI | iced 0.14, same features and vendor patches as prev |
 | Design | prev's Material 3 Expressive layer, Omarchy and system accent, from `scramble-ui`, a crate shared with prev |
 | License | MIT OR Apache-2.0 (see Licensing) |
-| Host endpoints | One ATDECC entity per spawned talker or listener |
+| Virtual endpoints | One ATDECC entity per spawned talker or listener |
 | Controller entity | triib advertises itself as a controller (valid time 62 s, entity model ID `0x8c1f6436c0000001` under the Scramble Tools MA-S `8C-1F-64-36-C`), answers CONTROLLER_AVAILABLE, and registers for unsolicited notifications from each entity it reads |
 | ATDECC | Our own Rust stack, controller and entity roles, in the reusable `atdecc` crate, see below |
 | PTP | Decided by the PTP analysis that opens milestone 7 (see PTP analysis): our own Rust gPTP (802.1AS-2020) and AVB Lite PTP engine as the reusable `avb-ptp` crate, following linuxptp where it runs, or both, and in what order |
@@ -144,7 +144,7 @@ crates/
 | Capability probe | `ETHTOOL_GET_TS_INFO`, PHC index | Investigation | None |
 
 The app asks `avb-net` what an interface can do and shows the
-answer: host endpoints are enabled per interface when it reports hardware
+answer: virtual endpoints are enabled per interface when it reports hardware
 timestamps and a usable time source, with the reason shown when not.
 
 Linux privileges: the GUI needs `CAP_NET_RAW`; `triib-endpointd` needs
@@ -168,16 +168,18 @@ timestamps is uncertain. Before writing the macOS backend, on the Mac mini:
    already uses.
 3. Time: can user space read the OS's gPTP time and the PHC relation, or
    get hardware timestamps at all?
-4. Host audio over AVB: if (3) fails, macOS host endpoints are the OS's
+4. Host audio over AVB: if (3) fails, macOS virtual endpoints are the OS's
    own AVB audio device, controlled by triib like any entity, with its
    limits documented; otherwise our own `triib-endpointd` as on Linux.
 
-The result decides only the macOS backends in `avb-net` and the clock
-source for host endpoints; nothing above them changes.
+The first two questions come before the macOS controller backend (P2),
+the last two before virtual endpoints on macOS (P4). The result decides
+only the macOS backends in `avb-net` and the clock source for virtual
+endpoints; nothing above them changes.
 
 ## PTP analysis
 
-Host endpoints need PTP: answering peer delay so the bridge treats the
+Virtual endpoints need PTP: answering peer delay so the bridge treats the
 link as asCapable (without it reservations stop there, as the network
 view shows for this computer today), a disciplined hardware clock for
 presentation times, and gPTP state for each host entity's GET_AVB_INFO,
@@ -218,7 +220,7 @@ listens to the bridge. Before shaping `avb-ptp`, milestone 7 answers:
     recent Windows (UDP only?), Npcap's timestamp types for layer 2, and
     Intel driver interfaces as OpenAvnu's Windows gPTP used.
   - Whether any path gives layer 2 PTP with hardware timestamps, or
-    Windows host endpoints wait.
+    Windows virtual endpoints wait.
   - Tried on the bench (2026-10-05, Windows 11 26H2, an Acemagic AM06
     Pro): its Intel I226-V (Intel driver e2fn 2.1.5.7, NDIS 6.89) and
     Realtek RTL8111 (Microsoft's driver 1.0.0.14) both answer
@@ -257,7 +259,7 @@ The answers decide whether `avb-ptp` is a full stack on every platform, a
 layer over the platform's PTP where one exists, or both, and which comes
 first. esp_ptp (C, both profiles) is the reference for our own engine.
 
-Testing host endpoints also needs a card with a hardware clock on the AVB
+Testing virtual endpoints also needs a card with a hardware clock on the AVB
 network. This computer's is a TP-Link TX401 (Marvell AQtion AQC107, Linux
 `atlantic`, firmware 3.1.100): hardware transmit and receive timestamps,
 the PTP v2 layer 2 event filter, two-step only, PHC `ptp0`. Its PTP
@@ -266,7 +268,7 @@ not all do; whether it can pace transmission (launch time, CBS) is not
 known yet. Its Realtek RTL8125 under r8169 exposes no PHC. Intel i210,
 i225 and i226 are the known choices with launch time.
 
-## Host talkers and listeners
+## Virtual endpoints: host talkers and listeners
 
 - Shown in the Entities view like any entity, with a filter for host
   entities and buttons there to add and remove them; adding is offered on
@@ -484,17 +486,39 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 - AVB Lite status query, bandwidth view and alarms.
 - Presets, `triib-cli` at parity with `atdecc_controller.py`.
 
-### P1: host endpoints on Linux
+### P2: macOS and Windows, everything but virtual endpoints
+
+- Controller frames on macOS (BPF, or the AudioVideoBridging framework,
+  as the investigation's first two questions decide) and on Windows
+  (Npcap), with the interface list and capability probe of each.
+- The app and `triib-cli` doing all of P0 and P1 on both: discovery,
+  enumeration, connections, the network view, media clock, mappings,
+  controls, diagnostics and the log; where a platform cannot hear the
+  bridge's gPTP messages, the network view says so instead of guessing.
+- Checked on the bench from the Windows PC and the Mac mini, against the
+  same entities as Linux.
+- Packages for both with what they need set up (Npcap on Windows), and
+  the release pipeline from prev.
+
+### P3: virtual endpoints on Linux
 
 - `triib-endpointd` with gPTP and AVB Lite PTP, MSRP, MVRP, CVU SRP.
 - Spawn talkers and listeners, AAF and AM824, audio routing via cpal.
 - Show them in the matrix and inspector; save them in presets.
 
-### P2: later
+### P4: investigating virtual endpoints on Windows, then macOS
 
-- Host endpoints on macOS (per the investigation) and Windows (when a
-  hardware timestamp path exists).
-- Firmware update over MVU, several interfaces at once, decoded packet log,
+- Windows first: whether a hardware timestamp path exists, starting from
+  the Intel I210 card and its driver's time sync; then gPTP, SRP and
+  paced transmit on it. The result decides whether Windows gets
+  `triib-endpointd`.
+- Then macOS: the investigation's last two questions, gPTP time and
+  hardware timestamps from user space, or the OS's own AVB audio device
+  controlled like any entity.
+
+### Later
+
+- Firmware update over MVU, several interfaces at once, saving the log,
   MCP server, CRF talker, PipeWire native nodes per endpoint.
 
 ### Not in scope
@@ -511,19 +535,21 @@ Dante, AES67, video streams, acting as an AVB bridge or AVB/Lite gateway.
    unsolicited; checked on the bench against Hive. Review the own-stack
    decision here.
 4. **GUI P0**.
-5. **macOS investigation** (can run alongside 3 and 4).
-6. **AVB Lite controller features**, with the status query in esp_avb.
-7. **Host endpoints on Linux**: the PTP analysis first, then PTP, SRP,
-   local entity engine, streaming, audio, daemon.
-8. **Ports and packaging**: macOS and Windows backends, packages with
-   capabilities set, release pipeline from prev.
+5. **Hive parity and AVB Lite controller features** (P1), with the
+   status query in esp_avb.
+6. **macOS and Windows** (P2): the macOS investigation's frame access
+   questions, then the controller backends of both, checked on the
+   bench; packages with capabilities set, release pipeline from prev.
+7. **Virtual endpoints on Linux** (P3): the PTP analysis first, then PTP,
+   SRP, local entity engine, streaming, audio, daemon.
+8. **Virtual endpoint investigation** (P4): Windows, then macOS.
 
 ## Footprint targets
 
 - GUI binary under 20 MB; daemon under 10 MB.
 - Cold start to window under 300 ms.
 - Idle CPU under 1% with 200 entities; memory under 100 MB.
-- Host endpoint: under 5% of one core per 8 channel 48 kHz stream.
+- Virtual endpoint: under 5% of one core per 8 channel 48 kHz stream.
 - Measured in CI with `triib-sim`.
 
 ## Open decisions
