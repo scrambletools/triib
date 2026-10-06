@@ -182,8 +182,8 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         (
             component::group([
                 view_tool(Icon::GridOn, "Connections", View::Matrix),
-                view_tool(Icon::ViewList, "Entities", View::Entities),
                 view_tool(Icon::Hub, "Network", View::Network),
+                view_tool(Icon::ViewList, "Entities", View::Entities),
             ]),
             DIVIDER_WIDTH + TOOLBAR_GAP + tools(3.0),
             Some(3),
