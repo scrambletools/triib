@@ -3248,6 +3248,7 @@ name = "triib"
 version = "0.1.0"
 dependencies = [
  "atdecc",
+ "avb-mrp",
  "avb-net",
  "iced",
  "iced_test",

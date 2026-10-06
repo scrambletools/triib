@@ -3,6 +3,7 @@
 //! the column or shows another field in it, and a last heading adds one.
 
 use atdecc::DiscoveredEntity;
+use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
 use iced::widget::text::Wrapping;
 use iced::widget::{container, mouse_area, opaque, scrollable, space, table};
@@ -95,6 +96,15 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
             ),
         EntityField::TalkerStreams => count(entity.adp.talker_stream_sources),
         EntityField::ListenerStreams => count(entity.adp.listener_stream_sinks),
+        EntityField::AvbLite => model.map_or_else(String::new, crate::lite_view::mode),
+        EntityField::Egress => model
+            .and_then(|model| {
+                let (interface, _) = model.descriptors(DescriptorType::AVB_INTERFACE).next()?;
+                crate::lite_view::egress(model, interface)
+            })
+            .map_or_else(String::new, |egress| {
+                format!("{:.1}%", egress.share() * 100.0)
+            }),
     }
 }
 

@@ -12,8 +12,10 @@ use atdecc::adp::AdpMessageType;
 use atdecc::aecp::{AecpMessageType, AemCommandType, AemPdu, AemStatus};
 use atdecc::blocking::Frame;
 use atdecc::descriptor::DescriptorType;
+use atdecc::lite::{CvuMessage, LiteFlags, LiteMessage, LiteStatus};
 use atdecc::mvu::MvuMessage;
 use atdecc::pdu::{self, Pdu};
+use avb_mrp::msrp;
 use iced::widget::{column, container, mouse_area, row, space};
 use iced::{Center, Element, Fill, Font, Length};
 use scramble_ui::button::{self, Kind, Size};
@@ -247,20 +249,26 @@ pub fn describe(triib: &Triib, frame: &Frame) -> Line {
             line.entity = Some(vendor_unique.header.target_entity_id);
             let response =
                 vendor_unique.header.message_type == AecpMessageType::VENDOR_UNIQUE_RESPONSE;
-            line.summary = match MvuMessage::from_pdu(&vendor_unique) {
-                Ok(message) => {
-                    let mut summary = format!(
-                        "Milan: {}",
-                        named(message.command_type.name(), message.command_type.0)
-                    );
-                    if message.unsolicited {
-                        summary.push_str(", notification");
-                    } else if response {
-                        summary.push_str(", response");
-                    }
-                    summary
+            line.summary = if let Ok(message) = LiteMessage::from_pdu(&vendor_unique) {
+                describe_lite(message, response)
+            } else if let Ok(cvu) = CvuMessage::from_pdu(&vendor_unique) {
+                // A talker sends CVU SRP about itself, to no one in
+                // particular.
+                line.entity = Some(cvu.sender);
+                describe_cvu(&cvu)
+            } else if let Ok(message) = MvuMessage::from_pdu(&vendor_unique) {
+                let mut summary = format!(
+                    "Milan: {}",
+                    named(message.command_type.name(), message.command_type.0)
+                );
+                if message.unsolicited {
+                    summary.push_str(", notification");
+                } else if response {
+                    summary.push_str(", response");
                 }
-                Err(_) => "Vendor unique".to_owned(),
+                summary
+            } else {
+                "Vendor unique".to_owned()
             };
             if response && vendor_unique.header.status != 0 {
                 let status = AemStatus(vendor_unique.header.status);
@@ -279,6 +287,64 @@ pub fn describe(triib: &Triib, frame: &Frame) -> Line {
         Ok(Pdu::Other { subtype }) => line.summary = format!("Subtype {subtype:#04x}"),
     }
     line
+}
+
+/// An AVB Lite status query or its answer, with what the answer says.
+fn describe_lite(message: LiteMessage<'_>, response: bool) -> String {
+    let mut summary = format!(
+        "AVB Lite: {}",
+        named(message.command_type.name(), message.command_type.0)
+    );
+    if message.unsolicited {
+        summary.push_str(", notification");
+    } else if response {
+        summary.push_str(", response");
+    }
+    if let Ok(status) = LiteStatus::decode(message.data) {
+        let mode = if status.flags.contains(LiteFlags::ACTIVE) {
+            "active"
+        } else if status.flags.contains(LiteFlags::CAPABLE) {
+            "capable"
+        } else {
+            "not capable"
+        };
+        summary.push_str(&format!(", {mode}"));
+        if let Some(offset) = status.offset() {
+            summary.push_str(&format!(", offset {offset} ns"));
+        }
+    }
+    summary
+}
+
+/// A CVU SRP message: the streams a talker declares or withdraws.
+fn describe_cvu(cvu: &CvuMessage<'_>) -> String {
+    let declarations: Vec<_> = msrp::talker_declarations(cvu.msrp).collect();
+    let kind = match cvu.command_type {
+        msrp::attribute::TALKER_ADVERTISE => "talker advertise",
+        msrp::attribute::TALKER_FAILED => "talker failed",
+        msrp::attribute::LISTENER => "listener",
+        msrp::attribute::DOMAIN => "domain",
+        _ => "declaration",
+    };
+    let mut summary = format!("CVU SRP: {kind}");
+    if let Some(first) = declarations.first() {
+        let verb = if first.event.declares() {
+            ""
+        } else {
+            " withdrawn"
+        };
+        summary.push_str(&format!(
+            ", stream {:#018x}{verb} to {}, VLAN {}, {}",
+            first.stream_id,
+            first.destination,
+            first.vlan_id,
+            crate::lite_view::rate(first.bandwidth(8000))
+        ));
+        if declarations.len() > 1 {
+            summary.push_str(&format!(" and {} more", declarations.len() - 1));
+        }
+    }
+    summary
 }
 
 fn describe_acmp(triib: &Triib, frame: &Frame, acmpdu: &Acmpdu, line: &mut Line) {
@@ -690,6 +756,35 @@ pub(crate) mod tests {
         let line = describe(&triib, &frame(false, refused));
         assert_eq!(line.summary, "Get counters, AVB interface 0, response");
         assert_eq!(line.refusal.as_deref(), Some("Not implemented"));
+    }
+
+    #[test]
+    fn avb_lite_frames_say_what_they_report() {
+        let triib = sample();
+        let mut out = [0; 64];
+        let length =
+            atdecc::lite::encode_get_lite_status(WIRED_ESP, CONTROLLER, 3, 0, &mut out).unwrap();
+        let line = describe(&triib, &frame(true, out[..length].to_vec()));
+        assert_eq!(line.summary, "AVB Lite: Get lite status");
+        assert_eq!(line.entity, Some(WIRED_ESP));
+
+        let [notification, declaration] =
+            <[Vec<u8>; 2]>::try_from(crate::view::tests::lite_frames(-180, 6_336)).unwrap();
+        let line = describe(&triib, &frame(false, notification));
+        assert_eq!(
+            line.summary,
+            "AVB Lite: Get lite status, notification, active, offset -180 ns"
+        );
+        assert_eq!(line.entity, Some(WIRED_ESP));
+        // CVU SRP is about the talker that sends it.
+        let line = describe(&triib, &frame(false, declaration));
+        assert_eq!(
+            line.summary,
+            "CVU SRP: talker advertise, stream 0xd111e597f5448000 to 91:e0:f0:00:6a:20, \
+             VLAN 2, 17 Mb/s"
+        );
+        assert_eq!(line.entity, Some(EntityId(0xd111_e597_f544_8000)));
+        assert!(line.warnings.is_empty());
     }
 
     #[test]

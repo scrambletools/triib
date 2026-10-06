@@ -114,6 +114,8 @@ pub enum Message {
     EntitySelected(EntityId),
     /// A press on a view's empty space: nothing selected.
     SelectionCleared,
+    /// Show an entity's alarms: select it and open its diagnostics.
+    AlarmOpened(EntityId),
     /// Open one of the inspector's tabs.
     InspectorTab(InspectorTab),
     Log(LogMessage),
@@ -368,6 +370,14 @@ impl Triib {
                     && let Some(message) = crate::controls_view::released(self, drag)
                 {
                     return self.update(message);
+                }
+            }
+            Message::AlarmOpened(entity_id) => {
+                self.selected = Some(entity_id);
+                self.inspector_tab = InspectorTab::Diagnostics;
+                if !self.settings.inspector {
+                    self.settings.inspector = true;
+                    self.save_settings();
                 }
             }
             Message::SelectionCleared => {

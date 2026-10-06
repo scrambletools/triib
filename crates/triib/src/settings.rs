@@ -105,11 +105,15 @@ pub enum EntityField {
     Configuration,
     TalkerStreams,
     ListenerStreams,
+    /// How it runs: AVB Lite, capable of it, or not.
+    AvbLite,
+    /// What its talker streams take of its link.
+    Egress,
 }
 
 impl EntityField {
     /// Every field, in the order the column menus offer them.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::Group,
         Self::Product,
         Self::Vendor,
@@ -128,6 +132,8 @@ impl EntityField {
         Self::Configuration,
         Self::TalkerStreams,
         Self::ListenerStreams,
+        Self::AvbLite,
+        Self::Egress,
     ];
 
     /// The columns shown until the user changes them.
@@ -164,6 +170,8 @@ impl EntityField {
             Self::Configuration => "Configuration",
             Self::TalkerStreams => "Talker streams",
             Self::ListenerStreams => "Listener streams",
+            Self::AvbLite => "AVB Lite",
+            Self::Egress => "Egress",
         }
     }
 }

@@ -306,13 +306,14 @@ Per `profiles/avb_lite.md`:
   Endpoint Declaration TLVs and beacons only reach us when no AVB bridge
   is between us and the device. Lite listeners and Lite-capable devices
   still in AVB mode are invisible.
-- **Gap in the profile:** section 2.2 says a device must advertise its mode
-  to the controller but defines no mechanism. Proposal: an AECP vendor
-  unique query under the AVB Lite MA-S OUI (sub-protocol `0x003`, next
-  after CVU SRP's `0x002`) returning capable, active, fallback reason, PTP
-  profile and domain, media VLAN and unicast fan-out, with unsolicited
-  notification on change. Implement in esp_avb, triib's own endpoints and
-  the profile document together.
+- **Mode reporting:** section 2.2 said a device must advertise its mode
+  to the controller but defined no mechanism; section 2.4 now does: an
+  AECP vendor unique query under the AVB Lite MA-S OUI (sub-protocol
+  `0x003`, next after CVU SRP's `0x002`), GET_LITE_STATUS, returning
+  capable, active, fallback reason, PTP profile and domain, media VLAN,
+  unicast fan-out, link speed, committed egress, grandmaster and offset,
+  with an unsolicited response on change. triib asks it; esp_avb and
+  triib's own endpoints still have to answer it.
 - **Profile inconsistency to settle:** section 4 and section 9 put admission
   control in the controller ("bandwidth ledger", refuse past 75%), while
   section 6 puts it in the endpoints (CVU SRP, talker 75% rule). triib can
@@ -483,7 +484,22 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   counts them), and the long ACMP form from a Milan entity. The blocking
   driver keeps the frames when asked. Saving the log, and warnings for
   timing rules such as an ENTITY_DISCOVER answered late, can follow.
-- AVB Lite status query, bandwidth view and alarms.
+- AVB Lite: each entity is asked GET_LITE_STATUS once read, and every
+  5 seconds while it answers, to follow its offset; one that says it
+  does not implement it is not asked again, and unsolicited responses
+  update it in place. CVU SRP talker declarations are heard from any
+  entity and kept 30 seconds past the last, so a talker that declares
+  shows as running AVB Lite without the query. The entity list has AVB
+  Lite and Egress columns, the inspector's Entity tab how each interface
+  runs (mode, why it fell back, PTP profile and domain, offset from the
+  grandmaster, media VLAN, unicast fan-out, link), and its Diagnostics
+  tab what the talker streams take of the link: as the entity reports
+  it, else worked out from the formats of its connected outputs.
+  Alarms for an offset past 50 us and egress past 75% show in
+  Diagnostics and on the status bar, which opens the entity. The log
+  describes the query and CVU SRP. The matrix showing Lite transport
+  (unicast, fan-out count, escalated to multicast) can follow, with
+  endpoints that answer the query to try it on.
 - Presets, from a toolbar button: each a TOML file in the data folder
   (copyable between computers) keeping each entity's clock sources,
   sampling rates, stream formats, settable level and selector controls

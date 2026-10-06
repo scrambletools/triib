@@ -16,8 +16,10 @@ listeners, routed to the computer's audio. Built in Rust with
 > (each entity's media clock right in the entity list), shows and
 > changes how their channels map to streams, shows and sets their
 > controls, such as gain and mute, saves and recalls presets of all of
-> that and the connections, and logs every ATDECC frame sent and heard,
-> marking those that break the rules. See the [plan](docs/PLAN.md).
+> that and the connections, logs every ATDECC frame sent and heard,
+> marking those that break the rules, and shows how entities run AVB
+> Lite, what their streams take of each link and the alarms the AVB Lite
+> profile calls for. See the [plan](docs/PLAN.md).
 
 ## Building
 

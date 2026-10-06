@@ -1,0 +1,462 @@
+//! AVB Lite and bandwidth in the inspector: how each interface of an
+//! entity runs as it reports it (AVB Lite profile, 2.4), what its talker
+//! streams take of its link, and the alarms the profile calls for: a PTP
+//! offset past 50 µs and egress past 75% of the link.
+
+use atdecc::EntityId;
+use atdecc::aem::StreamInfoFlags;
+use atdecc::descriptor::DescriptorType;
+use atdecc::lite::{FallbackReason, LiteFlags, LiteStatus, PtpProfile};
+use atdecc::model::EntityModel;
+use iced::widget::{column, container, row};
+use iced::{Element, Fill, Length, Theme};
+use scramble_ui::font::{Type, styled};
+use scramble_ui::{Scheme, component, shape, style};
+
+use crate::app::{Message, Triib};
+
+/// The PTP offset past which the profile calls for an alarm (9).
+const OFFSET_ALARM: i32 = 50_000;
+/// The share of a link streams may take (4 and 6.5).
+const EGRESS_LIMIT: f64 = 0.75;
+/// The link speed taken when an entity does not report it.
+const ASSUMED_LINK: u64 = 1_000_000_000;
+
+/// What an interface's talker streams take of its link.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Egress {
+    /// Bits per second.
+    pub used: u64,
+    pub link: u64,
+    /// The entity reported the link speed; else a gigabit is assumed.
+    pub link_reported: bool,
+    /// The entity reported what its streams take; else it is worked out
+    /// from the formats of its connected stream outputs.
+    pub used_reported: bool,
+}
+
+impl Egress {
+    pub fn share(&self) -> f64 {
+        self.used as f64 / self.link as f64
+    }
+
+    pub fn over(&self) -> bool {
+        self.share() >= EGRESS_LIMIT
+    }
+}
+
+/// What an interface's talker streams take: as the entity reports it, else
+/// from the formats of the stream outputs that are connected; none for an
+/// entity without talker streams or a report.
+pub fn egress(model: &EntityModel, interface: u16) -> Option<Egress> {
+    let status = model.lite_status(interface);
+    let link = status
+        .map(|status| u64::from(status.link_speed) * 1_000_000)
+        .filter(|&link| link > 0);
+    let reported = status.and_then(LiteStatus::egress);
+    let worked_out: u64 = model
+        .streams(false)
+        .filter(|stream| {
+            model
+                .stream_info(DescriptorType::STREAM_OUTPUT, stream.index)
+                .is_some_and(|info| info.flags.contains(StreamInfoFlags::CONNECTED))
+        })
+        .filter_map(|stream| stream.current_format.wire_bandwidth())
+        .sum();
+    if reported.is_none() && model.streams(false).next().is_none() {
+        return None;
+    }
+    Some(Egress {
+        used: reported.map_or(worked_out, |kilobits| u64::from(kilobits) * 1000),
+        link: link.unwrap_or(ASSUMED_LINK),
+        link_reported: link.is_some(),
+        used_reported: reported.is_some(),
+    })
+}
+
+/// A rate in bits per second, as "16.5 Mb/s" or "1 Gb/s".
+pub fn rate(bits: u64) -> String {
+    let (value, unit) = match bits {
+        bits if bits >= 1_000_000_000 => (bits as f64 / 1e9, "Gb/s"),
+        bits if bits >= 1_000_000 => (bits as f64 / 1e6, "Mb/s"),
+        bits => (bits as f64 / 1e3, "kb/s"),
+    };
+    let text = format!("{value:.1}");
+    format!("{} {unit}", text.trim_end_matches(".0"))
+}
+
+/// A time in nanoseconds in the unit that suits it: "180 ns", "72 µs".
+fn duration(nanoseconds: i32) -> String {
+    if nanoseconds.unsigned_abs() >= 10_000 {
+        format!("{} µs", nanoseconds / 1000)
+    } else {
+        format!("{nanoseconds} ns")
+    }
+}
+
+/// How an entity runs, for the entity list: AVB Lite or not, as it reports
+/// it or as its CVU SRP declarations show.
+pub fn mode(model: &EntityModel) -> String {
+    let statuses: Vec<&LiteStatus> = model
+        .descriptors(DescriptorType::AVB_INTERFACE)
+        .filter_map(|(interface, _)| model.lite_status(interface))
+        .collect();
+    if let Some(active) = statuses
+        .iter()
+        .find(|status| status.flags.contains(LiteFlags::ACTIVE))
+    {
+        return match active.media_vlan_id {
+            0 => "Active, untagged".to_owned(),
+            vlan => format!("Active, VLAN {vlan}"),
+        };
+    }
+    if model.cvu_talkers().next().is_some() {
+        return "Active".to_owned();
+    }
+    if statuses
+        .iter()
+        .any(|status| status.flags.contains(LiteFlags::CAPABLE))
+    {
+        return "Capable".to_owned();
+    }
+    match model.lite_supported {
+        Some(false) => "No".to_owned(),
+        _ => String::new(),
+    }
+}
+
+fn fallback(reason: FallbackReason) -> &'static str {
+    match reason {
+        FallbackReason::NONE => "no reason given",
+        FallbackReason::ENDPOINT_TLV => {
+            "another endpoint's declaration came through, so no AVB bridge is between them"
+        }
+        FallbackReason::PDELAY_UNANSWERED => "nine peer delay requests went unanswered",
+        FallbackReason::MULTIPLE_RESPONDERS => {
+            "two or more answered one peer delay request, so the switch is not an AVB bridge"
+        }
+        FallbackReason::CONFIGURED => "the operator or a controller set it",
+        _ => "a reason the profile does not name",
+    }
+}
+
+/// The AVB Lite section of the inspector's Entity tab: how each interface
+/// runs, from entities that report it.
+pub fn entity_section<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
+    let mut items = Vec::new();
+    for (interface, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+        let Some(status) = model.lite_status(interface) else {
+            continue;
+        };
+        if items.is_empty() {
+            items.push(component::section("AVB Lite"));
+        }
+        let active = status.flags.contains(LiteFlags::ACTIVE);
+        let capable = status.flags.contains(LiteFlags::CAPABLE);
+        let mode = match (active, capable) {
+            (true, _) => "AVB Lite".to_owned(),
+            (false, true) => "AVB, AVB Lite capable".to_owned(),
+            (false, false) => "AVB".to_owned(),
+        };
+        items.push(property("Mode", mode, false));
+        if active {
+            items.push(property(
+                "Because",
+                fallback(status.fallback_reason).to_owned(),
+                false,
+            ));
+        }
+        let profile = match status.ptp_profile {
+            PtpProfile::GPTP => "gPTP (802.1AS)",
+            PtpProfile::AVB_LITE_PTP => "AVB Lite PTP",
+            _ => "Another profile",
+        };
+        items.push(property(
+            "PTP",
+            format!("{profile}, domain {}", status.ptp_domain),
+            false,
+        ));
+        if let Some(offset) = status.offset() {
+            items.push(property(
+                "Offset",
+                format!("{} from {}", duration(offset), status.grandmaster),
+                offset.abs() > OFFSET_ALARM,
+            ));
+        }
+        if active {
+            items.push(property(
+                "Media VLAN",
+                match status.media_vlan_id {
+                    0 => "Untagged".to_owned(),
+                    vlan => vlan.to_string(),
+                },
+                false,
+            ));
+            if status.unicast_fanout_limit > 0 {
+                let limit = status.unicast_fanout_limit;
+                let plural = if limit == 1 { "listener" } else { "listeners" };
+                items.push(property(
+                    "Unicast",
+                    format!("Up to {limit} {plural} a stream, then multicast"),
+                    false,
+                ));
+            }
+        }
+        if status.link_speed > 0 {
+            items.push(property(
+                "Link",
+                rate(u64::from(status.link_speed) * 1_000_000),
+                false,
+            ));
+        }
+    }
+    items
+}
+
+fn property<'a>(label: &str, value: String, alarm: bool) -> Element<'a, Message> {
+    let value = styled(value, Type::BodyMedium).width(Fill);
+    row![
+        styled(label.to_owned(), Type::BodyMedium)
+            .style(style::on_surface_variant)
+            .width(Length::Fixed(132.0)),
+        if alarm {
+            value.style(style::error_text)
+        } else {
+            value
+        },
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// The bandwidth section of the Diagnostics tab: each interface's egress
+/// against its link, with a bar marked past 75%.
+pub fn bandwidth<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
+    let mut items = Vec::new();
+    for (interface, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+        let Some(egress) = egress(model, interface) else {
+            continue;
+        };
+        if items.is_empty() {
+            items.push(component::section("Bandwidth"));
+        }
+        let share = egress.share();
+        let mut text = format!(
+            "{} of {}, {:.1}%",
+            rate(egress.used),
+            rate(egress.link),
+            share * 100.0
+        );
+        if !egress.link_reported {
+            text.push_str(", a gigabit link assumed");
+        }
+        let over = egress.over();
+        let line = styled(text, Type::BodySmall);
+        let note = if egress.used_reported {
+            "As the entity counts its admitted streams."
+        } else {
+            "From the formats of its connected stream outputs."
+        };
+        items.push(
+            column![
+                styled("Egress", Type::BodyMedium),
+                meter(share.min(1.0) as f32, over),
+                if over {
+                    line.style(style::error_text)
+                } else {
+                    line.style(style::on_surface_variant)
+                },
+                styled(note, Type::BodySmall).style(style::on_surface_variant),
+            ]
+            .spacing(4)
+            .into(),
+        );
+    }
+    items
+}
+
+/// A bar filled to `share`, in the error color when `over`.
+fn meter<'a>(share: f32, over: bool) -> Element<'a, Message> {
+    let filled = container(iced::widget::space())
+        .width(Length::FillPortion((share * 1000.0).round() as u16))
+        .height(6)
+        .style(move |theme: &Theme| {
+            let scheme = Scheme::of(theme);
+            container::Style {
+                background: Some(if over { scheme.error } else { scheme.primary }.into()),
+                border: iced::border::rounded(shape::EXTRA_SMALL),
+                ..container::Style::default()
+            }
+        });
+    let rest =
+        iced::widget::space().width(Length::FillPortion(((1.0 - share) * 1000.0).round() as u16));
+    container(row![filled, rest])
+        .width(Fill)
+        .style(|theme: &Theme| container::Style {
+            background: Some(Scheme::of(theme).secondary_container.into()),
+            border: iced::border::rounded(shape::EXTRA_SMALL),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// An alarm the profile calls for, on an entity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Alarm {
+    pub entity: EntityId,
+    pub text: String,
+}
+
+/// Every entity's alarms: a PTP offset past 50 µs, and egress past 75% of
+/// a link.
+pub fn alarms(triib: &Triib) -> Vec<Alarm> {
+    let mut alarms = Vec::new();
+    for (&entity, model) in &triib.models {
+        if !triib.entities.contains_key(&entity) {
+            continue;
+        }
+        for (interface, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+            if let Some(offset) = model
+                .lite_status(interface)
+                .and_then(LiteStatus::offset)
+                .filter(|offset| offset.abs() > OFFSET_ALARM)
+            {
+                alarms.push(Alarm {
+                    entity,
+                    text: format!(
+                        "PTP offset {}, past the 50 µs AVB Lite allows",
+                        duration(offset)
+                    ),
+                });
+            }
+            if let Some(egress) = egress(model, interface).filter(Egress::over) {
+                alarms.push(Alarm {
+                    entity,
+                    text: format!(
+                        "Egress at {:.0}% of the link, past the 75% streams may take",
+                        egress.share() * 100.0
+                    ),
+                });
+            }
+        }
+    }
+    alarms
+}
+
+/// The alarms of one entity, for the top of its Diagnostics tab.
+pub fn entity_alarms<'a>(triib: &Triib, entity: EntityId) -> Vec<Element<'a, Message>> {
+    alarms(triib)
+        .into_iter()
+        .filter(|alarm| alarm.entity == entity)
+        .map(|alarm| {
+            styled(alarm.text, Type::BodyMedium)
+                .style(style::error_text)
+                .into()
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use avb_net::{Interface, MacAddress};
+
+    const MAC_MINI: EntityId = EntityId(0xd111_e597_f544_8000);
+    const WIRED_ESP: EntityId = EntityId(0xe8f6_0ae0_9220_0000);
+    const WIFI_ESP: EntityId = EntityId(0xfc01_2cfd_fe80_0000);
+
+    /// The bench, after the wired ESP reports AVB Lite with `offset` and
+    /// `egress` and the Mac mini declares a stream over CVU SRP.
+    fn lite_bench(offset: i32, egress: u32) -> Triib {
+        let (entities, models) =
+            crate::view::tests::bench_then(&crate::view::tests::lite_frames(offset, egress));
+        let interface = Interface {
+            name: "enp6s0".to_owned(),
+            mac: MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]),
+            up: true,
+            speed: None,
+            physical: true,
+            wireless: false,
+            hardware_clock: None,
+        };
+        Triib::sample(
+            crate::settings::Settings::default(),
+            interface,
+            entities,
+            models,
+        )
+    }
+
+    #[test]
+    fn modes_follow_reports_and_declarations() {
+        let triib = lite_bench(-180, 6_336);
+        assert_eq!(mode(&triib.models[&WIRED_ESP]), "Active, VLAN 2");
+        // Declaring over CVU SRP shows it runs AVB Lite without a report.
+        assert_eq!(mode(&triib.models[&MAC_MINI]), "Active");
+        assert_eq!(triib.models[&MAC_MINI].cvu_talkers().count(), 1);
+        // Nothing heard from it, and never asked.
+        assert_eq!(mode(&triib.models[&WIFI_ESP]), "");
+    }
+
+    #[test]
+    fn reported_egress_wins_over_formats() {
+        let triib = lite_bench(-180, 6_336);
+        let egress = egress(&triib.models[&WIRED_ESP], 0).unwrap();
+        assert_eq!(egress.used, 6_336_000);
+        assert_eq!(egress.link, 1_000_000_000);
+        assert!(egress.used_reported && egress.link_reported);
+        assert!(!egress.over());
+        // Quiet entities raise no alarms.
+        assert!(alarms(&triib).is_empty());
+    }
+
+    #[test]
+    fn offsets_and_egress_past_the_limits_raise_alarms() {
+        let triib = lite_bench(-72_400, 800_000);
+        let alarms = alarms(&triib);
+        assert_eq!(
+            alarms,
+            [
+                Alarm {
+                    entity: WIRED_ESP,
+                    text: "PTP offset -72 µs, past the 50 µs AVB Lite allows".to_owned(),
+                },
+                Alarm {
+                    entity: WIRED_ESP,
+                    text: "Egress at 80% of the link, past the 75% streams may take".to_owned(),
+                },
+            ]
+        );
+        // An entity gone from the network raises none.
+        let mut gone = lite_bench(-72_400, 800_000);
+        gone.entities.remove(&WIRED_ESP);
+        assert!(super::alarms(&gone).is_empty());
+    }
+
+    #[test]
+    fn rates_and_times_read_naturally() {
+        assert_eq!(rate(16_512_000), "16.5 Mb/s");
+        assert_eq!(rate(1_000_000_000), "1 Gb/s");
+        assert_eq!(rate(224_000), "224 kb/s");
+        assert_eq!(duration(180), "180 ns");
+        assert_eq!(duration(-72_400), "-72 µs");
+    }
+
+    #[test]
+    fn egress_past_three_quarters_is_over() {
+        let egress = Egress {
+            used: 760_000_000,
+            link: 1_000_000_000,
+            link_reported: true,
+            used_reported: true,
+        };
+        assert!(egress.over());
+        assert!(
+            !Egress {
+                used: 740_000_000,
+                ..egress
+            }
+            .over()
+        );
+    }
+}

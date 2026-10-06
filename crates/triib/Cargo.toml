@@ -15,6 +15,7 @@ iced = { version = "0.14", features = ["advanced", "canvas"] }
 serde = { version = "1", features = ["derive"] }
 scramble-ui.workspace = true
 atdecc = { workspace = true, features = ["std"] }
+avb-mrp.workspace = true
 avb-net = { workspace = true, features = ["std"] }
 triib-store.workspace = true
 

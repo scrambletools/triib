@@ -176,6 +176,53 @@ impl StreamFormat {
         matches!(self.kind(), FormatKind::Crf(_))
     }
 
+    /// The bandwidth the stream takes on an Ethernet link in bits per
+    /// second, frames counted with their preamble, VLAN tag, frame check
+    /// and gap: AAF and AM824 sent 8000 times a second as class A sends
+    /// them, CRF as often as its timestamps fill a frame. `None` for a
+    /// format whose frame size is not known.
+    pub fn wire_bandwidth(self) -> Option<u64> {
+        // Preamble and start of frame, header with a VLAN tag, frame check
+        // and interframe gap.
+        const OVERHEAD: u64 = 8 + 18 + 4 + 12;
+        const AVTP_HEADER: u64 = 24;
+        let (payload, frames_per_second) = match self.kind() {
+            FormatKind::Aaf(aaf) => {
+                let octets = match aaf.sample_format {
+                    // 32-bit float, 32-bit integer and AES3 subframes.
+                    1 | 2 | 5 => 4,
+                    3 => 3,
+                    4 => 2,
+                    _ => return None,
+                };
+                let samples = u64::from(aaf.samples_per_frame);
+                if samples == 0 {
+                    return None;
+                }
+                let payload = AVTP_HEADER + u64::from(aaf.channels) * samples * octets;
+                (payload, u64::from(nsr_hertz(aaf.nsr)?) / samples)
+            }
+            FormatKind::Iec61883_6(iec) => {
+                // Data blocks a frame carries 8000 times a second, each
+                // after the CIP header.
+                let blocks = u64::from(sfc_hertz(iec.sfc)?).div_ceil(8000);
+                let payload = AVTP_HEADER + 8 + blocks * u64::from(iec.dbs) * 4;
+                (payload, 8000)
+            }
+            FormatKind::Crf(crf) => {
+                let per_frame =
+                    u64::from(crf.timestamp_interval) * u64::from(crf.timestamps_per_pdu);
+                if per_frame == 0 {
+                    return None;
+                }
+                let payload = 20 + 8 * u64::from(crf.timestamps_per_pdu);
+                (payload, u64::from(crf.base_frequency).div_ceil(per_frame))
+            }
+            _ => return None,
+        };
+        Some((payload + OVERHEAD) * 8 * frames_per_second)
+    }
+
     /// An AAF format without its up-to flag and channel count, which may
     /// differ between a talker and a listener that takes fewer channels.
     fn aaf_without_channels(self) -> u64 {
@@ -389,6 +436,27 @@ impl fmt::Debug for StreamFormat {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bandwidth_follows_the_frames_on_the_wire() {
+        // AAF 48 kHz, 8 channels of 32 bits, 6 samples a frame: 216 octets
+        // of payload 8000 times a second.
+        assert_eq!(
+            StreamFormat(0x0205_0220_0200_6000).wire_bandwidth(),
+            Some((216 + 42) * 8 * 8000)
+        );
+        // AM824 48 kHz, 8 channels: 6 data blocks of 8 quadlets.
+        assert_eq!(
+            StreamFormat(0x00a0_0208_4000_0800).wire_bandwidth(),
+            Some((24 + 8 + 192 + 42) * 8 * 8000)
+        );
+        // CRF 48 kHz, one timestamp each 96 samples: 500 frames a second.
+        assert_eq!(
+            StreamFormat(0x0410_6001_0000_bb80).wire_bandwidth(),
+            Some((28 + 42) * 8 * 500)
+        );
+        assert_eq!(StreamFormat(0x8000_0000_0000_0000).wire_bandwidth(), None);
+    }
 
     #[test]
     fn decodes_aaf_from_a_milan_endpoint() {

@@ -748,7 +748,9 @@ fn entity_details<'a>(
             "No controls to show.",
         ),
         InspectorTab::Diagnostics => {
-            let mut items = interface_sections(model);
+            let mut items = crate::lite_view::entity_alarms(triib, entity_id);
+            items.extend(interface_sections(model));
+            items.extend(crate::lite_view::bandwidth(model));
             items.extend(crate::diagnostics_view::diagnostics(model));
             or_note(items, "No interfaces or counters reported.")
         }
@@ -869,6 +871,7 @@ fn entity_sections<'a>(
             ));
         }
     }
+    items.extend(crate::lite_view::entity_section(model));
     items
 }
 
@@ -1321,6 +1324,7 @@ fn status_bar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 .into(),
                 None => Element::from(space()),
             },
+            alarm_line(triib, full),
             label(entities),
             label(state),
         ]
@@ -1337,6 +1341,34 @@ fn status_bar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
             ..Default::default()
         }
     })
+    .into()
+}
+
+/// The first alarm, with how many more there are, opening its entity's
+/// diagnostics when pressed; nothing when there are none.
+fn alarm_line(triib: &Triib, full: bool) -> Element<'_, Message> {
+    let alarms = crate::lite_view::alarms(triib);
+    let Some(first) = alarms.first() else {
+        return space().into();
+    };
+    let mut text = if full {
+        format!("{}: {}", triib.entity_name_of(first.entity), first.text)
+    } else {
+        "Alarm".to_owned()
+    };
+    if alarms.len() > 1 {
+        text.push_str(&format!(" and {} more", alarms.len() - 1));
+    }
+    iced::widget::mouse_area(
+        iced::widget::row![
+            icon::icon(Icon::Warning, 16).style(style::error_text),
+            styled(text, Type::LabelMedium).style(style::error_text),
+        ]
+        .spacing(4)
+        .align_y(Center),
+    )
+    .on_press(Message::AlarmOpened(first.entity))
+    .interaction(iced::mouse::Interaction::Pointer)
     .into()
 }
 
@@ -1364,6 +1396,17 @@ pub(crate) mod tests {
     /// The entities and models a controller reads from the bench, replaying
     /// the capture of a live run.
     pub(crate) fn bench() -> (
+        BTreeMap<EntityId, DiscoveredEntity>,
+        BTreeMap<EntityId, EntityModel>,
+    ) {
+        bench_then(&[])
+    }
+
+    /// The bench, then `after`: ATDECC PDUs the controller hears once it
+    /// has read the bench.
+    pub(crate) fn bench_then(
+        after: &[Vec<u8>],
+    ) -> (
         BTreeMap<EntityId, DiscoveredEntity>,
         BTreeMap<EntityId, EntityModel>,
     ) {
@@ -1421,6 +1464,10 @@ pub(crate) mod tests {
             let _ = controller.handle_frame(now, source, &frame[14..]);
             controller.handle_timeout(now);
         }
+        let end = Instant::from_nanos(records[records.len() - 1].0 - start);
+        for pdu in after {
+            let _ = controller.handle_frame(end, MacAddress([0; 6]), pdu);
+        }
         let entities: BTreeMap<EntityId, DiscoveredEntity> = controller
             .entities()
             .map(|entity| (entity.entity_id(), *entity))
@@ -1430,6 +1477,90 @@ pub(crate) mod tests {
             .filter_map(|&entity_id| Some((entity_id, controller.model(entity_id)?.clone())))
             .collect();
         (entities, models)
+    }
+
+    /// What the bench would report running AVB Lite: the wired ESP on
+    /// VLAN 2 with `offset` nanoseconds from the grandmaster and `egress`
+    /// kb/s sent of a gigabit, and the Mac mini declaring a stream over
+    /// CVU SRP.
+    pub(crate) fn lite_frames(offset: i32, egress: u32) -> Vec<Vec<u8>> {
+        use atdecc::aecp::{AecpHeader, AecpMessageType, VendorUniquePdu};
+        use atdecc::id::ClockIdentity;
+        use atdecc::lite::{
+            CVU_PROTOCOL_ID, FallbackReason, LiteCommandType, LiteFlags, LiteStatus, PtpProfile,
+            STATUS_PROTOCOL_ID,
+        };
+
+        let status = LiteStatus {
+            interface: 0,
+            flags: LiteFlags::CAPABLE
+                | LiteFlags::ACTIVE
+                | LiteFlags::OFFSET_VALID
+                | LiteFlags::EGRESS_VALID,
+            fallback_reason: FallbackReason::MULTIPLE_RESPONDERS,
+            ptp_profile: PtpProfile::AVB_LITE_PTP,
+            ptp_domain: 0,
+            media_vlan_id: 2,
+            unicast_fanout_limit: 2,
+            link_speed: 1000,
+            committed_egress: egress,
+            grandmaster: ClockIdentity(0x9c6b_00ff_fe30_9a2b),
+            offset_from_grandmaster: offset,
+        };
+        // An unsolicited response, as an entity sends when its status
+        // changes.
+        let mut payload = (0x8000 | LiteCommandType::GET_LITE_STATUS.0)
+            .to_be_bytes()
+            .to_vec();
+        payload.extend_from_slice(&status.to_bytes());
+        let notification = VendorUniquePdu {
+            header: AecpHeader {
+                message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+                status: 0,
+                target_entity_id: WIRED_ESP,
+                controller_entity_id: EntityId(0x9c6b_00ff_fe30_9a2b),
+                sequence_id: 0,
+            },
+            protocol_id: STATUS_PROTOCOL_ID,
+            payload: &payload,
+        };
+
+        // Talker Advertise for the Mac mini's stream output 0.
+        let mut message = vec![avb_mrp::msrp::attribute::TALKER_ADVERTISE, 25, 0, 0];
+        message.extend_from_slice(&[0x00, 0x01]);
+        message.extend_from_slice(&0xd111_e597_f544_8000u64.to_be_bytes());
+        message.extend_from_slice(&[0x91, 0xe0, 0xf0, 0x00, 0x6a, 0x20]);
+        message.extend_from_slice(&2u16.to_be_bytes());
+        message.extend_from_slice(&224u16.to_be_bytes());
+        message.extend_from_slice(&1u16.to_be_bytes());
+        message.push(0xb0);
+        message.extend_from_slice(&500_000u32.to_be_bytes());
+        message.push(36); // JoinIn
+        message.extend_from_slice(&[0, 0]);
+        let list = (message.len() - 4) as u16;
+        message[2..4].copy_from_slice(&list.to_be_bytes());
+        let mut cvu_payload = vec![avb_mrp::msrp::attribute::TALKER_ADVERTISE];
+        cvu_payload.extend_from_slice(&message);
+        let declaration = VendorUniquePdu {
+            header: AecpHeader {
+                message_type: AecpMessageType::VENDOR_UNIQUE_COMMAND,
+                status: 0,
+                target_entity_id: EntityId(0),
+                controller_entity_id: MAC_MINI,
+                sequence_id: 0,
+            },
+            protocol_id: CVU_PROTOCOL_ID,
+            payload: &cvu_payload,
+        };
+
+        [notification, declaration]
+            .iter()
+            .map(|pdu| {
+                let mut out = [0; 128];
+                let length = pdu.encode(&mut out).unwrap();
+                out[..length].to_vec()
+            })
+            .collect()
     }
 
     /// A bench entity as it would read with its descriptors changed by
@@ -1730,6 +1861,18 @@ pub(crate) mod tests {
                 Size::new(1280.0, 2000.0),
             ),
             ("inspector-controls", View::Entities, true, desktop),
+            (
+                "inspector-lite",
+                View::Entities,
+                true,
+                Size::new(1280.0, 1400.0),
+            ),
+            (
+                "inspector-lite-alarms",
+                View::Entities,
+                true,
+                Size::new(1280.0, 1400.0),
+            ),
             ("log-desktop", View::Log, false, desktop),
             ("presets-desktop", View::Matrix, false, desktop),
             (
@@ -1758,7 +1901,11 @@ pub(crate) mod tests {
                 inspector,
                 ..Settings::default()
             };
-            let mut models = models.clone();
+            let mut models = if suffix.contains("lite") {
+                bench_then(&lite_frames(-72_400, 800_000)).1
+            } else {
+                models.clone()
+            };
             if suffix.contains("mappings") {
                 let model = dynamic_mac_mini(&entities, &models);
                 models.insert(MAC_MINI, model);
@@ -1779,14 +1926,17 @@ pub(crate) mod tests {
                 models.insert(WIRED_ESP, model);
             }
             let mut triib = Triib::sample(settings, interface.clone(), entities.clone(), models);
-            triib.selected = if suffix.contains("diagnostics") || suffix.contains("controls") {
+            triib.selected = if ["diagnostics", "controls", "lite"]
+                .iter()
+                .any(|kind| suffix.contains(kind))
+            {
                 Some(WIRED_ESP)
             } else {
                 entities.keys().next().copied()
             };
             triib.inspector_tab = if suffix.contains("tree") {
                 InspectorTab::Descriptors
-            } else if suffix.contains("diagnostics") {
+            } else if suffix.contains("diagnostics") || suffix.contains("alarms") {
                 InspectorTab::Diagnostics
             } else if suffix.contains("mappings") {
                 InspectorTab::Streams
