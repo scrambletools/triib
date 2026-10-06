@@ -1,5 +1,7 @@
 //! The app's settings and window state, kept in `triib.toml`.
 
+use std::collections::BTreeMap;
+
 use scramble_ui::appearance::Appearance;
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +35,11 @@ pub struct Settings {
     pub network_shows: NetworkShows,
     /// The entity list's columns after the name, in order.
     pub entity_columns: Vec<EntityField>,
+    /// Widths the user dragged the entity list's columns to, by field,
+    /// kept when a column is removed; the others fit their text.
+    pub entity_column_widths: BTreeMap<EntityField, f32>,
+    /// The width the user dragged the entity list's name column to.
+    pub entity_name_width: Option<f32>,
 }
 
 impl Default for Settings {
@@ -51,6 +58,8 @@ impl Default for Settings {
             matrix_connectable_only: false,
             network_shows: NetworkShows::Audio,
             entity_columns: EntityField::DEFAULT_COLUMNS.to_vec(),
+            entity_column_widths: BTreeMap::new(),
+            entity_name_width: None,
         }
     }
 }
@@ -72,7 +81,7 @@ pub enum View {
 }
 
 /// What a column of the entity list after the name shows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum EntityField {
     Group,

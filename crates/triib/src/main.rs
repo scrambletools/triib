@@ -3,6 +3,7 @@
 
 mod app;
 mod clock_view;
+mod column_resize;
 mod describe;
 mod diagnostics_view;
 mod entity_table;

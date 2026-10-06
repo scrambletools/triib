@@ -410,7 +410,9 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 2. Entity list with name, ID, model, firmware, group, Milan version, AVB
    Lite capable and active, clock domain, BTC, online state. Each column
    after the name is picked from its heading's menu, which also removes
-   it, and a last heading adds one; the choice is kept in triib.toml.
+   it or moves it left or right, and a last heading adds one. Columns
+   resize by dragging a heading's right edge, a double click there fitting
+   the text again. Fields, order and widths are kept in triib.toml.
 3. Stream matrix: connect and disconnect, status per cell.
 4. Identify.
 5. Inspector: AEM tree and dynamic values.

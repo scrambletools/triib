@@ -12,6 +12,7 @@ use scramble_ui::appearance::{self, Appearance, Inputs};
 use scramble_ui::{desktop, motion, omarchy, scheme};
 
 use crate::External;
+use crate::entity_table::Column;
 use crate::matrix::{Hover, Side};
 use crate::netmap::{Focus, NodeKey};
 use crate::network::{Action, Failure, Name, NameTarget, Neighbor, Network, Report, ReportKind};
@@ -109,6 +110,15 @@ pub enum Message {
     EntityColumn(usize, Option<EntityField>),
     /// Add a column showing this field at the entity list's right.
     EntityColumnAdded(EntityField),
+    /// Move the entity list's column at this place right, or left when
+    /// false.
+    EntityColumnMoved(usize, bool),
+    /// An entity list column dragged to this width.
+    EntityColumnResized(Column, f32),
+    /// A column's drag ended, so its width is kept.
+    EntityColumnResizeEnded,
+    /// Fit a column to its text again.
+    EntityColumnWidthReset(Column),
     MatrixConnectableOnlyToggled,
     MatrixCollapseToggled(Side, EntityId),
     MatrixHovered(Hover),
@@ -339,6 +349,36 @@ impl Triib {
                     }
                     self.save_settings();
                 }
+            }
+            Message::EntityColumnMoved(index, right) => {
+                let columns = &mut self.settings.entity_columns;
+                let other = if right {
+                    index.checked_add(1)
+                } else {
+                    index.checked_sub(1)
+                };
+                if let Some(other) = other.filter(|&other| other < columns.len())
+                    && index < columns.len()
+                {
+                    columns.swap(index, other);
+                    self.save_settings();
+                }
+            }
+            Message::EntityColumnResized(column, width) => match column {
+                Column::Name => self.settings.entity_name_width = Some(width),
+                Column::Field(field) => {
+                    self.settings.entity_column_widths.insert(field, width);
+                }
+            },
+            Message::EntityColumnResizeEnded => self.save_settings(),
+            Message::EntityColumnWidthReset(column) => {
+                match column {
+                    Column::Name => self.settings.entity_name_width = None,
+                    Column::Field(field) => {
+                        self.settings.entity_column_widths.remove(&field);
+                    }
+                }
+                self.save_settings();
             }
             Message::EntityColumnAdded(field) => {
                 if !self.settings.entity_columns.contains(&field) {

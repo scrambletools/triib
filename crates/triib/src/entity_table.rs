@@ -7,6 +7,7 @@ use std::fmt;
 use atdecc::DiscoveredEntity;
 use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
+use iced::widget::text::Wrapping;
 use iced::widget::{container, pick_list, scrollable, table};
 use iced::{Background, Border, Center, Color, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind};
@@ -16,6 +17,7 @@ use scramble_ui::icon;
 use scramble_ui::{Scheme, shape, style};
 
 use crate::app::{Message, Triib};
+use crate::column_resize::{MIN_WIDTH, resizable};
 use crate::describe;
 use crate::settings::EntityField;
 use crate::text::measure;
@@ -105,10 +107,19 @@ fn count(streams: u16) -> String {
     }
 }
 
+/// A column of the entity list: the name, or a field after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Column {
+    Name,
+    Field(EntityField),
+}
+
 /// What a heading's menu offers.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Choice {
     Remove,
+    MoveLeft,
+    MoveRight,
     Field(EntityField),
 }
 
@@ -116,6 +127,8 @@ impl fmt::Display for Choice {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Choice::Remove => formatter.write_str("Remove column"),
+            Choice::MoveLeft => formatter.write_str("Move left"),
+            Choice::MoveRight => formatter.write_str("Move right"),
             Choice::Field(field) => formatter.write_str(field.label()),
         }
     }
@@ -197,51 +210,99 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
             &mut rows.iter().map(|row| &row.values[index]),
         ));
     }
+    // The widths the user dragged columns to, which they keep.
+    let settings = &triib.settings;
+    let mut dragged: Vec<Option<f32>> = vec![settings.entity_name_width];
+    dragged.extend(
+        columns
+            .iter()
+            .map(|field| settings.entity_column_widths.get(field).copied()),
+    );
     if can_add {
         natural.push(ADD_WIDTH);
+        dragged.push(None);
     }
-    let needed = natural.iter().sum::<f32>()
+    let needed = natural
+        .iter()
+        .zip(&dragged)
+        .map(|(natural, dragged)| dragged.unwrap_or(*natural))
+        .sum::<f32>()
         + natural.len() as f32 * (2.0 * TABLE_PADDING + 1.0)
         + 2.0 * TABLE_MARGIN
         + TABLE_SLACK;
     let fits = width >= needed;
-    let column_width = |column: usize| {
-        if fits {
-            Length::FillPortion(natural[column].ceil().max(1.0) as u16)
-        } else {
-            Length::Shrink
-        }
+    let column_width = |column: usize| match dragged[column] {
+        Some(dragged) => Length::Fixed(dragged.max(MIN_WIDTH)),
+        None if fits => Length::FillPortion(natural[column].ceil().max(1.0) as u16),
+        None => Length::Fixed(natural[column].ceil()),
     };
+    // Headings and cells as wide as their columns: a table lays out a cell
+    // that fills apart from its column's width.
+    let heading = |content: Element<'static, Message>, column: Column, width: Length| {
+        resizable(
+            content,
+            move |width| Message::EntityColumnResized(column, width),
+            Message::EntityColumnResizeEnded,
+            Message::EntityColumnWidthReset(column),
+        )
+        .width(width)
+    };
+    // A cell's text on one line, cut off at the column's edge.
+    let cell = |text: String, width: Length| {
+        container(styled(text, Type::BodyMedium).wrapping(Wrapping::None))
+            .width(width)
+            .clip(true)
+    };
+    let name_width = column_width(0);
 
     let mut table_columns = vec![
         table::column(
-            styled("Name", Type::LabelLarge).style(style::on_surface_variant),
-            |row: Row<'_>| {
+            heading(
+                styled("Name", Type::LabelLarge)
+                    .style(style::on_surface_variant)
+                    .into(),
+                Column::Name,
+                name_width,
+            ),
+            move |row: Row<'_>| {
                 let entity_id = row.entity.entity_id();
-                button::custom(
-                    Kind::Row,
-                    iced::widget::row![
-                        icon::icon(describe::glyph(&row.entity.adp), 20),
-                        styled(row.name, Type::BodyMedium),
-                    ]
-                    .spacing(8)
-                    .align_y(Center),
+                container(
+                    button::custom(
+                        Kind::Row,
+                        iced::widget::row![
+                            icon::icon(describe::glyph(&row.entity.adp), 20),
+                            styled(row.name, Type::BodyMedium).wrapping(Wrapping::None),
+                        ]
+                        .spacing(8)
+                        .align_y(Center),
+                    )
+                    .selected(triib.selected == Some(entity_id))
+                    .on_press(Message::EntitySelected(entity_id)),
                 )
-                .selected(triib.selected == Some(entity_id))
-                .on_press(Message::EntitySelected(entity_id))
+                .width(name_width)
+                .clip(true)
             },
         )
         .width(column_width(0))
         .align_y(Center),
     ];
+    let last = columns.len().saturating_sub(1);
     for (index, &field) in columns.iter().enumerate() {
         let mut choices = vec![Choice::Remove];
+        if index > 0 {
+            choices.push(Choice::MoveLeft);
+        }
+        if index < last {
+            choices.push(Choice::MoveRight);
+        }
         choices.extend(unshown(columns).map(Choice::Field));
         let menu = pick_list(
             choices,
             Some(Choice::Field(field)),
             move |choice| match choice {
                 Choice::Remove => Message::EntityColumn(index, None),
+                Choice::MoveLeft => Message::EntityColumnMoved(index, false),
+                Choice::MoveRight => Message::EntityColumnMoved(index, true),
                 Choice::Field(field) => Message::EntityColumn(index, Some(field)),
             },
         )
@@ -250,11 +311,13 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         .padding([2, 6])
         .style(heading_menu)
         .menu_style(style::select_menu);
+        let width = column_width(index + 1);
         table_columns.push(
-            table::column(menu, move |row: Row<'_>| {
-                styled(row.values[index].clone(), Type::BodyMedium)
-            })
-            .width(column_width(index + 1))
+            table::column(
+                heading(menu.into(), Column::Field(field), width),
+                move |row: Row<'_>| cell(row.values[index].clone(), width),
+            )
+            .width(width)
             .align_y(Center),
         );
     }
@@ -264,7 +327,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
             None::<Choice>,
             |choice| match choice {
                 Choice::Field(field) => Message::EntityColumnAdded(field),
-                Choice::Remove => Message::Nothing,
+                _ => Message::Nothing,
             },
         )
         .placeholder("+")
@@ -347,6 +410,146 @@ mod tests {
         let _ = std::fs::remove_file(&file);
         assert!(saved.contains("\"mac-address\""), "{saved}");
         assert_eq!(loaded.entity_columns, before);
+    }
+
+    fn sample() -> Triib {
+        let (entities, models) = crate::view::tests::bench();
+        let interface = avb_net::Interface {
+            name: "enp6s0".to_owned(),
+            mac: avb_net::MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]),
+            up: true,
+            speed: None,
+            physical: true,
+            wireless: false,
+            hardware_clock: None,
+        };
+        let settings = crate::settings::Settings {
+            view: crate::settings::View::Entities,
+            ..crate::settings::Settings::default()
+        };
+        Triib::sample(settings, interface, entities, models)
+    }
+
+    #[test]
+    fn columns_move_and_keep_their_widths() {
+        let mut triib = sample();
+        let columns = |triib: &Triib| triib.settings.entity_columns.clone();
+        // Group moves right past Product, then back; the ends stay put.
+        let _ = triib.update(Message::EntityColumnMoved(0, true));
+        assert_eq!(
+            &columns(&triib)[..2],
+            [EntityField::Product, EntityField::Group]
+        );
+        let _ = triib.update(Message::EntityColumnMoved(1, false));
+        assert_eq!(
+            &columns(&triib)[..2],
+            [EntityField::Group, EntityField::Product]
+        );
+        let before = columns(&triib);
+        let _ = triib.update(Message::EntityColumnMoved(0, false));
+        let _ = triib.update(Message::EntityColumnMoved(before.len() - 1, true));
+        assert_eq!(columns(&triib), before);
+
+        // Dragged widths stay, by field, until reset.
+        let _ = triib.update(Message::EntityColumnResized(Column::Name, 240.0));
+        let _ = triib.update(Message::EntityColumnResized(
+            Column::Field(EntityField::Firmware),
+            90.0,
+        ));
+        let _ = triib.update(Message::EntityColumnResizeEnded);
+        assert_eq!(triib.settings.entity_name_width, Some(240.0));
+        assert_eq!(
+            triib
+                .settings
+                .entity_column_widths
+                .get(&EntityField::Firmware),
+            Some(&90.0)
+        );
+
+        // Fields, order and widths survive saving and loading.
+        let file = std::env::temp_dir().join(format!("triib-widths-{}.toml", std::process::id()));
+        triib_store::save(&file, &triib.settings).unwrap();
+        let loaded: crate::settings::Settings = triib_store::load_or_create(&file).unwrap();
+        let _ = std::fs::remove_file(&file);
+        assert_eq!(loaded.entity_columns, triib.settings.entity_columns);
+        assert_eq!(
+            loaded.entity_column_widths,
+            triib.settings.entity_column_widths
+        );
+        assert_eq!(loaded.entity_name_width, Some(240.0));
+
+        let _ = triib.update(Message::EntityColumnWidthReset(Column::Field(
+            EntityField::Firmware,
+        )));
+        let _ = triib.update(Message::EntityColumnWidthReset(Column::Name));
+        assert!(triib.settings.entity_column_widths.is_empty());
+        assert_eq!(triib.settings.entity_name_width, None);
+    }
+
+    #[test]
+    fn dragging_a_headings_edge_resizes_its_column() {
+        use iced::mouse::{Button, Event as Mouse};
+        use iced::{Event, Point, Size};
+
+        let triib = sample();
+        let settings = iced::Settings {
+            fonts: scramble_ui::font::files().collect(),
+            default_font: TEXT,
+            ..iced::Settings::default()
+        };
+        let mut simulator = iced_test::Simulator::with_size(
+            settings,
+            Size::new(2200.0, 420.0),
+            crate::view::window(&triib),
+        );
+        // The Group heading's right edge, then 50 pixels further right.
+        let edge = Point::new(436.0, 92.0);
+        let moved = Point::new(486.0, 92.0);
+        simulator.point_at(edge);
+        let _ = simulator.simulate([Event::Mouse(Mouse::ButtonPressed(Button::Left))]);
+        simulator.point_at(moved);
+        let _ = simulator.simulate([Event::Mouse(Mouse::CursorMoved { position: moved })]);
+        let _ = simulator.simulate([Event::Mouse(Mouse::ButtonReleased(Button::Left))]);
+        let messages: Vec<Message> = simulator.into_messages().collect();
+        let widths: Vec<f32> = messages
+            .iter()
+            .filter_map(|message| match message {
+                Message::EntityColumnResized(Column::Field(EntityField::Group), width) => {
+                    Some(*width)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(widths.len(), 1, "{messages:?}");
+        // The heading was about 117 pixels wide inside its padding.
+        assert!((150.0..190.0).contains(&widths[0]), "{widths:?}");
+        assert!(
+            messages
+                .iter()
+                .any(|message| matches!(message, Message::EntityColumnResizeEnded))
+        );
+
+        // A double click on the edge asks for the column to fit its text.
+        let mut simulator = iced_test::Simulator::with_size(
+            iced::Settings {
+                fonts: scramble_ui::font::files().collect(),
+                default_font: TEXT,
+                ..iced::Settings::default()
+            },
+            Size::new(2200.0, 420.0),
+            crate::view::window(&triib),
+        );
+        simulator.point_at(edge);
+        for _ in 0..2 {
+            let _ = simulator.simulate([
+                Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+                Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+            ]);
+        }
+        assert!(simulator.into_messages().any(|message| matches!(
+            message,
+            Message::EntityColumnWidthReset(Column::Field(EntityField::Group))
+        )));
     }
 
     #[test]
