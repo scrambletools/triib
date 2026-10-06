@@ -5,6 +5,7 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
+use avb_mrp::msrp::TalkerDeclaration;
 use avb_net::MacAddress;
 
 use crate::acmp::AcmpFlags;
@@ -22,7 +23,9 @@ use crate::descriptor::{
     StreamPortDescriptor, StringsDescriptor, names,
 };
 use crate::id::{ClockIdentity, EntityId, StreamId};
+use crate::lite::LiteStatus;
 use crate::mvu::{MediaClockReference, MilanInfo};
+use crate::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EnumerationState {
@@ -113,6 +116,12 @@ pub struct EntityModel {
     media_clock_references: BTreeMap<u16, MediaClockReference>,
     tx_states: BTreeMap<u16, TxState>,
     max_transit_times: BTreeMap<u16, u64>,
+    /// Whether it answers the AVB Lite status query; `None` until asked.
+    pub lite_supported: Option<bool>,
+    lite_status: BTreeMap<u16, LiteStatus>,
+    /// The streams it declares over CVU SRP, by stream ID, with when each
+    /// was last heard.
+    cvu_talkers: BTreeMap<u64, (TalkerDeclaration, Instant)>,
 }
 
 impl EntityModel {
@@ -234,6 +243,38 @@ impl EntityModel {
         self.max_transit_times.insert(output, nanoseconds) != Some(nanoseconds)
     }
 
+    /// Records what the entity reports of AVB Lite on an interface,
+    /// returning whether it changed.
+    pub(crate) fn set_lite_status(&mut self, status: LiteStatus) -> bool {
+        self.lite_status.insert(status.interface, status) != Some(status)
+    }
+
+    /// Records a stream the entity declares over CVU SRP, heard `now`,
+    /// returning whether the declaration is new or changed.
+    pub(crate) fn set_cvu_talker(&mut self, declaration: TalkerDeclaration, now: Instant) -> bool {
+        self.cvu_talkers
+            .insert(declaration.stream_id, (declaration, now))
+            .is_none_or(|(before, _)| before != declaration)
+    }
+
+    /// Forgets a stream the entity withdrew, returning whether it held it.
+    pub(crate) fn remove_cvu_talker(&mut self, stream_id: u64) -> bool {
+        self.cvu_talkers.remove(&stream_id).is_some()
+    }
+
+    /// Forgets the streams last heard at or before `before`, returning
+    /// whether any were.
+    pub(crate) fn age_cvu_talkers(&mut self, before: Instant) -> bool {
+        let held = self.cvu_talkers.len();
+        self.cvu_talkers.retain(|_, (_, heard)| *heard > before);
+        self.cvu_talkers.len() != held
+    }
+
+    /// When the stream heard longest ago was heard.
+    pub(crate) fn oldest_cvu_talker(&self) -> Option<Instant> {
+        self.cvu_talkers.values().map(|(_, heard)| *heard).min()
+    }
+
     /// Records a stream input's binding, returning whether it changed.
     pub(crate) fn set_binding(&mut self, input: u16, binding: Binding) -> bool {
         self.bindings.insert(input, binding) != Some(binding)
@@ -337,6 +378,18 @@ impl EntityModel {
     /// What the stream input with `index` is bound to, once known.
     pub fn binding(&self, input: u16) -> Option<&Binding> {
         self.bindings.get(&input)
+    }
+
+    /// What the entity reports of AVB Lite on an AVB_INTERFACE.
+    pub fn lite_status(&self, interface: u16) -> Option<&LiteStatus> {
+        self.lite_status.get(&interface)
+    }
+
+    /// The streams the entity declares over CVU SRP.
+    pub fn cvu_talkers(&self) -> impl Iterator<Item = &TalkerDeclaration> {
+        self.cvu_talkers
+            .values()
+            .map(|(declaration, _)| declaration)
     }
 
     /// What the talker last said of a stream output, when asked.

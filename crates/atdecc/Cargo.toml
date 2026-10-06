@@ -22,4 +22,5 @@ alloc = []
 std = ["alloc", "avb-net/std"]
 
 [dependencies]
+avb-mrp.workspace = true
 avb-net.workspace = true

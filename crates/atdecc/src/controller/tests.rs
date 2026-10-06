@@ -94,6 +94,8 @@ struct FakeEntity {
     transit: u64,
     /// DISCONNECT_TX commands seen: the output and the listener's input.
     tx_disconnects: Vec<(u16, EntityId, u16)>,
+    /// What it reports of AVB Lite, when it has it.
+    lite: Option<crate::lite::LiteStatus>,
 }
 
 fn descriptor(descriptor_type: DescriptorType, index: u16, length: usize) -> Vec<u8> {
@@ -224,6 +226,7 @@ impl FakeEntity {
             user_priority: 192,
             transit: 2_000_000,
             tx_disconnects: Vec::new(),
+            lite: None,
         }
     }
 
@@ -607,6 +610,32 @@ impl FakeEntity {
             return Some(out[..length].to_vec());
         }
         let command = VendorUniquePdu::decode(frame).ok()?;
+        if let Ok(asked) = crate::lite::LiteMessage::from_pdu(&command) {
+            // The AVB Lite status of the interface asked about, from an
+            // entity with AVB Lite; else not implemented.
+            let (status, data) = match self.lite {
+                Some(status) => {
+                    let mut data = asked.command_type.0.to_be_bytes().to_vec();
+                    data.extend_from_slice(&status.to_bytes());
+                    (0, data)
+                }
+                None => (
+                    AemStatus::NOT_IMPLEMENTED.0,
+                    [&asked.command_type.0.to_be_bytes()[..], asked.data].concat(),
+                ),
+            };
+            let response = VendorUniquePdu {
+                header: AecpHeader {
+                    message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+                    status,
+                    ..command.header
+                },
+                protocol_id: crate::lite::STATUS_PROTOCOL_ID,
+                payload: &data,
+            };
+            let length = response.encode(&mut out).unwrap();
+            return Some(out[..length].to_vec());
+        }
         let asked = crate::mvu::MvuMessage::from_pdu(&command).ok()?;
         let data = match asked.command_type {
             crate::mvu::MvuCommandType::GET_MEDIA_CLOCK_REFERENCE_INFO => {
@@ -1669,6 +1698,177 @@ fn descriptors_are_read_on_request() {
         model.name_of(DescriptorType::STREAM_INPUT, 1),
         Some("Vocal")
     );
+}
+
+fn lite_status() -> crate::lite::LiteStatus {
+    use crate::lite::{FallbackReason, LiteFlags, PtpProfile};
+    crate::lite::LiteStatus {
+        interface: 0,
+        flags: LiteFlags::CAPABLE | LiteFlags::ACTIVE | LiteFlags::OFFSET_VALID,
+        fallback_reason: FallbackReason::MULTIPLE_RESPONDERS,
+        ptp_profile: PtpProfile::AVB_LITE_PTP,
+        ptp_domain: 0,
+        media_vlan_id: 2,
+        unicast_fanout_limit: 2,
+        link_speed: 1000,
+        committed_egress: 0,
+        grandmaster: GRANDMASTER,
+        offset_from_grandmaster: 180,
+    }
+}
+
+/// Reads the fake entity, with AVB Lite when `lite` says what it reports.
+fn read_lite(lite: Option<crate::lite::LiteStatus>) -> (Controller, FakeEntity) {
+    let mut controller = controller();
+    let mut entity = FakeEntity::new();
+    entity.lite = lite;
+    controller.handle_adpdu(at(0), TALKER_MAC, &aem_available(1));
+    controller.pump(at(0));
+    exchange(&mut controller, &mut entity, at(0));
+    events(&mut controller);
+    (controller, entity)
+}
+
+#[test]
+fn lite_endpoints_report_their_mode_and_are_asked_again() {
+    let (mut controller, mut entity) = read_lite(Some(lite_status()));
+    let model = controller.model(TALKER).unwrap();
+    assert_eq!(model.lite_supported, Some(true));
+    assert_eq!(model.lite_status(0), Some(&lite_status()));
+    // Asked again every 5 s, to follow the offset.
+    let next = controller.poll_timeout().unwrap();
+    assert!(next <= at(5), "{next:?}");
+    entity.lite = Some(crate::lite::LiteStatus {
+        offset_from_grandmaster: 72_000,
+        ..lite_status()
+    });
+    controller.handle_timeout(next);
+    exchange(&mut controller, &mut entity, next);
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    let offset = controller
+        .model(TALKER)
+        .unwrap()
+        .lite_status(0)
+        .unwrap()
+        .offset();
+    assert_eq!(offset, Some(72_000));
+}
+
+#[test]
+fn entities_without_lite_are_asked_once() {
+    let (controller, _) = read_lite(None);
+    assert_eq!(
+        controller.model(TALKER).unwrap().lite_supported,
+        Some(false)
+    );
+    assert!(controller.model(TALKER).unwrap().lite_status(0).is_none());
+    // Nothing to poll: the entity's advertisement expiry comes first.
+    assert_eq!(controller.poll_timeout(), Some(at(20)));
+}
+
+#[test]
+fn unsolicited_lite_status_updates_the_model() {
+    let (mut controller, _) = read_lite(Some(lite_status()));
+    let changed = crate::lite::LiteStatus {
+        fallback_reason: crate::lite::FallbackReason::CONFIGURED,
+        ..lite_status()
+    };
+    let mut payload = 0x8000u16.to_be_bytes().to_vec();
+    payload.extend_from_slice(&changed.to_bytes());
+    let notification = VendorUniquePdu {
+        header: AecpHeader {
+            message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+            status: 0,
+            target_entity_id: TALKER,
+            controller_entity_id: CONTROLLER,
+            sequence_id: 40,
+        },
+        protocol_id: crate::lite::STATUS_PROTOCOL_ID,
+        payload: &payload,
+    };
+    let mut out = [0; 128];
+    let length = notification.encode(&mut out).unwrap();
+    controller
+        .handle_frame(at(1), TALKER_MAC, &out[..length])
+        .unwrap();
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    assert_eq!(
+        controller.model(TALKER).unwrap().lite_status(0),
+        Some(&changed)
+    );
+}
+
+/// A CVU SRP talker message from the entity declaring its stream output,
+/// joining or, with `leave`, withdrawing it.
+fn cvu_talker(leave: bool) -> Vec<u8> {
+    let mut msrp = vec![1, 25, 0, 0, 0x00, 0x01];
+    msrp.extend_from_slice(&0xe8f6_0ae0_9220_0000u64.to_be_bytes());
+    msrp.extend_from_slice(&[0x91, 0xe0, 0xf0, 0x00, 0x6a, 0x20]);
+    msrp.extend_from_slice(&2u16.to_be_bytes());
+    msrp.extend_from_slice(&224u16.to_be_bytes());
+    msrp.extend_from_slice(&1u16.to_be_bytes());
+    msrp.push(0xb0);
+    msrp.extend_from_slice(&500_000u32.to_be_bytes());
+    msrp.push(if leave { 5 * 36 } else { 36 });
+    msrp.extend_from_slice(&[0, 0]);
+    let list = (msrp.len() - 4) as u16;
+    msrp[2..4].copy_from_slice(&list.to_be_bytes());
+    let mut payload = vec![1];
+    payload.extend_from_slice(&msrp);
+    let pdu = VendorUniquePdu {
+        header: AecpHeader {
+            message_type: AecpMessageType::VENDOR_UNIQUE_COMMAND,
+            status: 0,
+            target_entity_id: EntityId(0),
+            controller_entity_id: TALKER,
+            sequence_id: 9,
+        },
+        protocol_id: crate::lite::CVU_PROTOCOL_ID,
+        payload: &payload,
+    };
+    let mut out = [0; 128];
+    let length = pdu.encode(&mut out).unwrap();
+    out[..length].to_vec()
+}
+
+#[test]
+fn cvu_declarations_are_kept_until_withdrawn_or_stale() {
+    let (mut controller, _) = read_lite(Some(lite_status()));
+    let streams = |controller: &Controller| controller.model(TALKER).unwrap().cvu_talkers().count();
+    controller
+        .handle_frame(at(1), TALKER_MAC, &cvu_talker(false))
+        .unwrap();
+    assert_eq!(streams(&controller), 1);
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    let declared = controller
+        .model(TALKER)
+        .unwrap()
+        .cvu_talkers()
+        .next()
+        .copied()
+        .unwrap();
+    assert_eq!(declared.vlan_id, 2);
+    // A refresh changes nothing.
+    controller
+        .handle_frame(at(2), TALKER_MAC, &cvu_talker(false))
+        .unwrap();
+    assert!(events(&mut controller).is_empty());
+    // Withdrawn.
+    controller
+        .handle_frame(at(3), TALKER_MAC, &cvu_talker(true))
+        .unwrap();
+    assert_eq!(streams(&controller), 0);
+    // Declared again, then not refreshed for 30 s.
+    controller
+        .handle_frame(at(4), TALKER_MAC, &cvu_talker(false))
+        .unwrap();
+    // The entity keeps advertising meanwhile.
+    controller.handle_adpdu(at(19), TALKER_MAC, &aem_available(1));
+    events(&mut controller);
+    controller.handle_timeout(at(33));
+    assert_eq!(streams(&controller), 1);
+    controller.handle_timeout(at(34));
+    assert_eq!(streams(&controller), 0);
 }
 
 /// Reads the entity with a controller that knows a model cached from an

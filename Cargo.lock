@@ -255,6 +255,7 @@ dependencies = [
 name = "atdecc"
 version = "0.1.0"
 dependencies = [
+ "avb-mrp",
  "avb-net",
 ]
 

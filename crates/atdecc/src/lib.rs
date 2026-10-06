@@ -36,6 +36,7 @@ pub mod control;
 pub mod descriptor;
 pub mod error;
 pub mod id;
+pub mod lite;
 #[cfg(feature = "alloc")]
 pub mod media_clock;
 #[cfg(feature = "alloc")]

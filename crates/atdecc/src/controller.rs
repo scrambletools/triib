@@ -13,6 +13,7 @@ use alloc::collections::{BTreeMap, VecDeque};
 use alloc::vec::Vec;
 use core::time::Duration;
 
+use avb_mrp::msrp;
 use avb_net::MacAddress;
 
 use crate::acmp::{AcmpMessageType, AcmpStatus, Acmpdu};
@@ -30,6 +31,7 @@ use crate::descriptor::{
 };
 use crate::error::{DecodeError, EncodeError};
 use crate::id::{EntityId, EntityModelId};
+use crate::lite::{self, CvuMessage, LiteCommandType, LiteMessage, LiteStatus};
 use crate::model::{Binding, EntityModel, EnumerationFailure, EnumerationState, TxState};
 use crate::mvu::{self, MediaClockReference, MilanInfo, MvuCommandType, MvuMessage};
 use crate::pdu::{self, Pdu};
@@ -39,6 +41,10 @@ use crate::time::Instant;
 /// How long a command waits for its response before its one retry
 /// (IEEE 1722.1-2021, 9.3.2.6).
 pub const COMMAND_TIMEOUT: Duration = Duration::from_millis(250);
+
+/// How long a CVU SRP declaration lasts without a refresh: well past
+/// MSRP's LeaveAll period of 10 s (IEEE 802.1Q-2022, 10.7.11).
+const CVU_LIFETIME: Duration = Duration::from_secs(30);
 
 /// The most descriptors read from one entity, against counts no entity
 /// could mean.
@@ -111,6 +117,11 @@ pub struct Config {
     /// Ask each Milan entity's stream outputs for their max transit time
     /// once it is read.
     pub read_transit_times: bool,
+    /// Ask each entity for its AVB Lite status once it is read, and keep
+    /// asking those that answer every `lite_poll`, zero for never, to
+    /// follow their PTP offset.
+    pub lite_status: bool,
+    pub lite_poll: Duration,
     /// Advertise the controller with ADP.
     pub advertise: Option<Advertise>,
     /// The first sequence ID of AEM and of MVU commands.
@@ -130,6 +141,8 @@ impl Config {
             media_clock_info: true,
             read_counters: true,
             read_transit_times: true,
+            lite_status: true,
+            lite_poll: Duration::from_secs(5),
             advertise: None,
             first_sequence_id: 0,
             random_seed: entity_id.0,
@@ -332,6 +345,10 @@ enum Request {
         set: MaxTransitTime,
         command: CommandId,
     },
+    /// The AVB Lite status of an AVB_INTERFACE (AVB Lite profile, 2.4).
+    GetLiteStatus {
+        interface: u16,
+    },
     /// READ_DESCRIPTOR the caller asked for, outside enumeration.
     ReadForCaller {
         descriptor_type: DescriptorType,
@@ -356,7 +373,10 @@ enum Channel {
 impl Request {
     fn channel(self) -> Channel {
         match self {
-            Request::GetMilanInfo | Request::GetMediaClockReference { .. } => Channel::Mvu,
+            // Vendor unique commands, numbered apart from AEM.
+            Request::GetMilanInfo
+            | Request::GetMediaClockReference { .. }
+            | Request::GetLiteStatus { .. } => Channel::Mvu,
             Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. }
@@ -474,6 +494,9 @@ pub struct Controller {
     next_command: u32,
     /// When to turn each identifying entity's identify control off.
     identify_off: BTreeMap<EntityId, (Instant, u16)>,
+    /// When to ask the entities that answer it for their AVB Lite status
+    /// again.
+    next_lite_poll: Option<Instant>,
     /// Entity models read before, by what they are for.
     cache: BTreeMap<ModelKey, CachedModel>,
     /// The mappings of each mapping change queued or in flight.
@@ -500,6 +523,7 @@ impl Controller {
             next_acmp_sequence: config.first_sequence_id,
             next_command: 0,
             identify_off: BTreeMap::new(),
+            next_lite_poll: None,
             cache: BTreeMap::new(),
             mapping_changes: BTreeMap::new(),
             control_values: BTreeMap::new(),
@@ -752,10 +776,22 @@ impl Controller {
         }
     }
 
-    fn handle_vendor_unique(&mut self, _now: Instant, pdu: &VendorUniquePdu<'_>) {
+    fn handle_vendor_unique(&mut self, now: Instant, pdu: &VendorUniquePdu<'_>) {
+        // CVU SRP declarations are commands every AVB Lite endpoint
+        // broadcasts; the controller listens.
+        if pdu.header.message_type == AecpMessageType::VENDOR_UNIQUE_COMMAND {
+            if let Ok(cvu) = CvuMessage::from_pdu(pdu) {
+                self.store_cvu(now, &cvu);
+            }
+            return;
+        }
         if pdu.header.message_type != AecpMessageType::VENDOR_UNIQUE_RESPONSE
             || pdu.header.controller_entity_id != self.config.entity_id
         {
+            return;
+        }
+        if let Ok(message) = LiteMessage::from_pdu(pdu) {
+            self.handle_lite(now, pdu, &message);
             return;
         }
         let Ok(message) = MvuMessage::from_pdu(pdu) else {
@@ -805,6 +841,83 @@ impl Controller {
             _ => return,
         }
         self.check_complete(entity_id);
+    }
+
+    /// An AVB Lite status response, or one an entity sent unsolicited.
+    fn handle_lite(&mut self, now: Instant, pdu: &VendorUniquePdu<'_>, message: &LiteMessage<'_>) {
+        let entity_id = pdu.header.target_entity_id;
+        let status = (pdu.header.status == 0
+            && message.command_type == LiteCommandType::GET_LITE_STATUS)
+            .then(|| LiteStatus::decode(message.data).ok())
+            .flatten();
+        if message.unsolicited {
+            if let Some(status) = status {
+                self.store_lite_status(entity_id, status);
+            }
+            return;
+        }
+        let key = (Channel::Mvu, pdu.header.sequence_id);
+        let Some(inflight) = self.inflight.get(&key).copied() else {
+            return;
+        };
+        let Request::GetLiteStatus { interface } = inflight.request else {
+            return;
+        };
+        if inflight.entity_id != entity_id {
+            return;
+        }
+        self.complete(key, inflight);
+        match status {
+            Some(status) if status.interface == interface => {
+                if let Some(model) = self.models.get_mut(&entity_id) {
+                    model.lite_supported = Some(true);
+                }
+                // Asked again from here on, to follow its offset.
+                if !self.config.lite_poll.is_zero() {
+                    self.next_lite_poll
+                        .get_or_insert(now + self.config.lite_poll);
+                }
+                self.store_lite_status(entity_id, status);
+            }
+            // An entity without AVB Lite says it does not implement the
+            // query; it is not asked again.
+            _ if pdu.header.status == AemStatus::NOT_IMPLEMENTED.0 => {
+                if let Some(model) = self.models.get_mut(&entity_id) {
+                    model.lite_supported = Some(false);
+                }
+            }
+            _ => {}
+        }
+        self.check_complete(entity_id);
+    }
+
+    fn store_lite_status(&mut self, entity_id: EntityId, status: LiteStatus) {
+        if let Some(model) = self.models.get_mut(&entity_id)
+            && model.has(DescriptorType::AVB_INTERFACE, status.interface)
+            && model.set_lite_status(status)
+            && model.state == EnumerationState::Complete
+        {
+            self.events.push_back(Event::EntityModelChanged(entity_id));
+        }
+    }
+
+    /// Keeps what a CVU SRP talker message declares, and forgets what it
+    /// withdraws, in the talker's model.
+    fn store_cvu(&mut self, now: Instant, cvu: &CvuMessage<'_>) {
+        let Some(model) = self.models.get_mut(&cvu.sender) else {
+            return;
+        };
+        let mut changed = false;
+        for declaration in msrp::talker_declarations(cvu.msrp) {
+            changed |= if declaration.event.declares() {
+                model.set_cvu_talker(declaration, now)
+            } else {
+                model.remove_cvu_talker(declaration.stream_id)
+            };
+        }
+        if changed {
+            self.events.push_back(Event::EntityModelChanged(cvu.sender));
+        }
     }
 
     fn store_media_clock_reference(&mut self, entity_id: EntityId, reference: MediaClockReference) {
@@ -1002,6 +1115,7 @@ impl Controller {
             }
             Request::GetMilanInfo
             | Request::GetMediaClockReference { .. }
+            | Request::GetLiteStatus { .. }
             | Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. }
@@ -1713,6 +1827,15 @@ impl Controller {
                 });
             }
         }
+        // Whether each interface runs AVB or AVB Lite, from entities that
+        // answer the query.
+        if self.config.lite_status && model.lite_supported != Some(false) {
+            for (interface, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+                session
+                    .queue
+                    .push_back(Request::GetLiteStatus { interface });
+            }
+        }
         // How each clock domain stands in media clock management.
         if self.config.media_clock_info && model.milan.is_some() {
             for (domain, _) in model.descriptors(DescriptorType::CLOCK_DOMAIN) {
@@ -1900,6 +2023,13 @@ impl Controller {
                 )
             }
             Request::RegisterUnsolicited => aem::encode_register_unsolicited(addressing, &mut out),
+            Request::GetLiteStatus { interface } => lite::encode_get_lite_status(
+                addressing.target,
+                addressing.controller,
+                sequence_id,
+                interface,
+                &mut out,
+            ),
             Request::GetMilanInfo => mvu::encode_get_milan_info(
                 addressing.target,
                 addressing.controller,
@@ -2524,6 +2654,13 @@ impl Controller {
                     EnumerationFailure::NoResponse,
                 );
             }
+            // An entity that never answered the query is not asked again.
+            if let Request::GetLiteStatus { .. } = inflight.request
+                && let Some(model) = self.models.get_mut(&inflight.entity_id)
+                && model.lite_supported.is_none()
+            {
+                model.lite_supported = Some(false);
+            }
             if let Request::GetDynamicInfo { queries, count } = inflight.request {
                 self.dynamic_info_answered(
                     inflight.entity_id,
@@ -2557,6 +2694,9 @@ impl Controller {
             );
         }
 
+        self.poll_lite(now);
+        self.age_cvu_talkers(now);
+
         if let Some(advertiser) = &mut self.advertiser
             && advertiser.next.is_some_and(|next| next <= now)
         {
@@ -2567,6 +2707,45 @@ impl Controller {
             self.queue_adp(&adpdu);
         }
         self.pump(now);
+    }
+
+    /// Asks each entity that answers the AVB Lite status query again, every
+    /// `lite_poll`.
+    fn poll_lite(&mut self, now: Instant) {
+        if self.next_lite_poll.is_none_or(|next| next > now) {
+            return;
+        }
+        let asked: Vec<(EntityId, u16)> = self
+            .models
+            .iter()
+            .filter(|(_, model)| model.lite_supported == Some(true))
+            .flat_map(|(&entity_id, model)| {
+                model
+                    .descriptors(DescriptorType::AVB_INTERFACE)
+                    .map(move |(interface, _)| (entity_id, interface))
+            })
+            .collect();
+        // The timer stops once no entity answers the query.
+        self.next_lite_poll = (!asked.is_empty()).then(|| now + self.config.lite_poll);
+        for (entity_id, interface) in asked {
+            self.queue_query(entity_id, Request::GetLiteStatus { interface });
+        }
+    }
+
+    /// Forgets CVU SRP declarations not refreshed for [`CVU_LIFETIME`].
+    fn age_cvu_talkers(&mut self, now: Instant) {
+        let Some(before) = now.checked_sub(CVU_LIFETIME) else {
+            return;
+        };
+        let mut aged = Vec::new();
+        for (&entity_id, model) in &mut self.models {
+            if model.age_cvu_talkers(before) {
+                aged.push(entity_id);
+            }
+        }
+        for entity_id in aged {
+            self.events.push_back(Event::EntityModelChanged(entity_id));
+        }
     }
 
     /// Schedules the first advertisement, a random moment after the
@@ -2614,10 +2793,18 @@ impl Controller {
             .as_ref()
             .and_then(|advertiser| advertiser.next);
         let identify = self.identify_off.values().map(|(when, _)| *when);
+        let lite = self.next_lite_poll;
+        let declarations = self
+            .models
+            .values()
+            .filter_map(EntityModel::oldest_cvu_talker)
+            .map(|heard| heard + CVU_LIFETIME);
         expiries
             .chain(deadlines)
             .chain(advertise)
             .chain(identify)
+            .chain(lite)
+            .chain(declarations)
             .min()
     }
 
@@ -2717,6 +2904,7 @@ fn command_type_of(request: Request) -> AemCommandType {
         // Not AEM commands; never match an AEM response.
         Request::GetMilanInfo
         | Request::GetMediaClockReference { .. }
+        | Request::GetLiteStatus { .. }
         | Request::GetRxState { .. }
         | Request::Bind { .. }
         | Request::Unbind { .. }

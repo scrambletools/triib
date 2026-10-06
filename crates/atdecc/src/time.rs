@@ -30,6 +30,12 @@ impl Instant {
     pub fn saturating_duration_since(self, earlier: Instant) -> Duration {
         self.0.saturating_sub(earlier.0)
     }
+
+    /// The instant `duration` before this one, unless that is before the
+    /// clock's start.
+    pub fn checked_sub(self, duration: Duration) -> Option<Instant> {
+        self.0.checked_sub(duration).map(Instant)
+    }
 }
 
 impl Add<Duration> for Instant {

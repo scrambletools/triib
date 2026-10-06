@@ -1399,6 +1399,7 @@ pub(crate) mod tests {
         config.media_clock_info = false;
         config.read_counters = false;
         config.read_transit_times = false;
+        config.lite_status = false;
         config.first_sequence_id = first_sequence_id;
         let mut controller = Controller::new(config);
         let mut buffer = [0; 1500];
