@@ -486,6 +486,20 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 - AVB Lite status query, bandwidth view and alarms.
 - Presets, `triib-cli` at parity with `atdecc_controller.py`.
 
+### P1.1: every language prev speaks
+
+- triib's text in all 38 languages prev has, kept as prev keeps them:
+  Project Fluent files under `i18n/<language>/`, loaded with i18n-embed,
+  the `fl!` macro checking each key against English when triib compiles,
+  and English standing in for keys a language lacks. Adding a language
+  is adding its folder.
+- The interface language follows the system or is picked in Settings, as
+  now; right to left languages mirror the layout through scramble-ui.
+- Text fields take the system's input language. Unlike prev, triib has
+  no setting to force one.
+- Names the standards give, such as descriptor types and the commands
+  and statuses in the log, stay as the standards write them.
+
 ### P2: macOS and Windows, everything but virtual endpoints
 
 - Controller frames on macOS (BPF, or the AudioVideoBridging framework,
@@ -536,7 +550,7 @@ Dante, AES67, video streams, acting as an AVB bridge or AVB/Lite gateway.
    decision here.
 4. **GUI P0**.
 5. **Hive parity and AVB Lite controller features** (P1), with the
-   status query in esp_avb.
+   status query in esp_avb, then **every language prev speaks** (P1.1).
 6. **macOS and Windows** (P2): the macOS investigation's frame access
    questions, then the controller backends of both, checked on the
    bench; packages with capabilities set, release pipeline from prev.
