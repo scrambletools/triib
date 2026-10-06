@@ -96,6 +96,8 @@ pub enum Message {
     VirtualInterfacesToggled,
     SearchChanged(String),
     EntitySelected(EntityId),
+    /// A press on a view's empty space: nothing selected.
+    SelectionCleared,
     Rediscover,
     RetryNetwork,
     Copy(String),
@@ -313,6 +315,11 @@ impl Triib {
                     self.settings.inspector = true;
                     self.save_settings();
                 }
+            }
+            Message::SelectionCleared => {
+                self.selected = None;
+                self.editing = None;
+                self.network_focus = None;
             }
             Message::Rediscover => {
                 if let Some(network) = &self.network {

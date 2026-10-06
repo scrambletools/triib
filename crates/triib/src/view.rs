@@ -1755,6 +1755,79 @@ pub(crate) mod tests {
         );
     }
 
+    /// What pressing and releasing at each point sends from a desktop
+    /// window showing `view` on the bench, the Mac mini selected.
+    fn presses(view: View, points: &[(f32, f32)]) -> Vec<Vec<Message>> {
+        use iced::mouse::{Button, Event as Mouse};
+        let (entities, models) = bench();
+        let interface = Interface {
+            name: "enp6s0".to_owned(),
+            mac: MacAddress(HOST_MAC),
+            up: true,
+            speed: Some(2500),
+            physical: true,
+            wireless: false,
+            hardware_clock: Some(0),
+        };
+        let settings = Settings {
+            interface: Some(interface.name.clone()),
+            view,
+            inspector: false,
+            ..Settings::default()
+        };
+        let mut triib = Triib::sample(settings, interface, entities, models);
+        triib.selected = Some(MAC_MINI);
+        points
+            .iter()
+            .map(|&(x, y)| {
+                let mut simulator = iced_test::Simulator::with_size(
+                    iced::Settings {
+                        fonts: scramble_ui::font::files().collect(),
+                        default_font: scramble_ui::font::TEXT,
+                        ..iced::Settings::default()
+                    },
+                    Size::new(1280.0, 800.0),
+                    window(&triib),
+                );
+                simulator.point_at(iced::Point::new(x, y));
+                let _ = simulator.simulate([
+                    iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+                    iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+                ]);
+                simulator.into_messages().collect()
+            })
+            .collect()
+    }
+
+    fn clears(messages: &[Message]) -> bool {
+        messages
+            .iter()
+            .any(|message| matches!(message, Message::SelectionCleared))
+    }
+
+    #[test]
+    fn a_press_on_a_views_empty_space_clears_the_selection() {
+        // Below the entity list's rows; on a name; on a plain cell.
+        let list = presses(
+            View::Entities,
+            &[(640.0, 600.0), (90.0, 148.0), (380.0, 148.0)],
+        );
+        assert!(clears(&list[0]), "{:?}", list[0]);
+        assert!(
+            matches!(list[1][..], [Message::EntitySelected(_)]),
+            "{:?}",
+            list[1]
+        );
+        assert!(list[2].is_empty(), "{:?}", list[2]);
+        // Beside the matrix; on one of its cells.
+        let matrix = presses(View::Matrix, &[(1200.0, 400.0), (420.0, 480.0)]);
+        assert!(clears(&matrix[0]), "{:?}", matrix[0]);
+        assert!(!clears(&matrix[1]), "{:?}", matrix[1]);
+        // The network map's empty corner.
+        let network = presses(View::Network, &[(60.0, 700.0)]);
+        assert!(clears(&network[0]), "{:?}", network[0]);
+    }
+
     #[test]
     fn edits_send_a_rename_only_when_the_name_changed() {
         let (entities, models) = bench();

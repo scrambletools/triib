@@ -9,7 +9,7 @@ use atdecc::model::EntityModel;
 use atdecc::stream_format::{Fit, fit};
 use atdecc::{DescriptorType, DiscoveredEntity, EntityId, StreamFormat};
 use iced::widget::text::Wrapping;
-use iced::widget::{column, container, row};
+use iced::widget::{column, container, mouse_area, row};
 use iced::{Center, Color, Element, Fill, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component;
@@ -237,9 +237,14 @@ pub fn view(triib: &Triib) -> Element<'_, Message> {
         let grid = grid(triib, &talkers, &listeners);
         let status = status(triib, &grid, &talkers, &listeners);
         column![
-            container(grid::matrix(grid, triib.hover))
-                .center_x(Fill)
-                .height(Fill),
+            // A press on the matrix's lines is the matrix's; one on the
+            // space around them clears the selection.
+            mouse_area(
+                container(grid::matrix(grid, triib.hover))
+                    .center_x(Fill)
+                    .height(Fill)
+            )
+            .on_press(Message::SelectionCleared),
             status,
             legend()
         ]

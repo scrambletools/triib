@@ -5,7 +5,7 @@
 use atdecc::DiscoveredEntity;
 use atdecc::model::EntityModel;
 use iced::widget::text::Wrapping;
-use iced::widget::{container, scrollable, space, table};
+use iced::widget::{container, mouse_area, opaque, scrollable, space, table};
 use iced::{Center, Element, Fill, Length};
 use scramble_ui::button::{self, Kind};
 use scramble_ui::dropdown::{self, Entry};
@@ -352,19 +352,24 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let table = table(table_columns, rows)
         .padding_x(TABLE_PADDING)
         .padding_y(ROW_PADDING);
-    let content = container(header_band(table, column_count, ROW_PADDING)).padding(TABLE_MARGIN);
-    if fits {
-        return component::scroll(content).height(Fill).into();
-    }
-    scrollable(content)
-        .direction(scrollable::Direction::Both {
-            vertical: component::thin_scrollbar(),
-            horizontal: component::thin_scrollbar(),
-        })
-        .style(style::scrollbar)
-        .width(Fill)
-        .height(Fill)
-        .into()
+    // A press on the table is the table's; one on the space around it
+    // clears the selection.
+    let content =
+        container(opaque(header_band(table, column_count, ROW_PADDING))).padding(TABLE_MARGIN);
+    let view: Element<'_, Message> = if fits {
+        component::scroll(content).height(Fill).into()
+    } else {
+        scrollable(content)
+            .direction(scrollable::Direction::Both {
+                vertical: component::thin_scrollbar(),
+                horizontal: component::thin_scrollbar(),
+            })
+            .style(style::scrollbar)
+            .width(Fill)
+            .height(Fill)
+            .into()
+    };
+    mouse_area(view).on_press(Message::SelectionCleared).into()
 }
 
 #[cfg(test)]

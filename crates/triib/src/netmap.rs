@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
 use atdecc::{ClockIdentity, DiscoveredEntity, EntityId};
-use iced::widget::{button as plain_button, column, container, row, scrollable, space};
+use iced::widget::{button as plain_button, column, container, mouse_area, row, scrollable, space};
 use iced::{Center, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component;
@@ -211,24 +211,28 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         focus,
     };
     // The map fits the room it is given, so it is laid out for that room.
-    let canvas = container(iced::widget::responsive(move |area| {
-        scrollable(map::map(data.clone(), area))
-            .direction(scrollable::Direction::Both {
-                vertical: component::thin_scrollbar(),
-                horizontal: component::thin_scrollbar(),
-            })
-            .style(style::scrollbar)
-            .width(Fill)
-            .height(Fill)
-            .into()
-    }))
-    .width(Fill)
-    .height(Fill)
-    .style(|theme: &Theme| container::Style {
-        background: Some(Scheme::of(theme).surface_container_low.into()),
-        border: iced::border::rounded(shape::LARGE),
-        ..container::Style::default()
-    });
+    // A press on its empty space clears the selection.
+    let canvas = mouse_area(
+        container(iced::widget::responsive(move |area| {
+            scrollable(map::map(data.clone(), area))
+                .direction(scrollable::Direction::Both {
+                    vertical: component::thin_scrollbar(),
+                    horizontal: component::thin_scrollbar(),
+                })
+                .style(style::scrollbar)
+                .width(Fill)
+                .height(Fill)
+                .into()
+        }))
+        .width(Fill)
+        .height(Fill)
+        .style(|theme: &Theme| container::Style {
+            background: Some(Scheme::of(theme).surface_container_low.into()),
+            border: iced::border::rounded(shape::LARGE),
+            ..container::Style::default()
+        }),
+    )
+    .on_press(Message::SelectionCleared);
     let panel_width = if !wide {
         Length::Fill
     } else if width >= ROOMY {

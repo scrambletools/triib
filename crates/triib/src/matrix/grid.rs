@@ -457,8 +457,12 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
                             shell.request_redraw();
                         }
                         shell.capture_event();
-                    } else if let Some(message) = self.press(target) {
-                        shell.publish(message);
+                    } else if target != Target::Nothing {
+                        // Every press on the matrix's lines is its own, done
+                        // or not; one on its empty corners passes through.
+                        if let Some(message) = self.press(target) {
+                            shell.publish(message);
+                        }
                         shell.capture_event();
                     }
                 }

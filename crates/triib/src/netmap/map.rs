@@ -1386,9 +1386,10 @@ impl Widget<Message, Theme, iced::Renderer> for NetMap {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 if let Some(point) = cursor.position_in(layout.bounds()) {
-                    let focus = self.clicked(point);
-                    if focus.is_some() || self.map.focus.is_some() {
-                        shell.publish(Message::NetworkFocused(focus));
+                    // A press on the empty map passes through, to clear the
+                    // selection and what the map shows.
+                    if let Some(focus) = self.clicked(point) {
+                        shell.publish(Message::NetworkFocused(Some(focus)));
                         shell.capture_event();
                     }
                 }
