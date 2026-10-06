@@ -31,6 +31,8 @@ pub struct Settings {
     pub matrix_connectable_only: bool,
     /// What the network view shows flowing along its wires.
     pub network_shows: NetworkShows,
+    /// The entity list's columns after the name, in order.
+    pub entity_columns: Vec<EntityField>,
 }
 
 impl Default for Settings {
@@ -48,6 +50,7 @@ impl Default for Settings {
             matrix_streams: Streams::All,
             matrix_connectable_only: false,
             network_shows: NetworkShows::Audio,
+            entity_columns: EntityField::DEFAULT_COLUMNS.to_vec(),
         }
     }
 }
@@ -66,6 +69,94 @@ pub enum View {
     Network,
     /// Each media clock reference and the clock domains following it.
     Clocks,
+}
+
+/// What a column of the entity list after the name shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EntityField {
+    Group,
+    Product,
+    Vendor,
+    Model,
+    Firmware,
+    SerialNumber,
+    Milan,
+    Roles,
+    MediaClock,
+    SamplingRate,
+    ClockSource,
+    Btc,
+    State,
+    EntityId,
+    MacAddress,
+    EntityModelId,
+    Configuration,
+    TalkerStreams,
+    ListenerStreams,
+}
+
+impl EntityField {
+    /// Every field, in the order the column menus offer them.
+    pub const ALL: [Self; 19] = [
+        Self::Group,
+        Self::Product,
+        Self::Vendor,
+        Self::Model,
+        Self::Firmware,
+        Self::SerialNumber,
+        Self::Milan,
+        Self::Roles,
+        Self::MediaClock,
+        Self::SamplingRate,
+        Self::ClockSource,
+        Self::Btc,
+        Self::State,
+        Self::EntityId,
+        Self::MacAddress,
+        Self::EntityModelId,
+        Self::Configuration,
+        Self::TalkerStreams,
+        Self::ListenerStreams,
+    ];
+
+    /// The columns shown until the user changes them.
+    pub const DEFAULT_COLUMNS: [Self; 9] = [
+        Self::Group,
+        Self::Product,
+        Self::Firmware,
+        Self::Milan,
+        Self::Roles,
+        Self::MediaClock,
+        Self::Btc,
+        Self::State,
+        Self::EntityId,
+    ];
+
+    /// The column's heading.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Group => "Group",
+            Self::Product => "Product",
+            Self::Vendor => "Vendor",
+            Self::Model => "Model",
+            Self::Firmware => "Firmware",
+            Self::SerialNumber => "Serial number",
+            Self::Milan => "Milan",
+            Self::Roles => "Roles",
+            Self::MediaClock => "Media clock",
+            Self::SamplingRate => "Sampling rate",
+            Self::ClockSource => "Clock source",
+            Self::Btc => "BTC",
+            Self::State => "State",
+            Self::EntityId => "Entity ID",
+            Self::MacAddress => "MAC address",
+            Self::EntityModelId => "Entity model ID",
+            Self::Configuration => "Configuration",
+            Self::TalkerStreams => "Talker streams",
+            Self::ListenerStreams => "Listener streams",
+        }
+    }
 }
 
 /// Which streams the connection matrix shows.

@@ -14,11 +14,11 @@ use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::stream_format::StreamFormat;
 use atdecc::{DiscoveredEntity, EntityCapabilities, EntityId};
 use avb_net::Interface;
-use iced::widget::{container, pick_list, rule, scrollable, space, table, text_input};
+use iced::widget::{container, pick_list, rule, space, text_input};
 use iced::{Center, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component::{self, TOOLBAR_HEIGHT};
-use scramble_ui::font::{TEXT, Type, styled};
+use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
 use scramble_ui::{Scheme, style};
 
@@ -27,7 +27,6 @@ use crate::describe;
 use crate::mapping_view;
 use crate::network::{Action, Failure, NameTarget};
 use crate::settings::View;
-use crate::text::measure;
 
 const STATUS_BAR_HEIGHT: f32 = 28.0;
 const SEARCH_WIDTH: f32 = 280.0;
@@ -41,28 +40,6 @@ const INSPECTOR_BESIDE: f32 = 720.0;
 const PICKER_NARROWEST: f32 = 160.0;
 /// Below this width the status bar leaves out the interface.
 const STATUS_FULL: f32 = 640.0;
-/// The entity table's columns after the name.
-const FIELDS: [&str; 9] = [
-    "Group",
-    "Product",
-    "Firmware",
-    "Milan",
-    "Roles",
-    "Media clock",
-    "BTC",
-    "State",
-    "Entity ID",
-];
-/// Around each cell of the entity table, around the table, and spare room
-/// for what measuring its text leaves out.
-const TABLE_PADDING: f32 = 12.0;
-const TABLE_MARGIN: f32 = 16.0;
-const TABLE_SLACK: f32 = 24.0;
-const MEDIUM: iced::Font = iced::Font {
-    weight: iced::font::Weight::Medium,
-    ..scramble_ui::font::TEXT
-};
-
 pub fn window(triib: &Triib) -> Element<'_, Message> {
     let window: Element<'_, Message> = iced::widget::column![
         toolbar(triib),
@@ -368,7 +345,7 @@ fn content(triib: &Triib) -> Element<'_, Message> {
             NetworkState::Running { .. } | NetworkState::Starting => crate::matrix::view(triib),
             state => network_state_view(triib, state),
         },
-        View::Entities if !triib.entities.is_empty() => entity_table(triib),
+        View::Entities if !triib.entities.is_empty() => crate::entity_table::view(triib),
         View::Entities => match &triib.network_state {
             NetworkState::Running { .. } | NetworkState::Starting => component::empty_state(
                 Icon::ViewList,
@@ -386,124 +363,6 @@ fn content(triib: &Triib) -> Element<'_, Message> {
             state => network_state_view(triib, state),
         },
     }
-}
-
-fn entity_table(triib: &Triib) -> Element<'_, Message> {
-    iced::widget::responsive(move |size| entity_table_at(triib, size.width)).into()
-}
-
-/// The entity table for `width` pixels: across the whole width when its
-/// columns fit, each widened in proportion to its text, else at their own
-/// widths, scrolling sideways.
-fn entity_table_at(triib: &Triib, width: f32) -> Element<'_, Message> {
-    #[derive(Clone)]
-    struct Row<'a> {
-        entity: &'a DiscoveredEntity,
-        name: String,
-        fields: [String; FIELDS.len()],
-    }
-    let rows: Vec<Row<'_>> = triib
-        .shown_entities()
-        .into_iter()
-        .map(|entity| {
-            let model = triib.models.get(&entity.entity_id());
-            Row {
-                entity,
-                name: triib.entity_name(entity),
-                fields: [
-                    model
-                        .and_then(EntityModel::entity)
-                        .map_or_else(String::new, |descriptor| descriptor.group_name.to_owned()),
-                    model.map_or_else(String::new, describe::product),
-                    model
-                        .and_then(EntityModel::entity)
-                        .map_or_else(String::new, |descriptor| {
-                            descriptor.firmware_version.to_owned()
-                        }),
-                    model.map_or_else(String::new, describe::milan),
-                    describe::roles(&entity.adp),
-                    model.map_or_else(String::new, describe::media_clock),
-                    describe::clock(&entity.adp),
-                    describe::read_state(model),
-                    entity.entity_id().to_string(),
-                ],
-            }
-        })
-        .collect();
-    // Each column's own width: its widest text, and for the name its icon
-    // and the row button's padding.
-    let widest = |heading: &str, texts: &mut dyn Iterator<Item = &String>| {
-        texts
-            .map(|text| measure(text, TEXT, 14.0))
-            .fold(measure(heading, MEDIUM, 14.0), f32::max)
-    };
-    let mut natural =
-        vec![widest("Name", &mut rows.iter().map(|row| &row.name)) + 20.0 + 8.0 + 32.0];
-    for (index, heading) in FIELDS.iter().enumerate() {
-        natural.push(widest(
-            heading,
-            &mut rows.iter().map(|row| &row.fields[index]),
-        ));
-    }
-    let needed = natural.iter().sum::<f32>()
-        + natural.len() as f32 * (2.0 * TABLE_PADDING + 1.0)
-        + 2.0 * TABLE_MARGIN
-        + TABLE_SLACK;
-    let fits = width >= needed;
-    let column_width = |column: usize| {
-        if fits {
-            Length::FillPortion(natural[column].ceil().max(1.0) as u16)
-        } else {
-            Length::Shrink
-        }
-    };
-
-    let header =
-        |label: &'static str| styled(label, Type::LabelLarge).style(style::on_surface_variant);
-    let mut columns = vec![
-        table::column(header("Name"), |row: Row<'_>| {
-            let entity_id = row.entity.entity_id();
-            button::custom(
-                Kind::Row,
-                iced::widget::row![
-                    icon::icon(describe::glyph(&row.entity.adp), 20),
-                    styled(row.name, Type::BodyMedium),
-                ]
-                .spacing(8)
-                .align_y(Center),
-            )
-            .selected(triib.selected == Some(entity_id))
-            .on_press(Message::EntitySelected(entity_id))
-        })
-        .width(column_width(0))
-        .align_y(Center),
-    ];
-    for (index, heading) in FIELDS.iter().enumerate() {
-        columns.push(
-            table::column(header(heading), move |row: Row<'_>| {
-                styled(row.fields[index].clone(), Type::BodyMedium)
-            })
-            .width(column_width(index + 1))
-            .align_y(Center),
-        );
-    }
-    let mut table = table(columns, rows).padding_x(TABLE_PADDING).padding_y(8);
-    if fits {
-        table = table.width(Fill);
-    }
-    let content = container(table).padding(TABLE_MARGIN);
-    if fits {
-        return component::scroll(content).height(Fill).into();
-    }
-    scrollable(content)
-        .direction(scrollable::Direction::Both {
-            vertical: component::thin_scrollbar(),
-            horizontal: component::thin_scrollbar(),
-        })
-        .style(style::scrollbar)
-        .width(Fill)
-        .height(Fill)
-        .into()
 }
 
 fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
@@ -1734,6 +1593,18 @@ pub(crate) mod tests {
             ("inspector-phone", View::Matrix, true, phone),
             ("matrix-desktop", View::Matrix, true, desktop),
             ("entities-desktop", View::Entities, false, desktop),
+            (
+                "entities-wide",
+                View::Entities,
+                false,
+                Size::new(2200.0, 420.0),
+            ),
+            (
+                "entities-menu",
+                View::Entities,
+                false,
+                Size::new(2200.0, 760.0),
+            ),
             ("inspector-editing", View::Entities, true, desktop),
             (
                 "inspector-tree",
@@ -1853,6 +1724,12 @@ pub(crate) mod tests {
             };
             let mut simulator =
                 iced_test::Simulator::with_size(iced_settings, size, window(&triib));
+            if suffix.contains("menu") {
+                // The Group column's menu, open; its heading draws its own
+                // label, so it is clicked where it shows.
+                simulator.point_at(iced::Point::new(350.0, 92.0));
+                let _ = simulator.simulate(iced_test::simulator::click());
+            }
             let snapshot = simulator.snapshot(&theme).expect("draws");
             assert!(snapshot.matches_image(&file).expect("writes"));
         }

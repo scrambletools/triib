@@ -15,7 +15,7 @@ use crate::External;
 use crate::matrix::{Hover, Side};
 use crate::netmap::{Focus, NodeKey};
 use crate::network::{Action, Failure, Name, NameTarget, Neighbor, Network, Report, ReportKind};
-use crate::settings::{NetworkShows, Settings, Streams, View};
+use crate::settings::{EntityField, NetworkShows, Settings, Streams, View};
 use crate::settings_view::SettingsTab;
 
 /// The desktop app ID, also the Wayland app ID.
@@ -104,6 +104,11 @@ pub enum Message {
     ActInOrder(Vec<Action>),
     DismissNotice,
     MatrixStreams(Streams),
+    /// Show another field in the entity list's column at this place, or
+    /// remove the column when `None`.
+    EntityColumn(usize, Option<EntityField>),
+    /// Add a column showing this field at the entity list's right.
+    EntityColumnAdded(EntityField),
     MatrixConnectableOnlyToggled,
     MatrixCollapseToggled(Side, EntityId),
     MatrixHovered(Hover),
@@ -322,6 +327,25 @@ impl Triib {
                 }
             }
             Message::DismissNotice => self.notice = None,
+            Message::EntityColumn(index, field) => {
+                let columns = &mut self.settings.entity_columns;
+                if index < columns.len() {
+                    match field {
+                        Some(field) if !columns.contains(&field) => columns[index] = field,
+                        Some(_) => {}
+                        None => {
+                            columns.remove(index);
+                        }
+                    }
+                    self.save_settings();
+                }
+            }
+            Message::EntityColumnAdded(field) => {
+                if !self.settings.entity_columns.contains(&field) {
+                    self.settings.entity_columns.push(field);
+                    self.save_settings();
+                }
+            }
             Message::MatrixStreams(streams) => {
                 self.settings.matrix_streams = streams;
                 self.save_settings();
