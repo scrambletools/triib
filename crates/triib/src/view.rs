@@ -154,11 +154,6 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let view_tool = |glyph, label, target| {
         component::toggle_tool(glyph, label, view == target, Message::ViewPicked(target))
     };
-    let inspector_glyph = if triib.settings.inspector {
-        Icon::RightPanelClose
-    } else {
-        Icon::RightPanelOpen
-    };
 
     // Each slot: its content, its width, when it moves into "More" (lowest
     // first), and whether a divider goes before it in the bar.
@@ -227,7 +222,7 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     ));
     slots.push((
         component::toggle_tool(
-            inspector_glyph,
+            Icon::Info,
             "Inspector",
             triib.settings.inspector,
             Message::InspectorToggled,
