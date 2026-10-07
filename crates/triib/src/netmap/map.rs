@@ -1606,7 +1606,7 @@ mod tests {
 
     use super::super::{Line, NodeKey, paints};
     use super::*;
-    use crate::topology::{EntityReport, InterfaceReport, Kind, Route};
+    use crate::topology::{EntityReport, HostReport, InterfaceReport, Kind, Route};
 
     fn info(grandmaster: ClockIdentity, delay: u32) -> AvbInfo {
         let mut payload = [0u8; 20];
@@ -1803,7 +1803,7 @@ mod tests {
                     Some(&wifi_info),
                 ),
             ],
-            Some(Some((SWITCH, 6, false))),
+            Some(HostReport::Heard(SWITCH, 6, false)),
         );
         for node in &mut topology.nodes {
             if node.kind == Kind::Bridge {

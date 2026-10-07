@@ -75,6 +75,8 @@ state-starting-note = Avataan liitäntää { $interface }.
 state-listening = Kuunnellaan
 state-listening-note = Liitännän { $interface } entiteetit näkyvät tässä sitä mukaa kuin ne mainostavat itseään.
 state-permission-needed = Tarvitaan käyttöoikeus
+state-npcap-needed = Tarvitaan Npcap
+state-get-npcap = Hanki Npcap
 state-copy-command = Kopioi komento
 state-cannot-use = Liitäntää { $interface } ei voi käyttää
 state-try-again = Yritä uudelleen
@@ -322,6 +324,7 @@ netmap-advertised-off-tree = Mainostettu, ei valmista listeneriä ({ $listener }
 netmap-failed-at = Varaus epäonnistui sillassa { $bridge }: { $reason }
 netmap-failed = Varaus epäonnistui: { $reason }
 netmap-no-bridge-on = Liitännässä { $interface } ei havaittu siltaa
+netmap-cannot-listen-on = gPTP:tä ei voi kuunnella liitännässä { $interface }
 netmap-path-not-reported = Polkua ei raportoitu
 netmap-gptp-not-reported = gPTP:tä ei raportoitu
 netmap-off-tree = Ei gPTP-puussa
@@ -351,6 +354,7 @@ netmap-apart-own-grandmaster = Ei gPTP-puussa: se on itse grandmaster
 netmap-apart-no-path = Sen polkua ei raportoitu; se seuraa grandmasteria { $grandmaster }
 netmap-apart-unreported = Se ei ole raportoinut gPTP-tilaansa
 netmap-apart-no-neighbor = Tämän tietokoneen liitännässä ei havaittu siltaa
+netmap-apart-cannot-listen = Tämä tietokone ei voi kuunnella gPTP:tä liitännässään
 netmap-clock-tree = Kellopuu
 netmap-no-grandmaster = Grandmasteria ei havaittu
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -635,6 +639,8 @@ control-option = Vaihtoehto { $number }
 ## Network errors
 
 network-permission = triib tarvitsee oikeuden lähettää ja vastaanottaa raakoja Ethernet-kehyksiä.
+network-needs-npcap = triib tarvitsee Npcapin raakojen Ethernet-kehysten lähettämiseen ja vastaanottamiseen.
+network-npcap-administrators = Npcap sallii raakojen Ethernet-kehysten lähettämisen ja vastaanottamisen vain järjestelmänvalvojille. Suorita triib järjestelmänvalvojana tai asenna Npcap uudelleen ilman vain järjestelmänvalvojille -valintaa.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

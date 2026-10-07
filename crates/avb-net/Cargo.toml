@@ -16,7 +16,22 @@ workspace = true
 default = ["std"]
 # Interfaces and frame I/O on Linux, macOS and Windows. Without it only the
 # address types remain, for protocol crates built for microcontrollers.
-std = ["dep:libc"]
+std = ["dep:libc", "dep:windows-sys"]
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc = { version = "0.2", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
+
+[[example]]
+name = "listen"
+required-features = ["std"]

@@ -73,6 +73,8 @@ state-starting-note = Otevírání { $interface }.
 state-listening = Naslouchání
 state-listening-note = Entity na { $interface } se zde objeví, jakmile se ohlásí.
 state-permission-needed = Je potřeba oprávnění
+state-npcap-needed = Je potřeba Npcap
+state-get-npcap = Získat Npcap
 state-copy-command = Zkopírovat příkaz
 state-cannot-use = Nelze použít { $interface }
 state-try-again = Zkusit znovu
@@ -328,6 +330,7 @@ netmap-advertised-off-tree = Ohlášeno, žádný listener není připraven ({ $
 netmap-failed-at = Rezervace selhala na { $bridge }: { $reason }
 netmap-failed = Rezervace selhala: { $reason }
 netmap-no-bridge-on = Na { $interface } není slyšet žádný přepínač
+netmap-cannot-listen-on = Na { $interface } nelze naslouchat gPTP
 netmap-path-not-reported = Cesta nehlášena
 netmap-gptp-not-reported = gPTP nehlášeno
 netmap-off-tree = Mimo strom gPTP
@@ -345,6 +348,7 @@ netmap-apart-own-grandmaster = Mimo strom gPTP: je svým vlastním grandmasterem
 netmap-apart-no-path = Cesta nebyla hlášena; řídí se grandmasterem { $grandmaster }
 netmap-apart-unreported = Stav gPTP nebyl hlášen
 netmap-apart-no-neighbor = Na rozhraní tohoto počítače není slyšet žádný přepínač
+netmap-apart-cannot-listen = Tento počítač nemůže na svém rozhraní naslouchat gPTP
 netmap-clock-tree = Strom hodin
 netmap-no-grandmaster = Žádný grandmaster není slyšet
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -686,6 +690,8 @@ control-option = Možnost { $number }
 ## Network errors
 
 network-permission = triib potřebuje oprávnění odesílat a přijímat surové rámce Ethernet.
+network-needs-npcap = triib potřebuje Npcap k odesílání a přijímání surových rámců Ethernet.
+network-npcap-administrators = Npcap umožňuje odesílat a přijímat surové rámce Ethernet jen správcům. Spusťte triib jako správce, nebo Npcap nainstalujte znovu bez volby pouze pro správce.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

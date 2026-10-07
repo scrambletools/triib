@@ -75,6 +75,8 @@ state-starting-note = { $interface } wird geöffnet.
 state-listening = Empfangsbereit
 state-listening-note = Entitäten auf { $interface } erscheinen hier, sobald sie sich ankündigen.
 state-permission-needed = Berechtigung erforderlich
+state-npcap-needed = Npcap erforderlich
+state-get-npcap = Npcap herunterladen
 state-copy-command = Befehl kopieren
 state-cannot-use = { $interface } kann nicht verwendet werden
 state-try-again = Erneut versuchen
@@ -316,6 +318,7 @@ netmap-advertised-off-tree = Angekündigt, kein Listener bereit ({ $listener } i
 netmap-failed-at = Reservierung an { $bridge } fehlgeschlagen: { $reason }
 netmap-failed = Reservierung fehlgeschlagen: { $reason }
 netmap-no-bridge-on = Kein Switch auf { $interface } erkannt
+netmap-cannot-listen-on = gPTP auf { $interface } kann nicht empfangen werden
 netmap-path-not-reported = Pfad nicht gemeldet
 netmap-gptp-not-reported = gPTP nicht gemeldet
 netmap-off-tree = Nicht im gPTP-Baum
@@ -333,6 +336,7 @@ netmap-apart-own-grandmaster = Nicht im gPTP-Baum: selbst Grandmaster
 netmap-apart-no-path = Pfad nicht gemeldet; folgt Grandmaster { $grandmaster }
 netmap-apart-unreported = gPTP-Zustand nicht gemeldet
 netmap-apart-no-neighbor = Kein Switch an der Schnittstelle dieses Computers erkannt
+netmap-apart-cannot-listen = Dieser Computer kann gPTP an seiner Schnittstelle nicht empfangen
 netmap-clock-tree = Clock-Baum
 netmap-no-grandmaster = Kein Grandmaster erkannt
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -616,6 +620,8 @@ control-option = Option { $number }
 ## Network errors
 
 network-permission = triib benötigt die Berechtigung, rohe Ethernet-Frames zu senden und zu empfangen.
+network-needs-npcap = triib benötigt Npcap, um rohe Ethernet-Frames zu senden und zu empfangen.
+network-npcap-administrators = Npcap erlaubt nur Administratoren, rohe Ethernet-Frames zu senden und zu empfangen. triib als Administrator ausführen oder Npcap ohne die Option „nur Administratoren“ neu installieren.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

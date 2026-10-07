@@ -73,6 +73,8 @@ state-starting-note = در حال باز کردن { $interface }.
 state-listening = در حال گوش دادن
 state-listening-note = موجودیت‌های روی { $interface } هنگام اعلام خود اینجا نمایش داده می‌شوند.
 state-permission-needed = مجوز لازم است
+state-npcap-needed = Npcap لازم است
+state-get-npcap = دریافت Npcap
 state-copy-command = کپی فرمان
 state-cannot-use = استفاده از { $interface } ممکن نیست
 state-try-again = تلاش دوباره
@@ -314,6 +316,7 @@ netmap-advertised-off-tree = اعلام‌شده، بدون Listener آماده 
 netmap-failed-at = رزرو در { $bridge } ناموفق بود: { $reason }
 netmap-failed = رزرو ناموفق بود: { $reason }
 netmap-no-bridge-on = هیچ پلی روی { $interface } شنیده نشد
+netmap-cannot-listen-on = گوش دادن به gPTP روی { $interface } ممکن نیست
 netmap-path-not-reported = مسیر گزارش نشده
 netmap-gptp-not-reported = gPTP گزارش نشده
 netmap-off-tree = خارج از درخت gPTP
@@ -331,6 +334,7 @@ netmap-apart-own-grandmaster = روی درخت gPTP نیست: خودش Grandmast
 netmap-apart-no-path = مسیرش گزارش نشده؛ از Grandmaster { $grandmaster } پیروی می‌کند
 netmap-apart-unreported = وضعیت gPTP خود را گزارش نکرده است
 netmap-apart-no-neighbor = هیچ پلی روی واسط این رایانه شنیده نشد
+netmap-apart-cannot-listen = این رایانه نمی‌تواند روی واسط خود به gPTP گوش دهد
 netmap-clock-tree = درخت ساعت
 netmap-no-grandmaster = هیچ Grandmaster شنیده نشد
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -606,6 +610,8 @@ control-option = گزینه { $number }
 ## Network errors
 
 network-permission = triib برای ارسال و دریافت فریم‌های خام اترنت به مجوز نیاز دارد.
+network-needs-npcap = triib برای ارسال و دریافت فریم‌های خام اترنت به Npcap نیاز دارد.
+network-npcap-administrators = Npcap فقط به مدیران اجازهٔ ارسال و دریافت فریم‌های خام اترنت را می‌دهد. triib را به‌عنوان مدیر اجرا کنید، یا Npcap را بدون گزینهٔ «فقط مدیران» دوباره نصب کنید.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

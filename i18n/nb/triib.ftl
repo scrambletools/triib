@@ -75,6 +75,8 @@ state-starting-note = Åpner { $interface }.
 state-listening = Lytter
 state-listening-note = Entiteter på { $interface } vises her etter hvert som de annonserer seg.
 state-permission-needed = Tillatelse kreves
+state-npcap-needed = Npcap kreves
+state-get-npcap = Hent Npcap
 state-copy-command = Kopier kommandoen
 state-cannot-use = Kan ikke bruke { $interface }
 state-try-again = Prøv igjen
@@ -316,6 +318,7 @@ netmap-advertised-off-tree = Annonsert, ingen listener klar ({ $listener } er ik
 netmap-failed-at = Reservasjonen mislyktes ved { $bridge }: { $reason }
 netmap-failed = Reservasjonen mislyktes: { $reason }
 netmap-no-bridge-on = Ingen switch funnet på { $interface }
+netmap-cannot-listen-on = Kan ikke lytte etter gPTP på { $interface }
 netmap-path-not-reported = Stien er ikke rapportert
 netmap-gptp-not-reported = gPTP er ikke rapportert
 netmap-off-tree = Ikke i gPTP-treet
@@ -333,6 +336,7 @@ netmap-apart-own-grandmaster = Ikke i gPTP-treet: den er sin egen grandmaster
 netmap-apart-no-path = Stien er ikke rapportert; følger grandmaster { $grandmaster }
 netmap-apart-unreported = Har ikke rapportert gPTP-tilstanden sin
 netmap-apart-no-neighbor = Ingen switch funnet på grensesnittet til denne datamaskinen
+netmap-apart-cannot-listen = Denne datamaskinen kan ikke lytte etter gPTP på grensesnittet sitt
 netmap-clock-tree = Klokketre
 netmap-no-grandmaster = Ingen grandmaster funnet
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -616,6 +620,8 @@ control-option = Alternativ { $number }
 ## Network errors
 
 network-permission = triib trenger tillatelse til å sende og motta rå Ethernet-rammer.
+network-needs-npcap = triib trenger Npcap for å sende og motta rå Ethernet-rammer.
+network-npcap-administrators = Npcap lar bare administratorer sende og motta rå Ethernet-rammer. Kjør triib som administrator, eller installer Npcap på nytt uten valget for bare administratorer.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

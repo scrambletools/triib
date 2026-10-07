@@ -108,6 +108,8 @@ state-starting-note = Opening { $interface }.
 state-listening = Listening
 state-listening-note = Entities on { $interface } appear here as they announce themselves.
 state-permission-needed = Permission needed
+state-npcap-needed = Npcap needed
+state-get-npcap = Get Npcap
 state-copy-command = Copy the command
 state-cannot-use = Cannot use { $interface }
 state-try-again = Try again
@@ -409,6 +411,7 @@ netmap-advertised-off-tree = Advertised, no listener ready ({ $listener } is not
 netmap-failed-at = Reservation failed at { $bridge }: { $reason }
 netmap-failed = Reservation failed: { $reason }
 netmap-no-bridge-on = No bridge heard on { $interface }
+netmap-cannot-listen-on = Cannot listen for gPTP on { $interface }
 netmap-path-not-reported = Path not reported
 netmap-gptp-not-reported = gPTP not reported
 # Also a label over the devices off the tree, in capitals where the script
@@ -432,6 +435,7 @@ netmap-apart-own-grandmaster = Not on the gPTP tree: it is its own grandmaster
 netmap-apart-no-path = Its path was not reported; it follows grandmaster { $grandmaster }
 netmap-apart-unreported = It has not reported its gPTP state
 netmap-apart-no-neighbor = No bridge heard on this computer's interface
+netmap-apart-cannot-listen = This computer cannot listen for gPTP on its interface
 netmap-clock-tree = Clock tree
 netmap-no-grandmaster = No grandmaster heard
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -773,6 +777,8 @@ control-option = Option { $number }
 ## Network errors
 
 network-permission = triib needs permission to send and receive raw Ethernet frames.
+network-needs-npcap = triib needs Npcap to send and receive raw Ethernet frames.
+network-npcap-administrators = Npcap lets only administrators send and receive raw Ethernet frames. Run triib as administrator, or install Npcap again without its administrators only option.
 
 # A stream's format, such as "48k 8ch", and a stream input's state.
 matrix-stream-format = { $format }.

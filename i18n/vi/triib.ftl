@@ -76,6 +76,8 @@ state-starting-note = Đang mở { $interface }.
 state-listening = Đang lắng nghe
 state-listening-note = Thực thể trên { $interface } sẽ hiện ở đây khi chúng quảng bá.
 state-permission-needed = Cần cấp quyền
+state-npcap-needed = Cần Npcap
+state-get-npcap = Tải Npcap
 state-copy-command = Sao chép lệnh
 state-cannot-use = Không thể dùng { $interface }
 state-try-again = Thử lại
@@ -296,6 +298,7 @@ netmap-advertised-off-tree = Đã quảng bá, chưa có Listener sẵn sàng ({
 netmap-failed-at = Đặt trước thất bại tại { $bridge }: { $reason }
 netmap-failed = Đặt trước thất bại: { $reason }
 netmap-no-bridge-on = Không thấy switch nào trên { $interface }
+netmap-cannot-listen-on = Không thể nghe gPTP trên { $interface }
 netmap-path-not-reported = Chưa báo cáo đường đi
 netmap-gptp-not-reported = Chưa báo cáo gPTP
 netmap-off-tree = Không nằm trên cây gPTP
@@ -313,6 +316,7 @@ netmap-apart-own-grandmaster = Không nằm trên cây gPTP: nó tự là Grandm
 netmap-apart-no-path = Chưa báo cáo đường đi; nó theo Grandmaster { $grandmaster }
 netmap-apart-unreported = Chưa báo cáo trạng thái gPTP
 netmap-apart-no-neighbor = Không thấy switch nào trên giao diện của máy tính này
+netmap-apart-cannot-listen = Máy tính này không thể nghe gPTP trên giao diện của mình
 netmap-clock-tree = Cây đồng hồ
 netmap-no-grandmaster = Không thấy Grandmaster nào
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -524,6 +528,8 @@ control-option = Tùy chọn { $number }
 ## Network errors
 
 network-permission = triib cần quyền gửi và nhận khung Ethernet thô.
+network-needs-npcap = triib cần Npcap để gửi và nhận khung Ethernet thô.
+network-npcap-administrators = Npcap chỉ cho phép quản trị viên gửi và nhận khung Ethernet thô. Hãy chạy triib với quyền quản trị viên, hoặc cài lại Npcap mà không chọn tùy chọn chỉ dành cho quản trị viên.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

@@ -76,6 +76,8 @@ state-starting-note = Ouverture de { $interface }.
 state-listening = À l’écoute
 state-listening-note = Les entités présentes sur { $interface } apparaissent ici à mesure qu’elles s’annoncent.
 state-permission-needed = Autorisation requise
+state-npcap-needed = Npcap requis
+state-get-npcap = Obtenir Npcap
 state-copy-command = Copier la commande
 state-cannot-use = Impossible d’utiliser { $interface }
 state-try-again = Réessayer
@@ -332,6 +334,7 @@ netmap-advertised-off-tree = Annoncé, aucun listener prêt ({ $listener } n’e
 netmap-failed-at = Échec de la réservation sur { $bridge } : { $reason }
 netmap-failed = Échec de la réservation : { $reason }
 netmap-no-bridge-on = Aucun commutateur détecté sur { $interface }
+netmap-cannot-listen-on = Impossible d’écouter gPTP sur { $interface }
 netmap-path-not-reported = Chemin non signalé
 netmap-gptp-not-reported = gPTP non signalé
 netmap-off-tree = Hors de l’arbre gPTP
@@ -353,6 +356,7 @@ netmap-apart-own-grandmaster = Hors de l’arbre gPTP : c’est son propre gran
 netmap-apart-no-path = Son chemin n’a pas été signalé ; il suit le grandmaster { $grandmaster }
 netmap-apart-unreported = L’appareil n’a pas signalé son état gPTP
 netmap-apart-no-neighbor = Aucun commutateur détecté sur l’interface de cet ordinateur
+netmap-apart-cannot-listen = Cet ordinateur ne peut pas écouter gPTP sur son interface
 netmap-clock-tree = Arbre d’horloge
 netmap-no-grandmaster = Aucun grandmaster détecté
 netmap-grandmaster-is = Grandmaster : { $grandmaster }
@@ -668,6 +672,8 @@ control-option = Option { $number }
 ## Network errors
 
 network-permission = triib a besoin d’une autorisation pour envoyer et recevoir des trames Ethernet brutes.
+network-needs-npcap = triib a besoin de Npcap pour envoyer et recevoir des trames Ethernet brutes.
+network-npcap-administrators = Npcap ne permet qu’aux administrateurs d’envoyer et de recevoir des trames Ethernet brutes. Exécutez triib en tant qu’administrateur, ou réinstallez Npcap sans son option réservée aux administrateurs.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

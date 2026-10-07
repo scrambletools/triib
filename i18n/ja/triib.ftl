@@ -76,6 +76,8 @@ state-starting-note = { $interface } を開いています。
 state-listening = 受信待機中
 state-listening-note = { $interface } 上のエンティティがアドバタイズすると、ここに表示されます。
 state-permission-needed = 権限が必要です
+state-npcap-needed = Npcap が必要です
+state-get-npcap = Npcap を入手
 state-copy-command = コマンドをコピー
 state-cannot-use = { $interface } を使用できません
 state-try-again = 再試行
@@ -296,6 +298,7 @@ netmap-advertised-off-tree = アドバタイズ中、リスナー未準備（{ $
 netmap-failed-at = { $bridge } で予約に失敗：{ $reason }
 netmap-failed = 予約に失敗：{ $reason }
 netmap-no-bridge-on = { $interface } でブリッジが見つかりません
+netmap-cannot-listen-on = { $interface } で gPTP を受信できません
 netmap-path-not-reported = パス未報告
 netmap-gptp-not-reported = gPTP 未報告
 netmap-off-tree = gPTP ツリー外
@@ -313,6 +316,7 @@ netmap-apart-own-grandmaster = gPTP ツリー外：自身がグランドマス�
 netmap-apart-no-path = パスが報告されていません。グランドマスター { $grandmaster } に従っています
 netmap-apart-unreported = gPTP の状態を報告していません
 netmap-apart-no-neighbor = このコンピューターのインターフェイスでブリッジが見つかりません
+netmap-apart-cannot-listen = このコンピューターはインターフェイスで gPTP を受信できません
 netmap-clock-tree = クロックツリー
 netmap-no-grandmaster = グランドマスターが見つかりません
 netmap-grandmaster-is = グランドマスター：{ $grandmaster }
@@ -524,6 +528,8 @@ control-option = オプション { $number }
 ## Network errors
 
 network-permission = triib が raw イーサネットフレームを送受信するには権限が必要です。
+network-needs-npcap = triib が raw イーサネットフレームを送受信するには Npcap が必要です。
+network-npcap-administrators = Npcap は管理者にのみ raw イーサネットフレームの送受信を許可しています。triib を管理者として実行するか、管理者限定のオプションを外して Npcap を再インストールしてください。
 
 matrix-stream-format = { $format }。
 matrix-stream-format-state = { $format }。{ $state }。

@@ -73,6 +73,8 @@ state-starting-note = { $interface } খোলা হচ্ছে।
 state-listening = শুনছে
 state-listening-note = { $interface }-এ entities নিজেদের advertise করলেই এখানে দেখা যায়।
 state-permission-needed = অনুমতি দরকার
+state-npcap-needed = Npcap দরকার
+state-get-npcap = Npcap নিন
 state-copy-command = কমান্ড কপি করুন
 state-cannot-use = { $interface } ব্যবহার করা যাচ্ছে না
 state-try-again = আবার চেষ্টা করুন
@@ -314,6 +316,7 @@ netmap-advertised-off-tree = Advertise করা হয়েছে, কোন�
 netmap-failed-at = { $bridge }-এ reservation ব্যর্থ: { $reason }
 netmap-failed = Reservation ব্যর্থ: { $reason }
 netmap-no-bridge-on = { $interface }-এ কোনো bridge শোনা যায়নি
+netmap-cannot-listen-on = { $interface }-এ gPTP শোনা সম্ভব নয়
 netmap-path-not-reported = Path জানানো হয়নি
 netmap-gptp-not-reported = gPTP জানানো হয়নি
 netmap-off-tree = gPTP tree-তে নেই
@@ -331,6 +334,7 @@ netmap-apart-own-grandmaster = gPTP tree-তে নেই: এটি নিজ�
 netmap-apart-no-path = এর path জানানো হয়নি; এটি Grandmaster { $grandmaster }-কে অনুসরণ করে
 netmap-apart-unreported = এটি নিজের gPTP অবস্থা জানায়নি
 netmap-apart-no-neighbor = এই কম্পিউটারের interface-এ কোনো bridge শোনা যায়নি
+netmap-apart-cannot-listen = এই কম্পিউটার তার interface-এ gPTP শুনতে পারে না
 netmap-clock-tree = Clock tree
 netmap-no-grandmaster = কোনো Grandmaster শোনা যায়নি
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -606,6 +610,8 @@ control-option = বিকল্প { $number }
 ## Network errors
 
 network-permission = raw Ethernet frames পাঠাতে ও গ্রহণ করতে triib-এর অনুমতি দরকার।
+network-needs-npcap = raw Ethernet frames পাঠাতে ও গ্রহণ করতে triib-এর Npcap দরকার।
+network-npcap-administrators = Npcap শুধু administrator-দের raw Ethernet frames পাঠাতে ও গ্রহণ করতে দেয়। triib administrator হিসেবে চালান, অথবা শুধু-administrator বিকল্প ছাড়া Npcap আবার ইনস্টল করুন।
 
 matrix-stream-format = { $format }।
 matrix-stream-format-state = { $format }। { $state }।

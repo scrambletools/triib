@@ -75,6 +75,8 @@ state-starting-note = Άνοιγμα της διεπαφής { $interface }.
 state-listening = Ακρόαση
 state-listening-note = Οι οντότητες στη διεπαφή { $interface } εμφανίζονται εδώ μόλις ανακοινώσουν την παρουσία τους.
 state-permission-needed = Απαιτείται άδεια
+state-npcap-needed = Απαιτείται το Npcap
+state-get-npcap = Λήψη του Npcap
 state-copy-command = Αντιγραφή της εντολής
 state-cannot-use = Δεν είναι δυνατή η χρήση της διεπαφής { $interface }
 state-try-again = Νέα προσπάθεια
@@ -319,6 +321,7 @@ netmap-advertised-off-tree = Ανακοινωμένη, κανένας Listener �
 netmap-failed-at = Η κράτηση απέτυχε στη γέφυρα { $bridge }: { $reason }
 netmap-failed = Η κράτηση απέτυχε: { $reason }
 netmap-no-bridge-on = Δεν εντοπίστηκε γέφυρα στη διεπαφή { $interface }
+netmap-cannot-listen-on = Δεν είναι δυνατή η ακρόαση gPTP στη διεπαφή { $interface }
 netmap-path-not-reported = Η διαδρομή δεν αναφέρθηκε
 netmap-gptp-not-reported = Δεν αναφέρθηκε gPTP
 netmap-off-tree = Εκτός δέντρου gPTP
@@ -348,6 +351,7 @@ netmap-apart-own-grandmaster = Εκτός δέντρου gPTP: είναι η ί�
 netmap-apart-no-path = Η διαδρομή της δεν αναφέρθηκε· ακολουθεί τον Grandmaster { $grandmaster }
 netmap-apart-unreported = Δεν έχει αναφέρει την κατάσταση gPTP της
 netmap-apart-no-neighbor = Δεν εντοπίστηκε γέφυρα στη διεπαφή αυτού του υπολογιστή
+netmap-apart-cannot-listen = Αυτός ο υπολογιστής δεν μπορεί να ακούσει gPTP στη διεπαφή του
 netmap-clock-tree = Δέντρο ρολογιού
 netmap-no-grandmaster = Δεν εντοπίστηκε Grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -629,6 +633,8 @@ control-option = Επιλογή { $number }
 ## Network errors
 
 network-permission = Το triib χρειάζεται άδεια για αποστολή και λήψη ακατέργαστων πλαισίων Ethernet.
+network-needs-npcap = Το triib χρειάζεται το Npcap για αποστολή και λήψη ακατέργαστων πλαισίων Ethernet.
+network-npcap-administrators = Το Npcap επιτρέπει μόνο σε διαχειριστές την αποστολή και λήψη ακατέργαστων πλαισίων Ethernet. Εκτελέστε το triib ως διαχειριστής ή εγκαταστήστε ξανά το Npcap χωρίς την επιλογή μόνο για διαχειριστές.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

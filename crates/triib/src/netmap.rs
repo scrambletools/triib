@@ -24,7 +24,7 @@ use crate::describe;
 use crate::fl;
 use crate::settings::NetworkShows;
 use crate::topology::{
-    Apart, EntityReport, InterfaceReport, Kind as NodeKind, NodeId, Route, Topology,
+    Apart, EntityReport, HostReport, InterfaceReport, Kind as NodeKind, NodeId, Route, Topology,
 };
 
 const PANEL_WIDTH: f32 = 360.0;
@@ -388,11 +388,12 @@ fn topology_of(triib: &Triib) -> Topology {
             }
         })
         .collect();
-    let host = matches!(triib.network_state, NetworkState::Running { .. }).then(|| {
-        triib
-            .neighbor
-            .map(|neighbor| (neighbor.clock, neighbor.port, neighbor.synced))
-    });
+    let host =
+        matches!(triib.network_state, NetworkState::Running { .. }).then(|| match triib.neighbor {
+            _ if triib.cannot_listen.is_some() => HostReport::CannotListen,
+            Some(neighbor) => HostReport::Heard(neighbor.clock, neighbor.port, neighbor.synced),
+            None => HostReport::Unheard,
+        });
     Topology::build(&reports, host)
 }
 
@@ -726,6 +727,10 @@ fn cards(
                     fl!("netmap-no-bridge-on", interface = interface),
                     Paint::Muted,
                 ),
+                (_, Some(Apart::CannotListen), _) => (
+                    fl!("netmap-cannot-listen-on", interface = interface),
+                    Paint::Muted,
+                ),
                 (_, Some(apart), _) => (
                     match apart {
                         Apart::NoPath(_) => fl!("netmap-path-not-reported"),
@@ -946,6 +951,7 @@ fn apart_reason(apart: Apart) -> String {
         ),
         Apart::Unreported => fl!("netmap-apart-unreported"),
         Apart::NoNeighbor => fl!("netmap-apart-no-neighbor"),
+        Apart::CannotListen => fl!("netmap-apart-cannot-listen"),
     }
 }
 

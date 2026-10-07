@@ -73,6 +73,8 @@ state-starting-note = { $interface } کھولا جا رہا ہے۔
 state-listening = سن رہا ہے
 state-listening-note = { $interface } پر اینٹیٹیز اپنا اعلان کرتے ہی یہاں ظاہر ہوتی ہیں۔
 state-permission-needed = اجازت درکار ہے
+state-npcap-needed = Npcap درکار ہے
+state-get-npcap = Npcap حاصل کریں
 state-copy-command = کمانڈ کاپی کریں
 state-cannot-use = { $interface } استعمال نہیں ہو سکتا
 state-try-again = دوبارہ کوشش کریں
@@ -314,6 +316,7 @@ netmap-advertised-off-tree = اعلان شدہ، کوئی Listener تیار نہ
 netmap-failed-at = { $bridge } پر ریزرویشن ناکام: { $reason }
 netmap-failed = ریزرویشن ناکام: { $reason }
 netmap-no-bridge-on = { $interface } پر کوئی برج سنائی نہیں دیا
+netmap-cannot-listen-on = { $interface } پر gPTP نہیں سنا جا سکتا
 netmap-path-not-reported = راستہ رپورٹ نہیں ہوا
 netmap-gptp-not-reported = gPTP رپورٹ نہیں ہوا
 netmap-off-tree = gPTP ٹری سے باہر
@@ -331,6 +334,7 @@ netmap-apart-own-grandmaster = gPTP ٹری پر نہیں: یہ خود اپنا G
 netmap-apart-no-path = اس کا راستہ رپورٹ نہیں ہوا؛ یہ Grandmaster { $grandmaster } کی پیروی کرتا ہے
 netmap-apart-unreported = اس نے اپنی gPTP حالت رپورٹ نہیں کی
 netmap-apart-no-neighbor = اس کمپیوٹر کے انٹرفیس پر کوئی برج سنائی نہیں دیا
+netmap-apart-cannot-listen = یہ کمپیوٹر اپنے انٹرفیس پر gPTP نہیں سن سکتا
 netmap-clock-tree = کلاک ٹری
 netmap-no-grandmaster = کوئی Grandmaster سنائی نہیں دیا
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -606,6 +610,8 @@ control-option = آپشن { $number }
 ## Network errors
 
 network-permission = triib کو خام ایتھرنیٹ فریمز بھیجنے اور وصول کرنے کی اجازت درکار ہے۔
+network-needs-npcap = triib کو خام ایتھرنیٹ فریمز بھیجنے اور وصول کرنے کے لیے Npcap درکار ہے۔
+network-npcap-administrators = Npcap صرف منتظمین کو خام ایتھرنیٹ فریمز بھیجنے اور وصول کرنے دیتا ہے۔ triib کو منتظم کے طور پر چلائیں، یا Npcap کو اس کے صرف منتظمین والے اختیار کے بغیر دوبارہ انسٹال کریں۔
 
 matrix-stream-format = { $format }۔
 matrix-stream-format-state = { $format }۔ { $state }۔

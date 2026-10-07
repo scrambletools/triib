@@ -73,6 +73,8 @@ state-starting-note = Inafungua { $interface }.
 state-listening = Inasikiliza
 state-listening-note = Huluki zilizo kwenye { $interface } zitaonekana hapa zinapojitangaza.
 state-permission-needed = Ruhusa inahitajika
+state-npcap-needed = Npcap inahitajika
+state-get-npcap = Pata Npcap
 state-copy-command = Nakili amri
 state-cannot-use = Haiwezi kutumia { $interface }
 state-try-again = Jaribu tena
@@ -314,6 +316,7 @@ netmap-advertised-off-tree = Imetangazwa, hakuna listener iliyo tayari ({ $liste
 netmap-failed-at = Uhifadhi umeshindwa kwenye { $bridge }: { $reason }
 netmap-failed = Uhifadhi umeshindwa: { $reason }
 netmap-no-bridge-on = Hakuna swichi iliyosikika kwenye { $interface }
+netmap-cannot-listen-on = Haiwezekani kusikiliza gPTP kwenye { $interface }
 netmap-path-not-reported = Njia haijaripotiwa
 netmap-gptp-not-reported = gPTP haijaripotiwa
 netmap-off-tree = Haiko kwenye mti wa gPTP
@@ -331,6 +334,7 @@ netmap-apart-own-grandmaster = Haiko kwenye mti wa gPTP: ni grandmaster yake yen
 netmap-apart-no-path = Njia yake haijaripotiwa; inafuata grandmaster { $grandmaster }
 netmap-apart-unreported = Haijaripoti hali yake ya gPTP
 netmap-apart-no-neighbor = Hakuna swichi iliyosikika kwenye kiolesura cha kompyuta hii
+netmap-apart-cannot-listen = Kompyuta hii haiwezi kusikiliza gPTP kwenye kiolesura chake
 netmap-clock-tree = Mti wa saa
 netmap-no-grandmaster = Hakuna grandmaster iliyosikika
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -615,6 +619,8 @@ control-option = Chaguo { $number }
 ## Network errors
 
 network-permission = triib inahitaji ruhusa ya kutuma na kupokea fremu ghafi za Ethernet.
+network-needs-npcap = triib inahitaji Npcap ili kutuma na kupokea fremu ghafi za Ethernet.
+network-npcap-administrators = Npcap inaruhusu wasimamizi pekee kutuma na kupokea fremu ghafi za Ethernet. Endesha triib kama msimamizi, au sakinisha Npcap upya bila chaguo lake la wasimamizi pekee.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

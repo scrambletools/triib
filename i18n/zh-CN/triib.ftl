@@ -76,6 +76,8 @@ state-starting-note = 正在打开 { $interface }。
 state-listening = 正在监听
 state-listening-note = { $interface } 上的实体发出通告后会显示在这里。
 state-permission-needed = 需要权限
+state-npcap-needed = 需要 Npcap
+state-get-npcap = 获取 Npcap
 state-copy-command = 复制命令
 state-cannot-use = 无法使用 { $interface }
 state-try-again = 重试
@@ -296,6 +298,7 @@ netmap-advertised-off-tree = 已通告，无就绪的接收端（{ $listener } �
 netmap-failed-at = 在 { $bridge } 预留失败：{ $reason }
 netmap-failed = 预留失败：{ $reason }
 netmap-no-bridge-on = 在 { $interface } 上未检测到交换机
+netmap-cannot-listen-on = 无法在 { $interface } 上监听 gPTP
 netmap-path-not-reported = 未报告路径
 netmap-gptp-not-reported = 未报告 gPTP
 netmap-off-tree = 不在 gPTP 树上
@@ -313,6 +316,7 @@ netmap-apart-own-grandmaster = 不在 gPTP 树上：它自身即为 Grandmaster
 netmap-apart-no-path = 未报告其路径；它跟随 Grandmaster { $grandmaster }
 netmap-apart-unreported = 未报告其 gPTP 状态
 netmap-apart-no-neighbor = 本机接口上未检测到交换机
+netmap-apart-cannot-listen = 本机无法在其接口上监听 gPTP
 netmap-clock-tree = 时钟树
 netmap-no-grandmaster = 未检测到 Grandmaster
 netmap-grandmaster-is = Grandmaster：{ $grandmaster }
@@ -524,6 +528,8 @@ control-option = 选项 { $number }
 ## Network errors
 
 network-permission = triib 需要权限才能收发原始以太网帧。
+network-needs-npcap = triib 需要 Npcap 才能收发原始以太网帧。
+network-npcap-administrators = Npcap 仅允许管理员收发原始以太网帧。请以管理员身份运行 triib，或在不勾选“仅限管理员”选项的情况下重新安装 Npcap。
 
 matrix-stream-format = { $format }。
 matrix-stream-format-state = { $format }。{ $state }。

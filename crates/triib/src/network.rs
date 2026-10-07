@@ -6,16 +6,17 @@ use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use atdecc::aem::{AudioMapping, MappingChange, NAME_LENGTH, aem_name};
 use atdecc::blocking::{Driver, Frame};
 use atdecc::controller::{Advertise, CommandId, Outcome};
 use atdecc::descriptor::{DescriptorType, SamplingRate};
 use atdecc::model::EntityModel;
+pub use atdecc::neighbor::Neighbor;
+use atdecc::neighbor::NeighborListener;
 use atdecc::stream_format::StreamFormat;
-use atdecc::{ClockIdentity, DiscoveredEntity, EntityId, EntityModelId, Event, OfflineReason};
-use avb_net::{MacAddress, Socket};
+use atdecc::{DiscoveredEntity, EntityId, EntityModelId, Event, OfflineReason};
 
 use crate::External;
 
@@ -30,16 +31,6 @@ const ENTITY_MODEL_ID: EntityModelId = EntityModelId(0x8c1f_6436_c000_0001);
 /// How long other controllers keep triib after its last advertisement, in
 /// units of 2 s: the standard's default of 62 s.
 const VALID_TIME: u8 = 31;
-
-const ETHERTYPE_GPTP: u16 = 0x88f7;
-/// Where gPTP sends its messages, to the neighbor only.
-const GPTP_MULTICAST: MacAddress = MacAddress([0x01, 0x80, 0xc2, 0x00, 0x00, 0x0e]);
-/// How long the bridge is known after its last peer delay request; it
-/// sends one a second.
-const NEIGHBOR_TIMEOUT: Duration = Duration::from_secs(5);
-/// How long gPTP counts as running after the bridge's last Sync, which it
-/// sends eight times a second.
-const SYNC_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// What the network thread reports, tagged with the generation of the
 /// thread that sent it so reports from a replaced thread can be ignored.
@@ -67,19 +58,11 @@ pub enum ReportKind {
     /// The bridge this computer is plugged into, as its gPTP messages show,
     /// or none heard.
     Neighbor(Option<Neighbor>),
+    /// This computer cannot listen for gPTP on the interface, and why.
+    CannotListen(String),
     /// ATDECC frames sent and received since the last report, oldest
     /// first.
     Frames(Vec<Frame>),
-}
-
-/// The bridge port this computer is plugged into, from the peer delay
-/// requests the bridge sends on it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Neighbor {
-    pub clock: ClockIdentity,
-    pub port: u16,
-    /// The bridge sends Sync on the link, as it does once gPTP runs there.
-    pub synced: bool,
 }
 
 /// Something the app asks the network to do.
@@ -208,26 +191,64 @@ const IDENTIFY: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
     pub message: String,
-    /// The command that grants the missing permission, when that is the
-    /// problem.
-    pub fix: Option<String>,
+    /// What gets raw Ethernet going again, when it is out of reach.
+    pub remedy: Option<Remedy>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Remedy {
+    /// A command that grants the missing permission, to copy.
+    Command(String),
+    /// Npcap is missing, from here.
+    GetNpcap(String),
+    /// Run as administrator, or set the system up again.
+    Permission,
 }
 
 impl Failure {
     fn from_io(error: &io::Error) -> Self {
-        let fix = (error.kind() == io::ErrorKind::PermissionDenied).then(|| {
-            let program = std::env::current_exe()
+        let program = || {
+            std::env::current_exe()
                 .map(|path| path.display().to_string())
-                .unwrap_or_else(|_| "triib".to_owned());
-            format!("sudo setcap cap_net_raw+ep {program}")
-        });
-        let message = match fix {
-            Some(_) => crate::fl!("network-permission"),
-            None => error.to_string(),
+                .unwrap_or_else(|_| "triib".to_owned())
         };
-        Self { message, fix }
+        let (message, remedy) = match avb_net::Blocked::of(error) {
+            Some(avb_net::Blocked::RawCapability) => (
+                crate::fl!("network-permission"),
+                Remedy::Command(format!("sudo setcap cap_net_raw+ep {}", program())),
+            ),
+            // Until the next restart; the installer's helper keeps it.
+            Some(avb_net::Blocked::CaptureDevices) => (
+                crate::fl!("network-permission"),
+                Remedy::Command(format!(
+                    "sudo chown {} /dev/bpf*",
+                    std::env::var("USER").unwrap_or_else(|_| "$USER".to_owned())
+                )),
+            ),
+            Some(avb_net::Blocked::Npcap) => (
+                crate::fl!("network-needs-npcap"),
+                Remedy::GetNpcap(NPCAP_DOWNLOAD.to_owned()),
+            ),
+            Some(avb_net::Blocked::NpcapAdministrators) => (
+                crate::fl!("network-npcap-administrators"),
+                Remedy::Permission,
+            ),
+            _ => {
+                return Self {
+                    message: error.to_string(),
+                    remedy: None,
+                };
+            }
+        };
+        Self {
+            message,
+            remedy: Some(remedy),
+        }
     }
 }
+
+/// Where Npcap's installer is.
+const NPCAP_DOWNLOAD: &str = "https://npcap.com/#download";
 
 enum Command {
     Discover,
@@ -306,7 +327,13 @@ fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<
     driver.controller_mut().discover(None);
     let mut actions: HashMap<CommandId, Action> = HashMap::new();
     // Without it the network view only lacks this computer's place.
-    let mut gptp = Gptp::open(interface);
+    let mut gptp = match NeighborListener::open(interface) {
+        Ok(listener) => Some(listener),
+        Err(error) => {
+            report(generation, ReportKind::CannotListen(error.to_string()));
+            None
+        }
+    };
     loop {
         if stop.load(Ordering::Relaxed) {
             // Tell other controllers triib is leaving.
@@ -424,105 +451,6 @@ fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<
                 report(generation, kind);
             }
         }
-    }
-}
-
-/// Listens to the gPTP messages the neighboring bridge sends this
-/// computer, without taking part in gPTP.
-struct Gptp {
-    socket: Socket,
-    /// The bridge port and when it last sent a peer delay request.
-    heard: Option<(ClockIdentity, u16, Instant)>,
-    last_sync: Option<Instant>,
-    reported: Option<Neighbor>,
-}
-
-impl Gptp {
-    fn open(interface: &str) -> Option<Self> {
-        let socket = Socket::open(interface, ETHERTYPE_GPTP).ok()?;
-        socket.join_multicast(GPTP_MULTICAST).ok()?;
-        Some(Self {
-            socket,
-            heard: None,
-            last_sync: None,
-            reported: None,
-        })
-    }
-
-    /// Reads what arrived, returning the neighbor when it changed.
-    fn poll(&mut self) -> Option<Option<Neighbor>> {
-        let mut buffer = [0; 128];
-        let now = Instant::now();
-        while let Ok(Some(received)) = self.socket.receive(&mut buffer, Some(Duration::ZERO)) {
-            let Some(message) = GptpMessage::decode(&buffer[..received.length.min(buffer.len())])
-            else {
-                continue;
-            };
-            match message.message_type {
-                GptpMessage::PDELAY_REQ => self.heard = Some((message.clock, message.port, now)),
-                GptpMessage::SYNC => self.last_sync = Some(now),
-                _ => {}
-            }
-        }
-        let neighbor = self
-            .heard
-            .filter(|(_, _, at)| now.duration_since(*at) < NEIGHBOR_TIMEOUT)
-            .map(|(clock, port, _)| Neighbor {
-                clock,
-                port,
-                synced: self
-                    .last_sync
-                    .is_some_and(|at| now.duration_since(at) < SYNC_TIMEOUT),
-            });
-        (neighbor != self.reported).then(|| {
-            self.reported = neighbor;
-            neighbor
-        })
-    }
-}
-
-/// The parts of a gPTP message header the network view uses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct GptpMessage {
-    message_type: u8,
-    clock: ClockIdentity,
-    port: u16,
-}
-
-impl GptpMessage {
-    const SYNC: u8 = 0x0;
-    const PDELAY_REQ: u8 = 0x2;
-
-    /// Decodes the common header: the message type, then the sending
-    /// port's identity at octet 20.
-    fn decode(bytes: &[u8]) -> Option<Self> {
-        let header: &[u8; 34] = bytes.get(..34)?.try_into().ok()?;
-        let clock: [u8; 8] = header[20..28].try_into().ok()?;
-        Some(Self {
-            message_type: header[0] & 0x0f,
-            clock: ClockIdentity(u64::from_be_bytes(clock)),
-            port: u16::from_be_bytes([header[28], header[29]]),
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn peer_delay_requests_name_the_bridge_port() {
-        // A bridge's Pdelay_Req, as on the bench: port 6 of the switch.
-        let mut frame = [0u8; 54];
-        frame[0] = 0x12;
-        frame[1] = 0x02;
-        frame[20..28].copy_from_slice(&0x0001_f2ff_feff_3b14u64.to_be_bytes());
-        frame[28..30].copy_from_slice(&6u16.to_be_bytes());
-        let message = GptpMessage::decode(&frame).unwrap();
-        assert_eq!(message.message_type, GptpMessage::PDELAY_REQ);
-        assert_eq!(message.clock, ClockIdentity(0x0001_f2ff_feff_3b14));
-        assert_eq!(message.port, 6);
-        assert_eq!(GptpMessage::decode(&frame[..33]), None);
     }
 }
 

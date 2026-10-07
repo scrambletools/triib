@@ -26,7 +26,7 @@ use crate::app::{Message, NetworkState, Triib};
 use crate::describe;
 use crate::fl;
 use crate::mapping_view;
-use crate::network::{Action, Failure, NameTarget};
+use crate::network::{Action, Failure, NameTarget, Remedy};
 use crate::settings::View;
 
 const STATUS_BAR_HEIGHT: f32 = 28.0;
@@ -352,17 +352,23 @@ fn network_state_view<'a>(triib: &'a Triib, state: &'a NetworkState) -> Element<
 }
 
 fn failure_view<'a>(interface: &str, failure: &'a Failure) -> Element<'a, Message> {
-    let (headline, action) = match &failure.fix {
-        Some(fix) => (
+    let try_again = || {
+        button::with_icon(Kind::Tonal, Icon::Refresh, fl!("state-try-again"))
+            .on_press(Message::RetryNetwork)
+    };
+    let (headline, action) = match &failure.remedy {
+        Some(Remedy::Command(command)) => (
             fl!("state-permission-needed"),
             button::with_icon(Kind::Tonal, Icon::ContentCopy, fl!("state-copy-command"))
-                .on_press(Message::Copy(fix.clone())),
+                .on_press(Message::Copy(command.clone())),
         ),
-        None => (
-            fl!("state-cannot-use", interface = interface),
-            button::with_icon(Kind::Tonal, Icon::Refresh, fl!("state-try-again"))
-                .on_press(Message::RetryNetwork),
+        Some(Remedy::GetNpcap(link)) => (
+            fl!("state-npcap-needed"),
+            button::with_icon(Kind::Tonal, Icon::Link, fl!("state-get-npcap"))
+                .on_press(Message::OpenLink(link.clone())),
         ),
+        Some(Remedy::Permission) => (fl!("state-permission-needed"), try_again()),
+        None => (fl!("state-cannot-use", interface = interface), try_again()),
     };
     let mut details = iced::widget::column![
         styled(failure.message.as_str(), Type::BodyMedium)
@@ -371,9 +377,9 @@ fn failure_view<'a>(interface: &str, failure: &'a Failure) -> Element<'a, Messag
     ]
     .spacing(12)
     .align_x(Center);
-    if let Some(fix) = &failure.fix {
+    if let Some(Remedy::Command(command)) = &failure.remedy {
         details = details.push(
-            styled(fix.as_str(), Type::BodySmall)
+            styled(command.as_str(), Type::BodySmall)
                 .style(style::on_surface_variant)
                 .center(),
         );
@@ -1422,7 +1428,13 @@ fn status_bar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
             fl!("status-discovering-as", controller = controller.to_string())
         }
         NetworkState::Running { .. } => fl!("status-discovering"),
-        NetworkState::Failed(failure) if failure.fix.is_some() => fl!("state-permission-needed"),
+        NetworkState::Failed(Failure {
+            remedy: Some(Remedy::GetNpcap(_)),
+            ..
+        }) => fl!("state-npcap-needed"),
+        NetworkState::Failed(failure) if failure.remedy.is_some() => {
+            fl!("state-permission-needed")
+        }
         NetworkState::Failed(_) => fl!("status-stopped"),
     };
     container(

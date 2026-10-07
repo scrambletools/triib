@@ -76,6 +76,8 @@ state-starting-note = { $interface } 인터페이스를 여는 중입니다.
 state-listening = 수신 대기 중
 state-listening-note = { $interface }의 엔티티가 광고하면 여기에 표시됩니다.
 state-permission-needed = 권한 필요
+state-npcap-needed = Npcap 필요
+state-get-npcap = Npcap 받기
 state-copy-command = 명령 복사
 state-cannot-use = { $interface } 인터페이스를 사용할 수 없음
 state-try-again = 다시 시도
@@ -296,6 +298,7 @@ netmap-advertised-off-tree = 광고됨, 준비된 리스너 없음({ $listener }
 netmap-failed-at = { $bridge }에서 예약 실패: { $reason }
 netmap-failed = 예약 실패: { $reason }
 netmap-no-bridge-on = { $interface }에서 감지된 브리지 없음
+netmap-cannot-listen-on = { $interface }에서 gPTP를 수신할 수 없음
 netmap-path-not-reported = 경로 보고 없음
 netmap-gptp-not-reported = gPTP 보고 없음
 netmap-off-tree = gPTP 트리에 없음
@@ -313,6 +316,7 @@ netmap-apart-own-grandmaster = gPTP 트리에 없음: 자체가 그랜드마스�
 netmap-apart-no-path = 경로가 보고되지 않았으며 그랜드마스터 { $grandmaster }을(를) 따릅니다
 netmap-apart-unreported = gPTP 상태를 보고하지 않았습니다
 netmap-apart-no-neighbor = 이 컴퓨터의 인터페이스에서 감지된 브리지 없음
+netmap-apart-cannot-listen = 이 컴퓨터는 인터페이스에서 gPTP를 수신할 수 없음
 netmap-clock-tree = 클럭 트리
 netmap-no-grandmaster = 감지된 그랜드마스터 없음
 netmap-grandmaster-is = 그랜드마스터: { $grandmaster }
@@ -524,6 +528,8 @@ control-option = 옵션 { $number }
 ## Network errors
 
 network-permission = triib 앱에 원시 이더넷 프레임을 보내고 받을 권한이 필요합니다.
+network-needs-npcap = triib 앱이 원시 이더넷 프레임을 보내고 받으려면 Npcap이 필요합니다.
+network-npcap-administrators = Npcap이 관리자에게만 원시 이더넷 프레임 송수신을 허용합니다. triib 앱을 관리자 권한으로 실행하거나, 관리자 전용 옵션 없이 Npcap을 다시 설치하세요.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

@@ -73,6 +73,8 @@ state-starting-note = جارٍ فتح { $interface }.
 state-listening = جارٍ الاستماع
 state-listening-note = تظهر هنا الكيانات الموجودة على { $interface } عندما تعلن عن نفسها.
 state-permission-needed = يلزم إذن
+state-npcap-needed = يلزم Npcap
+state-get-npcap = تنزيل Npcap
 state-copy-command = نسخ الأمر
 state-cannot-use = تعذّر استخدام { $interface }
 state-try-again = إعادة المحاولة
@@ -342,6 +344,7 @@ netmap-advertised-off-tree = مُعلَن، لا Listener جاهز ({ $listener 
 netmap-failed-at = فشل الحجز عند { $bridge }: { $reason }
 netmap-failed = فشل الحجز: { $reason }
 netmap-no-bridge-on = لم يُسمع أي جسر على { $interface }
+netmap-cannot-listen-on = تعذّر الاستماع إلى gPTP على { $interface }
 netmap-path-not-reported = لم يُبلَّغ عن المسار
 netmap-gptp-not-reported = لم يُبلَّغ عن gPTP
 netmap-off-tree = خارج شجرة gPTP
@@ -359,6 +362,7 @@ netmap-apart-own-grandmaster = ليس على شجرة gPTP: إنه Grandmaster �
 netmap-apart-no-path = لم يُبلَّغ عن مساره؛ إنه يتبع Grandmaster { $grandmaster }
 netmap-apart-unreported = لم يُبلِّغ عن حالة gPTP الخاصة به
 netmap-apart-no-neighbor = لم يُسمع أي جسر على واجهة هذا الحاسوب
+netmap-apart-cannot-listen = لا يستطيع هذا الحاسوب الاستماع إلى gPTP على واجهته
 netmap-clock-tree = شجرة الساعة
 netmap-no-grandmaster = لم يُسمع أي Grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -734,6 +738,8 @@ control-option = الخيار { $number }
 ## Network errors
 
 network-permission = يحتاج triib إلى إذن لإرسال إطارات إيثرنت الخام واستقبالها.
+network-needs-npcap = يحتاج triib إلى Npcap لإرسال إطارات إيثرنت الخام واستقبالها.
+network-npcap-administrators = يسمح Npcap للمسؤولين فقط بإرسال إطارات إيثرنت الخام واستقبالها. شغّل triib كمسؤول، أو ثبّت Npcap مجددًا دون خيار المسؤولين فقط.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

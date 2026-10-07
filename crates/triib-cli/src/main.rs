@@ -18,6 +18,7 @@ use atdecc::descriptor::{ClockSourceType, DescriptorType, LocalizedStringRef, Sa
 use atdecc::lite::LiteFlags;
 use atdecc::media_clock::{Broken, ClockFrom, DomainClock, DomainId, media_clocks};
 use atdecc::model::{EntityModel, EnumerationState};
+use atdecc::neighbor::{Neighbor, NeighborListener};
 use atdecc::stream_format::StreamFormat;
 use atdecc::{
     ClockIdentity, ControllerCapabilities, DiscoveredEntity, EntityCapabilities, EntityId, Event,
@@ -346,6 +347,10 @@ fn usage() -> ExitCode {
 
 fn print_interfaces() {
     let interfaces = avb_net::interfaces();
+    match avb_net::check_access() {
+        Ok(()) => println!("raw Ethernet: ready"),
+        Err(error) => println!("raw Ethernet: {error}"),
+    }
     if interfaces.is_empty() {
         println!("no Ethernet interfaces found");
         return;
@@ -1943,7 +1948,14 @@ struct Leaf {
 /// Reads every entity and prints the gPTP tree their paths make: the
 /// grandmaster, the bridges under it and the entities under those.
 fn network(interface: &str) -> std::io::Result<()> {
+    // Listening while the entities are read, as the bridge sends a peer
+    // delay request each second.
+    let listener = NeighborListener::open(interface);
     let driver = read(interface, None)?;
+    let host = match listener {
+        Ok(mut listener) => Host::Heard(listener.neighbor()),
+        Err(error) => Host::CannotListen(error.to_string()),
+    };
     let controller = driver.controller();
     // Each entity interface's clock identity, to tell entities from
     // bridges in the paths.
@@ -2009,8 +2021,34 @@ fn network(interface: &str) -> std::io::Result<()> {
         "network on {interface} as gPTP paths show it, {} entities\n",
         controller.entities().count()
     );
+    let tree = Tree {
+        controller,
+        owners: &owners,
+        children: &children,
+        leaves: &leaves,
+        host: match host {
+            Host::Heard(neighbor) => neighbor,
+            Host::CannotListen(_) => None,
+        },
+    };
     for root in &roots {
-        print_node(controller, &owners, &children, &leaves, *root, 0);
+        tree.print(*root, 0);
+    }
+    let placed = |clock: ClockIdentity| {
+        roots.contains(&clock) || children.values().any(|below| below.contains(&clock))
+    };
+    match &host {
+        Host::Heard(Some(neighbor)) if placed(neighbor.clock) => {}
+        Host::Heard(Some(neighbor)) => println!(
+            "this computer  port {} of bridge {}, {}",
+            neighbor.port,
+            neighbor.clock,
+            synced(neighbor.synced)
+        ),
+        Host::Heard(None) => println!("this computer  no bridge heard on {interface}"),
+        Host::CannotListen(reason) => {
+            println!("this computer  cannot listen for gPTP on {interface}: {reason}");
+        }
     }
     if let Some(unplaced) = leaves.get(&None) {
         println!("not placed, no gPTP path reported:");
@@ -2027,32 +2065,54 @@ fn network(interface: &str) -> std::io::Result<()> {
     driver.close()
 }
 
-fn print_node(
-    controller: &Controller,
-    owners: &BTreeMap<ClockIdentity, (EntityId, u16)>,
-    children: &BTreeMap<ClockIdentity, BTreeSet<ClockIdentity>>,
-    leaves: &BTreeMap<Option<ClockIdentity>, Vec<Leaf>>,
-    node: ClockIdentity,
-    depth: usize,
-) {
-    let indent = "  ".repeat(depth);
-    let what = match owners.get(&node) {
-        Some((entity_id, index)) => {
-            let name = controller
-                .model(*entity_id)
-                .and_then(EntityModel::entity_name)
-                .unwrap_or("unnamed");
-            format!("entity \"{name}\" {entity_id} interface {index}")
+/// What this computer heard of the bridge it is plugged into.
+enum Host {
+    Heard(Option<Neighbor>),
+    CannotListen(String),
+}
+
+fn synced(synced: bool) -> &'static str {
+    if synced { "synced" } else { "not synced" }
+}
+
+/// The gPTP tree the entities' paths make, to print.
+struct Tree<'a> {
+    controller: &'a Controller,
+    owners: &'a BTreeMap<ClockIdentity, (EntityId, u16)>,
+    children: &'a BTreeMap<ClockIdentity, BTreeSet<ClockIdentity>>,
+    leaves: &'a BTreeMap<Option<ClockIdentity>, Vec<Leaf>>,
+    host: Option<Neighbor>,
+}
+
+impl Tree<'_> {
+    fn print(&self, node: ClockIdentity, depth: usize) {
+        let indent = "  ".repeat(depth);
+        let what = match self.owners.get(&node) {
+            Some((entity_id, index)) => {
+                let name = self
+                    .controller
+                    .model(*entity_id)
+                    .and_then(EntityModel::entity_name)
+                    .unwrap_or("unnamed");
+                format!("entity \"{name}\" {entity_id} interface {index}")
+            }
+            None => "bridge".to_owned(),
+        };
+        let role = if depth == 0 { "grandmaster, " } else { "" };
+        println!("{indent}{node}  {role}{what}");
+        for child in self.children.get(&node).into_iter().flatten() {
+            self.print(*child, depth + 1);
         }
-        None => "bridge".to_owned(),
-    };
-    let role = if depth == 0 { "grandmaster, " } else { "" };
-    println!("{indent}{node}  {role}{what}");
-    for child in children.get(&node).into_iter().flatten() {
-        print_node(controller, owners, children, leaves, *child, depth + 1);
-    }
-    for leaf in leaves.get(&Some(node)).into_iter().flatten() {
-        print_leaf(leaf, depth + 1);
+        for leaf in self.leaves.get(&Some(node)).into_iter().flatten() {
+            print_leaf(leaf, depth + 1);
+        }
+        if let Some(neighbor) = self.host.filter(|neighbor| neighbor.clock == node) {
+            println!(
+                "{indent}  this computer  bridge port {}, {}",
+                neighbor.port,
+                synced(neighbor.synced)
+            );
+        }
     }
 }
 

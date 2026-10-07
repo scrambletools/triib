@@ -76,6 +76,8 @@ state-starting-note = 正在開啟 { $interface }。
 state-listening = 正在監聽
 state-listening-note = { $interface } 上的實體發出通告後會顯示於此。
 state-permission-needed = 需要權限
+state-npcap-needed = 需要 Npcap
+state-get-npcap = 取得 Npcap
 state-copy-command = 複製指令
 state-cannot-use = 無法使用 { $interface }
 state-try-again = 重試
@@ -296,6 +298,7 @@ netmap-advertised-off-tree = 已通告，沒有就緒的接收端（{ $listener 
 netmap-failed-at = 在 { $bridge } 保留失敗：{ $reason }
 netmap-failed = 保留失敗：{ $reason }
 netmap-no-bridge-on = 在 { $interface } 上未偵測到交換器
+netmap-cannot-listen-on = 無法在 { $interface } 上監聽 gPTP
 netmap-path-not-reported = 未回報路徑
 netmap-gptp-not-reported = 未回報 gPTP
 netmap-off-tree = 不在 gPTP 樹上
@@ -313,6 +316,7 @@ netmap-apart-own-grandmaster = 不在 gPTP 樹上：它本身即為 Grandmaster
 netmap-apart-no-path = 未回報其路徑；它跟隨 Grandmaster { $grandmaster }
 netmap-apart-unreported = 未回報其 gPTP 狀態
 netmap-apart-no-neighbor = 本機介面上未偵測到交換器
+netmap-apart-cannot-listen = 本機無法在其介面上監聽 gPTP
 netmap-clock-tree = 時鐘樹
 netmap-no-grandmaster = 未偵測到 Grandmaster
 netmap-grandmaster-is = Grandmaster：{ $grandmaster }
@@ -524,6 +528,8 @@ control-option = 選項 { $number }
 ## Network errors
 
 network-permission = triib 需要權限才能傳送與接收原始乙太網路訊框。
+network-needs-npcap = triib 需要 Npcap 才能傳送與接收原始乙太網路訊框。
+network-npcap-administrators = Npcap 僅允許系統管理員傳送與接收原始乙太網路訊框。請以系統管理員身分執行 triib，或在不勾選「僅限系統管理員」選項的情況下重新安裝 Npcap。
 
 matrix-stream-format = { $format }。
 matrix-stream-format-state = { $format }。{ $state }。

@@ -76,6 +76,8 @@ state-starting-note = S’està obrint { $interface }.
 state-listening = A l’escolta
 state-listening-note = Les entitats de { $interface } apareixen aquí a mesura que s’anuncien.
 state-permission-needed = Cal permís
+state-npcap-needed = Cal Npcap
+state-get-npcap = Obtén Npcap
 state-copy-command = Copia l’ordre
 state-cannot-use = No es pot fer servir { $interface }
 state-try-again = Torna-ho a provar
@@ -328,6 +330,7 @@ netmap-advertised-off-tree = Anunciat, cap listener a punt ({ $listener } no és
 netmap-failed-at = Ha fallat la reserva a { $bridge }: { $reason }
 netmap-failed = Ha fallat la reserva: { $reason }
 netmap-no-bridge-on = No s’ha detectat cap commutador a { $interface }
+netmap-cannot-listen-on = No es pot escoltar gPTP a { $interface }
 netmap-path-not-reported = Camí no notificat
 netmap-gptp-not-reported = gPTP no notificat
 netmap-off-tree = Fora de l’arbre gPTP
@@ -353,6 +356,7 @@ netmap-apart-own-grandmaster = Fora de l’arbre gPTP: és el seu propi grandmas
 netmap-apart-no-path = No ha notificat el seu camí; segueix el grandmaster { $grandmaster }
 netmap-apart-unreported = No ha notificat el seu estat gPTP
 netmap-apart-no-neighbor = No s’ha detectat cap commutador a la interfície d’aquest ordinador
+netmap-apart-cannot-listen = Aquest ordinador no pot escoltar gPTP a la seva interfície
 netmap-clock-tree = Arbre de rellotge
 netmap-no-grandmaster = No s’ha detectat cap grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -668,6 +672,8 @@ control-option = Opció { $number }
 ## Network errors
 
 network-permission = triib necessita permís per enviar i rebre trames Ethernet en brut.
+network-needs-npcap = triib necessita Npcap per enviar i rebre trames Ethernet en brut.
+network-npcap-administrators = Npcap només permet als administradors enviar i rebre trames Ethernet en brut. Executeu triib com a administrador o torneu a instal·lar Npcap sense l’opció de només administradors.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

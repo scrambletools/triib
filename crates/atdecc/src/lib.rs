@@ -50,6 +50,8 @@ pub mod time;
 pub mod blocking;
 #[cfg(feature = "alloc")]
 pub mod controller;
+#[cfg(feature = "std")]
+pub mod neighbor;
 
 pub use acmp::{AcmpFlags, AcmpIp, AcmpMessageType, AcmpStatus, Acmpdu};
 pub use adp::{

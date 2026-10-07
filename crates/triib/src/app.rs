@@ -66,6 +66,9 @@ pub struct Triib {
     pub hover: Hover,
     /// The bridge this computer is plugged into.
     pub neighbor: Option<Neighbor>,
+    /// Why this computer cannot listen for the bridge's gPTP messages,
+    /// when it cannot.
+    pub cannot_listen: Option<String>,
     /// What the network view brings forward.
     pub network_focus: Option<Focus>,
     /// The toolbar's "More" menu is open.
@@ -137,6 +140,8 @@ pub enum Message {
     Rediscover,
     RetryNetwork,
     Copy(String),
+    /// Opens a link in the browser.
+    OpenLink(String),
     Act(Action),
     /// Several actions, sent in order, such as removing a channel's mapping
     /// before mapping it anew.
@@ -232,6 +237,7 @@ impl Triib {
             collapsed: BTreeSet::new(),
             hover: Hover::default(),
             neighbor: None,
+            cannot_listen: None,
             network_focus: None,
             overflow_open: false,
             network_list: false,
@@ -276,6 +282,7 @@ impl Triib {
             collapsed: BTreeSet::new(),
             hover: Hover::default(),
             neighbor: None,
+            cannot_listen: None,
             network_focus: None,
             overflow_open: false,
             network_list: false,
@@ -648,6 +655,9 @@ impl Triib {
             Message::NetworkListToggled => self.network_list = !self.network_list,
             Message::OverflowClosed => self.overflow_open = false,
             Message::Copy(text) => return iced::clipboard::write(text),
+            Message::OpenLink(link) => {
+                return Task::perform(desktop::open_uri(link), |_| Message::Nothing);
+            }
             Message::SystemTheme(mode) => {
                 self.system_mode = mode;
                 self.refresh_theme();
@@ -694,6 +704,7 @@ impl Triib {
         self.pending.clear();
         self.hover = Hover::default();
         self.neighbor = None;
+        self.cannot_listen = None;
         self.network_focus = None;
         let Some(interface) = self.settings.interface.clone() else {
             self.network_state = NetworkState::Idle;
@@ -729,6 +740,7 @@ impl Triib {
                 self.models.insert(entity_id, *model);
             }
             ReportKind::Neighbor(neighbor) => self.neighbor = neighbor,
+            ReportKind::CannotListen(reason) => self.cannot_listen = Some(reason),
             ReportKind::Frames(frames) => {
                 if !self.log.paused {
                     let described = frames

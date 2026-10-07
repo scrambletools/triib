@@ -75,6 +75,8 @@ state-starting-note = Megnyitás: { $interface }.
 state-listening = Figyelés
 state-listening-note = Az entitások itt jelennek meg, amint meghirdetik magukat ezen az interfészen: { $interface }.
 state-permission-needed = Engedély szükséges
+state-npcap-needed = Npcap szükséges
+state-get-npcap = Npcap letöltése
 state-copy-command = A parancs másolása
 state-cannot-use = Nem használható: { $interface }
 state-try-again = Újra
@@ -316,6 +318,7 @@ netmap-advertised-off-tree = Meghirdetve, nincs kész listener (nincs a gPTP-fá
 netmap-failed-at = A foglalás sikertelen (híd: { $bridge }): { $reason }
 netmap-failed = A foglalás sikertelen: { $reason }
 netmap-no-bridge-on = Nincs észlelt híd ({ $interface })
+netmap-cannot-listen-on = A gPTP nem figyelhető ({ $interface })
 netmap-path-not-reported = Az útvonal nincs jelentve
 netmap-gptp-not-reported = A gPTP nincs jelentve
 netmap-off-tree = Nincs a gPTP-fán
@@ -333,6 +336,7 @@ netmap-apart-own-grandmaster = Nincs a gPTP-fán: saját maga a grandmaster
 netmap-apart-no-path = Az útvonalát nem jelentette; a követett grandmaster: { $grandmaster }
 netmap-apart-unreported = Nem jelentette a gPTP-állapotát
 netmap-apart-no-neighbor = Nincs észlelt híd a számítógép interfészén
+netmap-apart-cannot-listen = Ez a számítógép nem tudja figyelni a gPTP-t az interfészén
 netmap-clock-tree = Órajelfa
 netmap-no-grandmaster = Nincs észlelt grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -608,6 +612,8 @@ control-option = Opció { $number }
 ## Network errors
 
 network-permission = A triib alkalmazásnak engedély kell nyers Ethernet-keretek küldéséhez és fogadásához.
+network-needs-npcap = A triib alkalmazásnak Npcap kell nyers Ethernet-keretek küldéséhez és fogadásához.
+network-npcap-administrators = Az Npcap csak rendszergazdáknak engedi a nyers Ethernet-keretek küldését és fogadását. Futtassa a triib alkalmazást rendszergazdaként, vagy telepítse újra az Npcapot a csak rendszergazdáknak szóló beállítás nélkül.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

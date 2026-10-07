@@ -73,6 +73,8 @@ state-starting-note = Membuka { $interface }.
 state-listening = Mendengarkan
 state-listening-note = Entitas di { $interface } muncul di sini saat mengumumkan diri.
 state-permission-needed = Perlu izin
+state-npcap-needed = Perlu Npcap
+state-get-npcap = Dapatkan Npcap
 state-copy-command = Salin perintah
 state-cannot-use = Tidak dapat memakai { $interface }
 state-try-again = Coba lagi
@@ -293,6 +295,7 @@ netmap-advertised-off-tree = Diumumkan, belum ada listener siap ({ $listener } t
 netmap-failed-at = Reservasi gagal di { $bridge }: { $reason }
 netmap-failed = Reservasi gagal: { $reason }
 netmap-no-bridge-on = Tidak ada switch terdeteksi di { $interface }
+netmap-cannot-listen-on = Tidak dapat mendengarkan gPTP di { $interface }
 netmap-path-not-reported = Jalur tidak dilaporkan
 netmap-gptp-not-reported = gPTP tidak dilaporkan
 netmap-off-tree = Tidak ada di pohon gPTP
@@ -310,6 +313,7 @@ netmap-apart-own-grandmaster = Tidak ada di pohon gPTP: menjadi grandmaster send
 netmap-apart-no-path = Jalurnya tidak dilaporkan; mengikuti grandmaster { $grandmaster }
 netmap-apart-unreported = Belum melaporkan status gPTP-nya
 netmap-apart-no-neighbor = Tidak ada switch terdeteksi di antarmuka komputer ini
+netmap-apart-cannot-listen = Komputer ini tidak dapat mendengarkan gPTP di antarmukanya
 netmap-clock-tree = Pohon clock
 netmap-no-grandmaster = Tidak ada grandmaster terdeteksi
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -529,6 +533,8 @@ control-option = Opsi { $number }
 ## Network errors
 
 network-permission = triib memerlukan izin untuk mengirim dan menerima frame Ethernet mentah.
+network-needs-npcap = triib memerlukan Npcap untuk mengirim dan menerima frame Ethernet mentah.
+network-npcap-administrators = Npcap hanya mengizinkan administrator mengirim dan menerima frame Ethernet mentah. Jalankan triib sebagai administrator, atau instal ulang Npcap tanpa opsi khusus administrator.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

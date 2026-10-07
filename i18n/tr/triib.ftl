@@ -75,6 +75,8 @@ state-starting-note = { $interface } açılıyor.
 state-listening = Dinleniyor
 state-listening-note = { $interface } üzerindeki varlıklar kendilerini duyurdukça burada görünür.
 state-permission-needed = İzin gerekli
+state-npcap-needed = Npcap gerekli
+state-get-npcap = Npcap'i indir
 state-copy-command = Komutu kopyala
 state-cannot-use = { $interface } kullanılamıyor
 state-try-again = Yeniden dene
@@ -316,6 +318,7 @@ netmap-advertised-off-tree = Duyuruldu, hazır listener yok ({ $listener } gPTP 
 netmap-failed-at = { $bridge } köprüsünde rezervasyon başarısız: { $reason }
 netmap-failed = Rezervasyon başarısız: { $reason }
 netmap-no-bridge-on = { $interface } üzerinde köprü algılanmadı
+netmap-cannot-listen-on = { $interface } üzerinde gPTP dinlenemiyor
 netmap-path-not-reported = Yol bildirilmedi
 netmap-gptp-not-reported = gPTP bildirilmedi
 netmap-off-tree = gPTP ağacı dışında
@@ -333,6 +336,7 @@ netmap-apart-own-grandmaster = gPTP ağacı dışında: kendisi grandmaster
 netmap-apart-no-path = Yolu bildirilmedi; { $grandmaster } grandmaster'ını izliyor
 netmap-apart-unreported = gPTP durumunu bildirmedi
 netmap-apart-no-neighbor = Bu bilgisayarın arayüzünde köprü algılanmadı
+netmap-apart-cannot-listen = Bu bilgisayar kendi arayüzünde gPTP dinleyemiyor
 netmap-clock-tree = Saat ağacı
 netmap-no-grandmaster = Grandmaster algılanmadı
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -608,6 +612,8 @@ control-option = Seçenek { $number }
 ## Network errors
 
 network-permission = triib'in ham Ethernet çerçeveleri gönderip alabilmesi için izin gerekiyor.
+network-needs-npcap = triib'in ham Ethernet çerçeveleri gönderip alabilmesi için Npcap gerekiyor.
+network-npcap-administrators = Npcap ham Ethernet çerçevelerini yalnızca yöneticilerin gönderip almasına izin veriyor. triib'i yönetici olarak çalıştırın veya Npcap'i yalnızca yöneticiler seçeneği olmadan yeniden yükleyin.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

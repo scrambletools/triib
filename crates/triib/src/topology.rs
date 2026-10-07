@@ -43,6 +43,8 @@ pub enum Apart {
     Unreported,
     /// This computer has heard no bridge.
     NoNeighbor,
+    /// This computer cannot listen for gPTP, so where it is is unknown.
+    CannotListen,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -82,9 +84,16 @@ pub struct InterfaceReport<'a> {
     pub info: Option<&'a AvbInfo>,
 }
 
-/// What this computer heard of its neighbor: the bridge's clock, its port
-/// and whether gPTP runs on the link.
-pub type HostReport = Option<(ClockIdentity, u16, bool)>;
+/// What this computer heard of its neighbor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostReport {
+    /// The bridge's clock, its port and whether gPTP runs on the link.
+    Heard(ClockIdentity, u16, bool),
+    /// No bridge heard.
+    Unheard,
+    /// This computer cannot listen for gPTP on the interface.
+    CannotListen,
+}
 
 /// One stream's way through the tree.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
@@ -244,7 +253,7 @@ impl Topology {
                 apart: Some(Apart::NoNeighbor),
             };
             match host {
-                Some((clock, port, synced)) => {
+                HostReport::Heard(clock, port, synced) => {
                     node.apart = None;
                     node.link = Link {
                         delay: None,
@@ -262,7 +271,10 @@ impl Topology {
                         topology.roots.push(bridge);
                     }
                 }
-                None => {
+                HostReport::Unheard | HostReport::CannotListen => {
+                    if host == HostReport::CannotListen {
+                        node.apart = Some(Apart::CannotListen);
+                    }
                     let host = topology.push(node);
                     topology.apart.push(host);
                 }
@@ -494,7 +506,7 @@ mod tests {
 
     #[test]
     fn the_bench() {
-        let topology = bench(Some(Some((SWITCH, 6, false))));
+        let topology = bench(Some(HostReport::Heard(SWITCH, 6, false)));
         assert_eq!(topology.roots.len(), 1);
         let root = topology.roots[0];
         assert_eq!(kind_of(&topology, root), Kind::Bridge);
@@ -531,8 +543,20 @@ mod tests {
     }
 
     #[test]
+    fn this_computer_that_cannot_listen_says_so() {
+        let topology = bench(Some(HostReport::CannotListen));
+        let host = topology
+            .nodes
+            .iter()
+            .find(|node| node.kind == Kind::Host)
+            .unwrap();
+        assert_eq!(host.apart, Some(Apart::CannotListen));
+        assert_eq!(host.parent, None);
+    }
+
+    #[test]
     fn this_computer_without_a_bridge_is_apart() {
-        let topology = bench(Some(None));
+        let topology = bench(Some(HostReport::Unheard));
         assert!(
             topology
                 .apart

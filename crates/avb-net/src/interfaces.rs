@@ -111,7 +111,301 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+mod platform {
+    use std::ffi::CStr;
+    use std::mem::{offset_of, size_of, zeroed};
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+
+    use super::Interface;
+    use crate::MacAddress;
+
+    /// `IFT_ETHER`, the link type of Ethernet and Wi-Fi interfaces.
+    const LINK_TYPE_ETHERNET: u8 = 6;
+    /// The network type in a media word (`IFM_NMASK`), and its values for
+    /// Ethernet and Wi-Fi.
+    const MEDIA_NETWORK: i32 = 0xe0;
+    const MEDIA_WIFI: i32 = 0x80;
+    /// The media status word says whether the link is up (`IFM_AVALID`),
+    /// and that it is (`IFM_ACTIVE`).
+    const MEDIA_STATUS_VALID: i32 = 0x01;
+    const MEDIA_ACTIVE: i32 = 0x02;
+
+    /// `struct ifmediareq`, for `SIOCGIFMEDIA`, packed to four octets as
+    /// macOS declares it.
+    #[derive(Clone, Copy)]
+    #[repr(C, packed(4))]
+    struct MediaRequest {
+        name: [libc::c_char; libc::IFNAMSIZ],
+        current: i32,
+        mask: i32,
+        status: i32,
+        active: i32,
+        count: i32,
+        list: *mut i32,
+    }
+
+    pub fn interfaces() -> Vec<Interface> {
+        let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
+        // SAFETY: getifaddrs fills `head` with a list freed below.
+        if unsafe { libc::getifaddrs(&raw mut head) } != 0 {
+            return Vec::new();
+        }
+        // A socket to ask each interface about its media on.
+        // SAFETY: plain system call with integer arguments.
+        let raw = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+        // SAFETY: `raw`, when valid, is a socket this function owns.
+        let query = (raw >= 0).then(|| unsafe { OwnedFd::from_raw_fd(raw) });
+        let mut found = Vec::new();
+        let mut entry = head;
+        while !entry.is_null() {
+            // SAFETY: each entry of the list getifaddrs made is valid until
+            // it is freed.
+            let address = unsafe { &*entry };
+            entry = address.ifa_next;
+            if let Some(interface) = read(address, query.as_ref()) {
+                found.push(interface);
+            }
+        }
+        // SAFETY: `head` came from getifaddrs and is freed once.
+        unsafe { libc::freeifaddrs(head) };
+        found
+    }
+
+    /// The interface an `AF_LINK` entry describes, when it is Ethernet.
+    fn read(address: &libc::ifaddrs, query: Option<&OwnedFd>) -> Option<Interface> {
+        if address.ifa_addr.is_null() {
+            return None;
+        }
+        // SAFETY: a non-null address points at a sockaddr at least as long
+        // as its header.
+        if i32::from(unsafe { (*address.ifa_addr).sa_family }) != libc::AF_LINK {
+            return None;
+        }
+        // SAFETY: an AF_LINK address is a sockaddr_dl.
+        let link = unsafe { &*address.ifa_addr.cast::<libc::sockaddr_dl>() };
+        if link.sdl_type != LINK_TYPE_ETHERNET || link.sdl_alen != 6 {
+            return None;
+        }
+        // The address follows the name in `sdl_data`, within `sdl_len`.
+        let start = offset_of!(libc::sockaddr_dl, sdl_data) + usize::from(link.sdl_nlen);
+        if start + 6 > usize::from(link.sdl_len) {
+            return None;
+        }
+        let mut mac = [0; 6];
+        // SAFETY: the six octets lie within the address, as checked.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                (link as *const libc::sockaddr_dl).cast::<u8>().add(start),
+                mac.as_mut_ptr(),
+                6,
+            );
+        }
+        // SAFETY: the name is a NUL-terminated string in the entry.
+        let name = unsafe { CStr::from_ptr(address.ifa_name) }
+            .to_string_lossy()
+            .into_owned();
+        let speed = (!address.ifa_data.is_null())
+            .then(|| {
+                // SAFETY: an AF_LINK entry's data is its if_data.
+                unsafe { (*address.ifa_data.cast::<libc::if_data>()).ifi_baudrate }
+            })
+            .filter(|&bits| bits > 0)
+            .map(|bits| bits / 1_000_000);
+        let media = query.and_then(|query| media(query, &name));
+        let flags = address.ifa_flags as i32;
+        let up = flags & libc::IFF_UP != 0
+            && match media {
+                Some(media) if media.status & MEDIA_STATUS_VALID != 0 => {
+                    media.status & MEDIA_ACTIVE != 0
+                }
+                _ => flags & libc::IFF_RUNNING != 0,
+            };
+        Some(Interface {
+            // macOS names its Ethernet and Wi-Fi ports enN; anpi, ap, awdl,
+            // llw and the like are its own.
+            physical: name.starts_with("en"),
+            wireless: media.is_some_and(|media| media.current & MEDIA_NETWORK == MEDIA_WIFI),
+            name,
+            mac: MacAddress(mac),
+            up,
+            speed: speed.filter(|_| up),
+            hardware_clock: None,
+        })
+    }
+
+    /// What `SIOCGIFMEDIA` says of the interface named `name`.
+    fn media(query: &OwnedFd, name: &str) -> Option<MediaRequest> {
+        // SAFETY: MediaRequest is plain data, valid when zeroed.
+        let mut request: MediaRequest = unsafe { zeroed() };
+        let bytes = name.as_bytes();
+        if bytes.len() >= request.name.len() {
+            return None;
+        }
+        for (place, &byte) in request.name.iter_mut().zip(bytes) {
+            *place = byte as libc::c_char;
+        }
+        // _IOWR('i', 56, struct ifmediareq)
+        let code = 0xc000_0000
+            | ((size_of::<MediaRequest>() as libc::c_ulong & 0x1fff) << 16)
+            | (libc::c_ulong::from(b'i') << 8)
+            | 56;
+        // SAFETY: `request` is a valid ifmediareq, with no list to fill,
+        // that lives through the call.
+        let result = unsafe { libc::ioctl(query.as_raw_fd(), code, &raw mut request) };
+        (result == 0).then_some(request)
+    }
+}
+
+/// The capture device Npcap knows the interface named `name` by.
+#[cfg(windows)]
+pub(crate) fn device_of(name: &str) -> Option<String> {
+    platform::adapters()
+        .into_iter()
+        .find(|(interface, _)| interface.name == name)
+        .map(|(_, guid)| format!("\\Device\\NPF_{guid}"))
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod platform {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+        GAA_FLAG_SKIP_UNICAST, GetAdaptersAddresses, GetIfEntry2, IF_TYPE_ETHERNET_CSMACD,
+        IF_TYPE_IEEE80211, IP_ADAPTER_ADDRESSES_LH, MIB_IF_ROW2,
+    };
+    use windows_sys::Win32::NetworkManagement::Ndis::IfOperStatusUp;
+
+    use super::Interface;
+    use crate::MacAddress;
+
+    /// `ERROR_BUFFER_OVERFLOW`, when the list outgrew the room given.
+    const BUFFER_OVERFLOW: u32 = 111;
+    /// The interface flag set when a connector is present, which is to
+    /// say a network adapter is (`ConnectorPresent`).
+    const CONNECTOR_PRESENT: u8 = 1 << 2;
+
+    pub fn interfaces() -> Vec<Interface> {
+        adapters()
+            .into_iter()
+            .map(|(interface, _)| interface)
+            .collect()
+    }
+
+    /// The Ethernet and Wi-Fi adapters, each with the GUID that names its
+    /// device.
+    pub fn adapters() -> Vec<(Interface, String)> {
+        let flags = GAA_FLAG_SKIP_UNICAST
+            | GAA_FLAG_SKIP_ANYCAST
+            | GAA_FLAG_SKIP_MULTICAST
+            | GAA_FLAG_SKIP_DNS_SERVER;
+        // Room for a few adapters first, then as much as Windows asks for.
+        let mut size: u32 = 16 * 1024;
+        let mut buffer: Vec<u64> = Vec::new();
+        for _ in 0..4 {
+            buffer = vec![0; (size as usize).div_ceil(8)];
+            // SAFETY: the buffer, eight-octet aligned, holds `size` octets
+            // and lives through the call.
+            let result = unsafe {
+                GetAdaptersAddresses(
+                    0,
+                    flags,
+                    std::ptr::null(),
+                    buffer.as_mut_ptr().cast(),
+                    &raw mut size,
+                )
+            };
+            match result {
+                0 => break,
+                BUFFER_OVERFLOW => buffer.clear(),
+                _ => return Vec::new(),
+            }
+        }
+        if buffer.is_empty() {
+            return Vec::new();
+        }
+        let mut found = Vec::new();
+        let mut entry = buffer.as_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
+        while !entry.is_null() {
+            // SAFETY: each entry of the list lies within the buffer.
+            let adapter = unsafe { &*entry };
+            entry = adapter.Next;
+            if let Some(read) = read(adapter) {
+                found.push(read);
+            }
+        }
+        found
+    }
+
+    fn read(adapter: &IP_ADAPTER_ADDRESSES_LH) -> Option<(Interface, String)> {
+        let wireless = match adapter.IfType {
+            IF_TYPE_ETHERNET_CSMACD => false,
+            IF_TYPE_IEEE80211 => true,
+            _ => return None,
+        };
+        if adapter.PhysicalAddressLength != 6 || adapter.FriendlyName.is_null() {
+            return None;
+        }
+        let mut mac = [0; 6];
+        mac.copy_from_slice(&adapter.PhysicalAddress[..6]);
+        // SAFETY: the friendly name is a NUL-terminated wide string and the
+        // adapter name a NUL-terminated string, both within the list.
+        let (name, guid) = unsafe {
+            (
+                String::from_utf16_lossy(wide(adapter.FriendlyName)),
+                std::ffi::CStr::from_ptr(adapter.AdapterName.cast())
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        };
+        let up = adapter.OperStatus == IfOperStatusUp;
+        // SAFETY: MIB_IF_ROW2 is plain data, valid when zeroed; the call
+        // reads the LUID set in it and fills in the rest.
+        let physical = unsafe {
+            let mut row: MIB_IF_ROW2 = std::mem::zeroed();
+            row.InterfaceLuid = adapter.Luid;
+            GetIfEntry2(&raw mut row) == 0
+                && row.InterfaceAndOperStatusFlags._bitfield & CONNECTOR_PRESENT != 0
+        };
+        // Unknown speeds read as all ones.
+        let speed = (up && adapter.TransmitLinkSpeed != u64::MAX)
+            .then(|| u32::try_from(adapter.TransmitLinkSpeed / 1_000_000).ok())
+            .flatten()
+            .filter(|&speed| speed > 0);
+        Some((
+            Interface {
+                name,
+                mac: MacAddress(mac),
+                up,
+                speed,
+                physical,
+                wireless,
+                hardware_clock: None,
+            },
+            guid,
+        ))
+    }
+
+    /// The characters of a NUL-terminated wide string.
+    ///
+    /// # Safety
+    ///
+    /// `string` points at a NUL-terminated wide string that outlives the
+    /// slice.
+    unsafe fn wide<'a>(string: *const u16) -> &'a [u16] {
+        let mut length = 0;
+        // SAFETY: the string ends at a NUL, as the caller promises.
+        unsafe {
+            while *string.add(length) != 0 {
+                length += 1;
+            }
+            std::slice::from_raw_parts(string, length)
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 mod platform {
     use super::Interface;
 

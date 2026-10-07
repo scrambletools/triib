@@ -73,6 +73,8 @@ state-starting-note = กำลังเปิด { $interface }
 state-listening = กำลังรับฟัง
 state-listening-note = เอนทิตีบน { $interface } จะปรากฏที่นี่เมื่อประกาศตัว
 state-permission-needed = ต้องได้รับสิทธิ์
+state-npcap-needed = ต้องใช้ Npcap
+state-get-npcap = รับ Npcap
 state-copy-command = คัดลอกคำสั่ง
 state-cannot-use = ใช้ { $interface } ไม่ได้
 state-try-again = ลองอีกครั้ง
@@ -293,6 +295,7 @@ netmap-advertised-off-tree = ประกาศแล้ว ยังไม่�
 netmap-failed-at = การจองล้มเหลวที่ { $bridge }: { $reason }
 netmap-failed = การจองล้มเหลว: { $reason }
 netmap-no-bridge-on = ไม่พบสวิตช์บน { $interface }
+netmap-cannot-listen-on = ไม่สามารถรับฟัง gPTP บน { $interface }
 netmap-path-not-reported = ไม่มีการรายงานเส้นทาง
 netmap-gptp-not-reported = ไม่มีการรายงาน gPTP
 netmap-off-tree = ไม่อยู่ในทรี gPTP
@@ -310,6 +313,7 @@ netmap-apart-own-grandmaster = ไม่อยู่ในทรี gPTP: เป
 netmap-apart-no-path = ไม่ได้รายงานเส้นทาง แต่ซิงค์ตาม Grandmaster { $grandmaster }
 netmap-apart-unreported = ยังไม่ได้รายงานสถานะ gPTP
 netmap-apart-no-neighbor = ไม่พบสวิตช์บนอินเทอร์เฟซของคอมพิวเตอร์เครื่องนี้
+netmap-apart-cannot-listen = คอมพิวเตอร์เครื่องนี้ไม่สามารถรับฟัง gPTP บนอินเทอร์เฟซของตน
 netmap-clock-tree = ทรีคล็อก
 netmap-no-grandmaster = ไม่พบ Grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -521,6 +525,8 @@ control-option = ตัวเลือก { $number }
 ## Network errors
 
 network-permission = triib ต้องได้รับสิทธิ์ในการส่งและรับเฟรม Ethernet แบบดิบ
+network-needs-npcap = triib ต้องใช้ Npcap ในการส่งและรับเฟรม Ethernet แบบดิบ
+network-npcap-administrators = Npcap อนุญาตให้เฉพาะผู้ดูแลระบบส่งและรับเฟรม Ethernet แบบดิบ เรียกใช้ triib ในฐานะผู้ดูแลระบบ หรือติดตั้ง Npcap ใหม่โดยไม่เลือกตัวเลือกสำหรับผู้ดูแลระบบเท่านั้น
 
 matrix-stream-format = { $format }
 matrix-stream-format-state = { $format } { $state }

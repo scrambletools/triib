@@ -75,6 +75,8 @@ state-starting-note = { $interface } wordt geopend.
 state-listening = Luisteren
 state-listening-note = Entiteiten op { $interface } verschijnen hier zodra ze zich aankondigen.
 state-permission-needed = Toestemming nodig
+state-npcap-needed = Npcap nodig
+state-get-npcap = Npcap downloaden
 state-copy-command = Commando kopiëren
 state-cannot-use = Kan { $interface } niet gebruiken
 state-try-again = Opnieuw proberen
@@ -316,6 +318,7 @@ netmap-advertised-off-tree = Aangekondigd, geen listener gereed ({ $listener } z
 netmap-failed-at = Reservering mislukt bij { $bridge }: { $reason }
 netmap-failed = Reservering mislukt: { $reason }
 netmap-no-bridge-on = Geen switch gedetecteerd op { $interface }
+netmap-cannot-listen-on = Kan niet naar gPTP luisteren op { $interface }
 netmap-path-not-reported = Pad niet gemeld
 netmap-gptp-not-reported = gPTP niet gemeld
 netmap-off-tree = Niet in de gPTP-boom
@@ -333,6 +336,7 @@ netmap-apart-own-grandmaster = Niet in de gPTP-boom: zelf grandmaster
 netmap-apart-no-path = Pad niet gemeld; volgt grandmaster { $grandmaster }
 netmap-apart-unreported = gPTP-status niet gemeld
 netmap-apart-no-neighbor = Geen switch gedetecteerd op de interface van deze computer
+netmap-apart-cannot-listen = Deze computer kan op zijn interface niet naar gPTP luisteren
 netmap-clock-tree = Klokboom
 netmap-no-grandmaster = Geen grandmaster gedetecteerd
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -616,6 +620,8 @@ control-option = Optie { $number }
 ## Network errors
 
 network-permission = triib heeft toestemming nodig om ruwe Ethernet-frames te verzenden en te ontvangen.
+network-needs-npcap = triib heeft Npcap nodig om ruwe Ethernet-frames te verzenden en te ontvangen.
+network-npcap-administrators = Npcap staat alleen beheerders toe ruwe Ethernet-frames te verzenden en te ontvangen. Voer triib uit als beheerder, of installeer Npcap opnieuw zonder de optie voor alleen beheerders.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

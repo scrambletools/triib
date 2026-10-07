@@ -73,6 +73,8 @@ state-starting-note = { $interface } திறக்கப்படுகிற�
 state-listening = கேட்கிறது
 state-listening-note = { $interface }-இல் உள்ள entities தங்களை advertise செய்யும்போது இங்கே தோன்றும்.
 state-permission-needed = அனுமதி தேவை
+state-npcap-needed = Npcap தேவை
+state-get-npcap = Npcap-ஐப் பெறு
 state-copy-command = கட்டளையை நகலெடு
 state-cannot-use = { $interface }-ஐப் பயன்படுத்த முடியவில்லை
 state-try-again = மீண்டும் முயல்
@@ -314,6 +316,7 @@ netmap-advertised-off-tree = Advertise செய்யப்பட்டது, 
 netmap-failed-at = { $bridge }-இல் reservation தோல்வி: { $reason }
 netmap-failed = Reservation தோல்வி: { $reason }
 netmap-no-bridge-on = { $interface }-இல் எந்த bridge-உம் கேட்கப்படவில்லை
+netmap-cannot-listen-on = { $interface }-இல் gPTP-ஐக் கேட்க முடியவில்லை
 netmap-path-not-reported = Path தெரிவிக்கப்படவில்லை
 netmap-gptp-not-reported = gPTP தெரிவிக்கப்படவில்லை
 netmap-off-tree = gPTP tree-இல் இல்லை
@@ -331,6 +334,7 @@ netmap-apart-own-grandmaster = gPTP tree-இல் இல்லை: இதுவ
 netmap-apart-no-path = இதன் path தெரிவிக்கப்படவில்லை; இது Grandmaster { $grandmaster }-ஐப் பின்பற்றுகிறது
 netmap-apart-unreported = இது தன் gPTP நிலையைத் தெரிவிக்கவில்லை
 netmap-apart-no-neighbor = இந்தக் கணினியின் interface-இல் எந்த bridge-உம் கேட்கப்படவில்லை
+netmap-apart-cannot-listen = இந்தக் கணினியால் அதன் interface-இல் gPTP-ஐக் கேட்க முடியாது
 netmap-clock-tree = Clock tree
 netmap-no-grandmaster = எந்த Grandmaster-உம் கேட்கப்படவில்லை
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -606,6 +610,8 @@ control-option = விருப்பம் { $number }
 ## Network errors
 
 network-permission = raw Ethernet frames-ஐ அனுப்பவும் பெறவும் triib-க்கு அனுமதி தேவை.
+network-needs-npcap = raw Ethernet frames-ஐ அனுப்பவும் பெறவும் triib-க்கு Npcap தேவை.
+network-npcap-administrators = Npcap நிர்வாகிகளை மட்டுமே raw Ethernet frames-ஐ அனுப்பவும் பெறவும் அனுமதிக்கிறது. triib-ஐ நிர்வாகியாக இயக்கவும், அல்லது நிர்வாகிகள் மட்டும் என்ற விருப்பம் இல்லாமல் Npcap-ஐ மீண்டும் நிறுவவும்.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

@@ -76,6 +76,8 @@ state-starting-note = Abriendo { $interface }.
 state-listening = Escuchando
 state-listening-note = Las entidades de { $interface } aparecen aquí a medida que se anuncian.
 state-permission-needed = Se necesita permiso
+state-npcap-needed = Se necesita Npcap
+state-get-npcap = Obtener Npcap
 state-copy-command = Copiar el comando
 state-cannot-use = No se puede usar { $interface }
 state-try-again = Reintentar
@@ -328,6 +330,7 @@ netmap-advertised-off-tree = Anunciado, ningún listener listo ({ $listener } no
 netmap-failed-at = La reserva falló en { $bridge }: { $reason }
 netmap-failed = La reserva falló: { $reason }
 netmap-no-bridge-on = Ningún switch detectado en { $interface }
+netmap-cannot-listen-on = No se puede escuchar gPTP en { $interface }
 netmap-path-not-reported = Ruta no informada
 netmap-gptp-not-reported = gPTP no informado
 netmap-off-tree = Fuera del árbol gPTP
@@ -345,6 +348,7 @@ netmap-apart-own-grandmaster = Fuera del árbol gPTP: es su propio grandmaster
 netmap-apart-no-path = No ha informado de su ruta; sigue al grandmaster { $grandmaster }
 netmap-apart-unreported = No ha informado de su estado gPTP
 netmap-apart-no-neighbor = Ningún switch detectado en la interfaz de este equipo
+netmap-apart-cannot-listen = Este equipo no puede escuchar gPTP en su interfaz
 netmap-clock-tree = Árbol de reloj
 netmap-no-grandmaster = Ningún grandmaster detectado
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -656,6 +660,8 @@ control-option = Opción { $number }
 ## Network errors
 
 network-permission = triib necesita permiso para enviar y recibir tramas Ethernet sin procesar.
+network-needs-npcap = triib necesita Npcap para enviar y recibir tramas Ethernet sin procesar.
+network-npcap-administrators = Npcap solo permite a los administradores enviar y recibir tramas Ethernet sin procesar. Ejecuta triib como administrador o vuelve a instalar Npcap sin su opción de solo administradores.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

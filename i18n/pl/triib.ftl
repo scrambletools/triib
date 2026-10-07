@@ -73,6 +73,8 @@ state-starting-note = Otwieranie { $interface }.
 state-listening = Nasłuchiwanie
 state-listening-note = Encje na { $interface } pojawiają się tutaj, gdy się ogłoszą.
 state-permission-needed = Wymagane uprawnienia
+state-npcap-needed = Wymagany Npcap
+state-get-npcap = Pobierz Npcap
 state-copy-command = Kopiuj polecenie
 state-cannot-use = Nie można użyć { $interface }
 state-try-again = Spróbuj ponownie
@@ -328,6 +330,7 @@ netmap-advertised-off-tree = Ogłoszono, brak gotowego listenera ({ $listener } 
 netmap-failed-at = Rezerwacja nie powiodła się na { $bridge }: { $reason }
 netmap-failed = Rezerwacja nie powiodła się: { $reason }
 netmap-no-bridge-on = Na { $interface } nie słychać przełącznika
+netmap-cannot-listen-on = Nie można nasłuchiwać gPTP na { $interface }
 netmap-path-not-reported = Nie podano ścieżki
 netmap-gptp-not-reported = Brak danych gPTP
 netmap-off-tree = Poza drzewem gPTP
@@ -345,6 +348,7 @@ netmap-apart-own-grandmaster = Poza drzewem gPTP: sam jest grandmasterem
 netmap-apart-no-path = Nie podano ścieżki; synchronizuje się z grandmasterem { $grandmaster }
 netmap-apart-unreported = Nie podano stanu gPTP
 netmap-apart-no-neighbor = Na interfejsie tego komputera nie słychać przełącznika
+netmap-apart-cannot-listen = Ten komputer nie może nasłuchiwać gPTP na swoim interfejsie
 netmap-clock-tree = Drzewo zegara
 netmap-no-grandmaster = Nie słychać grandmastera
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -685,6 +689,8 @@ control-option = Opcja { $number }
 ## Network errors
 
 network-permission = triib potrzebuje uprawnień do wysyłania i odbierania surowych ramek Ethernet.
+network-needs-npcap = triib potrzebuje Npcap do wysyłania i odbierania surowych ramek Ethernet.
+network-npcap-administrators = Npcap pozwala wysyłać i odbierać surowe ramki Ethernet tylko administratorom. Uruchom triib jako administrator albo zainstaluj Npcap ponownie bez opcji tylko dla administratorów.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

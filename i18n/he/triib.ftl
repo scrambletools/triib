@@ -73,6 +73,8 @@ state-starting-note = פותח את { $interface }.
 state-listening = מאזין
 state-listening-note = ישויות ב-{ $interface } יופיעו כאן כשהן מכריזות על עצמן.
 state-permission-needed = נדרשת הרשאה
+state-npcap-needed = נדרש Npcap
+state-get-npcap = הורדת Npcap
 state-copy-command = העתקת הפקודה
 state-cannot-use = לא ניתן להשתמש ב-{ $interface }
 state-try-again = ניסיון חוזר
@@ -321,6 +323,7 @@ netmap-advertised-off-tree = מוכרז, אין Listener מוכן ({ $listener }
 netmap-failed-at = השריון נכשל ב-{ $bridge }: { $reason }
 netmap-failed = השריון נכשל: { $reason }
 netmap-no-bridge-on = לא נשמע גשר ב-{ $interface }
+netmap-cannot-listen-on = אי אפשר להאזין ל-gPTP ב-{ $interface }
 netmap-path-not-reported = הנתיב לא דווח
 netmap-gptp-not-reported = gPTP לא דווח
 netmap-off-tree = מחוץ לעץ ה-gPTP
@@ -338,6 +341,7 @@ netmap-apart-own-grandmaster = לא בעץ ה-gPTP: הוא ה-Grandmaster של �
 netmap-apart-no-path = הנתיב שלו לא דווח; הוא עוקב אחר Grandmaster { $grandmaster }
 netmap-apart-unreported = הוא לא דיווח על מצב ה-gPTP שלו
 netmap-apart-no-neighbor = לא נשמע גשר בממשק של המחשב הזה
+netmap-apart-cannot-listen = המחשב הזה לא יכול להאזין ל-gPTP בממשק שלו
 netmap-clock-tree = עץ השעון
 netmap-no-grandmaster = לא נשמע Grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -640,6 +644,8 @@ control-option = אפשרות { $number }
 ## Network errors
 
 network-permission = triib זקוק להרשאה כדי לשלוח ולקבל מסגרות אתרנט גולמיות.
+network-needs-npcap = triib זקוק ל-Npcap כדי לשלוח ולקבל מסגרות אתרנט גולמיות.
+network-npcap-administrators = Npcap מאפשר רק למנהלי מערכת לשלוח ולקבל מסגרות אתרנט גולמיות. יש להפעיל את triib כמנהל מערכת, או להתקין מחדש את Npcap בלי האפשרות של מנהלי מערכת בלבד.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

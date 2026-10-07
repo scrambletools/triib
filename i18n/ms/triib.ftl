@@ -73,6 +73,8 @@ state-starting-note = Membuka { $interface }.
 state-listening = Mendengar
 state-listening-note = Entiti pada { $interface } muncul di sini apabila mengumumkan diri.
 state-permission-needed = Kebenaran diperlukan
+state-npcap-needed = Npcap diperlukan
+state-get-npcap = Dapatkan Npcap
 state-copy-command = Salin arahan
 state-cannot-use = Tidak dapat menggunakan { $interface }
 state-try-again = Cuba lagi
@@ -293,6 +295,7 @@ netmap-advertised-off-tree = Diumumkan, tiada listener sedia ({ $listener } tiad
 netmap-failed-at = Tempahan gagal di { $bridge }: { $reason }
 netmap-failed = Tempahan gagal: { $reason }
 netmap-no-bridge-on = Tiada suis dikesan pada { $interface }
+netmap-cannot-listen-on = Tidak dapat mendengar gPTP pada { $interface }
 netmap-path-not-reported = Laluan tidak dilaporkan
 netmap-gptp-not-reported = gPTP tidak dilaporkan
 netmap-off-tree = Tiada dalam pepohon gPTP
@@ -310,6 +313,7 @@ netmap-apart-own-grandmaster = Tiada dalam pepohon gPTP: ia grandmaster bagi dir
 netmap-apart-no-path = Laluannya tidak dilaporkan; ia mengikut grandmaster { $grandmaster }
 netmap-apart-unreported = Ia belum melaporkan keadaan gPTP-nya
 netmap-apart-no-neighbor = Tiada suis dikesan pada antara muka komputer ini
+netmap-apart-cannot-listen = Komputer ini tidak dapat mendengar gPTP pada antara mukanya
 netmap-clock-tree = Pepohon jam
 netmap-no-grandmaster = Tiada grandmaster dikesan
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -529,6 +533,8 @@ control-option = Pilihan { $number }
 ## Network errors
 
 network-permission = triib memerlukan kebenaran untuk menghantar dan menerima bingkai Ethernet mentah.
+network-needs-npcap = triib memerlukan Npcap untuk menghantar dan menerima bingkai Ethernet mentah.
+network-npcap-administrators = Npcap hanya membenarkan pentadbir menghantar dan menerima bingkai Ethernet mentah. Jalankan triib sebagai pentadbir, atau pasang semula Npcap tanpa pilihan pentadbir sahaja.
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.

@@ -73,6 +73,8 @@ state-starting-note = Открывается { $interface }.
 state-listening = Прослушивание
 state-listening-note = Сущности на { $interface } появляются здесь по мере того, как объявляют о себе.
 state-permission-needed = Нужно разрешение
+state-npcap-needed = Нужен Npcap
+state-get-npcap = Скачать Npcap
 state-copy-command = Скопировать команду
 state-cannot-use = Не удаётся использовать { $interface }
 state-try-again = Повторить
@@ -328,6 +330,7 @@ netmap-advertised-off-tree = Объявлено, нет готового Listene
 netmap-failed-at = Резервирование не удалось на { $bridge }: { $reason }
 netmap-failed = Резервирование не удалось: { $reason }
 netmap-no-bridge-on = На { $interface } не слышно коммутатора
+netmap-cannot-listen-on = Не удаётся слушать gPTP на { $interface }
 netmap-path-not-reported = Путь не сообщён
 netmap-gptp-not-reported = Нет данных gPTP
 netmap-off-tree = Не в дереве gPTP
@@ -345,6 +348,7 @@ netmap-apart-own-grandmaster = Не в дереве gPTP: сам являетс�
 netmap-apart-no-path = Путь не сообщён; синхронизируется с Grandmaster { $grandmaster }
 netmap-apart-unreported = Состояние gPTP не сообщено
 netmap-apart-no-neighbor = На интерфейсе этого компьютера не слышно коммутатора
+netmap-apart-cannot-listen = Этот компьютер не может слушать gPTP на своём интерфейсе
 netmap-clock-tree = Дерево синхронизации
 netmap-no-grandmaster = Не слышно Grandmaster
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -684,6 +688,8 @@ control-option = Вариант { $number }
 ## Network errors
 
 network-permission = triib нужно разрешение на отправку и приём необработанных кадров Ethernet.
+network-needs-npcap = triib нужен Npcap для отправки и приёма необработанных кадров Ethernet.
+network-npcap-administrators = Npcap разрешает отправлять и принимать необработанные кадры Ethernet только администраторам. Запустите triib от имени администратора или переустановите Npcap без параметра «только для администраторов».
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
