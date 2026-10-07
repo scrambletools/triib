@@ -317,6 +317,7 @@ stream-sending-to = Sending to { $destination }
 failure-no-response = it did not respond
 failure-refused = it refused with { $status }
 failure-malformed = its response did not decode
+failure-on-this-computer = it runs on this computer; read it from another one
 
 # Why a stream's reservation failed, by the MSRP failure codes of IEEE
 # 802.1Q (35.2.2.8.7). A bridge is an AVB switch; the egress port is the
@@ -412,6 +413,7 @@ netmap-failed-at = Reservation failed at { $bridge }: { $reason }
 netmap-failed = Reservation failed: { $reason }
 netmap-no-bridge-on = No bridge heard on { $interface }
 netmap-cannot-listen-on = Cannot listen for gPTP on { $interface }
+netmap-on-this-computer = On this computer
 netmap-path-not-reported = Path not reported
 netmap-gptp-not-reported = gPTP not reported
 # Also a label over the devices off the tree, in capitals where the script
@@ -436,6 +438,7 @@ netmap-apart-no-path = Its path was not reported; it follows grandmaster { $gran
 netmap-apart-unreported = It has not reported its gPTP state
 netmap-apart-no-neighbor = No bridge heard on this computer's interface
 netmap-apart-cannot-listen = This computer cannot listen for gPTP on its interface
+netmap-apart-on-this-computer = It runs on this computer; read it from another computer to see its gPTP state
 netmap-clock-tree = Clock tree
 netmap-no-grandmaster = No grandmaster heard
 netmap-grandmaster-is = Grandmaster: { $grandmaster }

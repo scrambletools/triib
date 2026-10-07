@@ -45,6 +45,8 @@ pub enum Apart {
     NoNeighbor,
     /// This computer cannot listen for gPTP, so where it is is unknown.
     CannotListen,
+    /// An entity on this computer, which cannot be read from here.
+    OnThisComputer,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]

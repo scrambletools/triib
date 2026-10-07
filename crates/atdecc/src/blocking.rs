@@ -52,6 +52,10 @@ impl Driver {
         let socket = Socket::open(interface, crate::ETHERTYPE_AVTP)?;
         socket.join_multicast(crate::ADP_ACMP_MULTICAST)?;
         let mut config = Config::new(EntityId::from_mac(socket.mac()));
+        // The system's own AVB entity never sees what is written to BPF.
+        if cfg!(target_os = "macos") {
+            config.own_mac = Some(socket.mac());
+        }
         // A new start for sequence IDs each run, so a restarted controller
         // is not taken for a retry of its earlier commands.
         let clock = std::time::SystemTime::now()

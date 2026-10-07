@@ -122,6 +122,9 @@ pub struct Config {
     /// follow their PTP offset.
     pub lite_status: bool,
     pub lite_poll: Duration,
+    /// The controller's own MAC address, where entities advertised from
+    /// it are out of its reach: it does not read them.
+    pub own_mac: Option<MacAddress>,
     /// Advertise the controller with ADP.
     pub advertise: Option<Advertise>,
     /// The first sequence ID of AEM and of MVU commands.
@@ -143,6 +146,7 @@ impl Config {
             read_transit_times: true,
             lite_status: true,
             lite_poll: Duration::from_secs(5),
+            own_mac: None,
             advertise: None,
             first_sequence_id: 0,
             random_seed: entity_id.0,
@@ -714,6 +718,16 @@ impl Controller {
         let Some(entity) = self.entities.get(&entity_id) else {
             return;
         };
+        if self.config.own_mac == Some(entity.mac) {
+            let mut model = EntityModel::reading();
+            model.state = EnumerationState::Failed(EnumerationFailure::OnThisComputer);
+            self.models.insert(entity_id, model);
+            self.events.push_back(Event::EnumerationFailed(
+                entity_id,
+                EnumerationFailure::OnThisComputer,
+            ));
+            return;
+        }
         let mut session = Session::default();
         if entity
             .adp

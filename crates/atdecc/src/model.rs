@@ -47,6 +47,9 @@ pub enum EnumerationFailure {
     Refused(AemStatus),
     /// The response did not decode.
     Malformed,
+    /// The entity runs on the controller's own computer, whose system
+    /// never sees the commands the controller sends (macOS).
+    OnThisComputer,
 }
 
 /// What a listener says one of its stream inputs is bound to, from its

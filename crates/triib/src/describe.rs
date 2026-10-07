@@ -147,7 +147,11 @@ pub fn product(model: &EntityModel) -> String {
 /// Milan support: the specification version and certification, or "No".
 pub fn milan(model: &EntityModel) -> String {
     let Some(milan) = model.milan else {
-        return fl!("milan-no");
+        // Unknown, rather than no, for an entity that could not be read.
+        return match model.state {
+            EnumerationState::Failed(_) => String::new(),
+            _ => fl!("milan-no"),
+        };
     };
     let dotted = |version: [u8; 4]| {
         let mut parts: Vec<String> = version.iter().map(u8::to_string).collect();
@@ -330,6 +334,7 @@ pub fn failure(failure: EnumerationFailure) -> String {
                 .map_or_else(|| status.0.to_string(), flag_name)
         ),
         EnumerationFailure::Malformed => fl!("failure-malformed"),
+        EnumerationFailure::OnThisComputer => fl!("failure-on-this-computer"),
     }
 }
 

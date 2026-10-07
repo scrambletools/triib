@@ -896,6 +896,23 @@ fn unanswered_commands_retry_once_then_fail() {
 }
 
 #[test]
+fn entities_on_the_own_mac_are_not_read() {
+    let mut config = Config::new(CONTROLLER);
+    config.own_mac = Some(TALKER_MAC);
+    let mut controller = Controller::new(config);
+    controller.handle_adpdu(at(0), TALKER_MAC, &aem_available(1));
+    assert!(transmits(&mut controller).is_empty());
+    assert!(events(&mut controller).contains(&Event::EnumerationFailed(
+        TALKER,
+        EnumerationFailure::OnThisComputer
+    )));
+    assert_eq!(
+        controller.model(TALKER).unwrap().state,
+        EnumerationState::Failed(EnumerationFailure::OnThisComputer)
+    );
+}
+
+#[test]
 fn in_progress_holds_off_the_timeout() {
     let mut controller = controller();
     let mut adpdu = aem_available(1);

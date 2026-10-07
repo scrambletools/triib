@@ -8,7 +8,7 @@ mod map;
 use std::collections::HashMap;
 
 use atdecc::descriptor::DescriptorType;
-use atdecc::model::EntityModel;
+use atdecc::model::{EntityModel, EnumerationFailure, EnumerationState};
 use atdecc::{ClockIdentity, DiscoveredEntity, EntityId};
 use iced::widget::{button as plain_button, container, mouse_area, scrollable, space};
 use iced::{Center, Element, Fill, Length, Theme};
@@ -394,7 +394,19 @@ fn topology_of(triib: &Triib) -> Topology {
             Some(neighbor) => HostReport::Heard(neighbor.clock, neighbor.port, neighbor.synced),
             None => HostReport::Unheard,
         });
-    Topology::build(&reports, host)
+    let mut topology = Topology::build(&reports, host);
+    // An entity this computer runs, which triib cannot read from here.
+    for node in &mut topology.nodes {
+        if let NodeKind::Entity { entity_id, .. } = node.kind
+            && node.apart == Some(Apart::Unreported)
+            && triib.models.get(&entity_id).is_some_and(|model| {
+                model.state == EnumerationState::Failed(EnumerationFailure::OnThisComputer)
+            })
+        {
+            node.apart = Some(Apart::OnThisComputer);
+        }
+    }
+    topology
 }
 
 fn key_of(topology: &Topology, node: NodeId) -> NodeKey {
@@ -731,6 +743,9 @@ fn cards(
                     fl!("netmap-cannot-listen-on", interface = interface),
                     Paint::Muted,
                 ),
+                (_, Some(Apart::OnThisComputer), _) => {
+                    (fl!("netmap-on-this-computer"), Paint::Muted)
+                }
                 (_, Some(apart), _) => (
                     match apart {
                         Apart::NoPath(_) => fl!("netmap-path-not-reported"),
@@ -952,6 +967,7 @@ fn apart_reason(apart: Apart) -> String {
         Apart::Unreported => fl!("netmap-apart-unreported"),
         Apart::NoNeighbor => fl!("netmap-apart-no-neighbor"),
         Apart::CannotListen => fl!("netmap-apart-cannot-listen"),
+        Apart::OnThisComputer => fl!("netmap-apart-on-this-computer"),
     }
 }
 
