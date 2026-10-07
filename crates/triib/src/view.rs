@@ -237,7 +237,11 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let right = slots.len();
     slots.push((
         component::search_bar(
-            text_input(&fl!("toolbar-search"), &triib.search).on_input(Message::SearchChanged),
+            text_input(&fl!("toolbar-search"), &triib.search)
+                .on_input(Message::SearchChanged)
+                // Typed text on the side it starts on: Hebrew from the
+                // right, English from the left.
+                .align_x(dir::input_align(&triib.search)),
             Vec::new(),
             SEARCH_WIDTH,
         ),

@@ -87,6 +87,12 @@ fn main() -> iced::Result {
     .window(iced::window::Settings {
         size: iced::Size::new(1280.0, 800.0),
         min_size: Some(iced::Size::new(360.0, 480.0)),
+        // On Linux, the app id desktops match windows and launchers by.
+        #[cfg(target_os = "linux")]
+        platform_specific: iced::window::settings::PlatformSpecific {
+            application_id: app::APP_ID.to_owned(),
+            ..Default::default()
+        },
         ..iced::window::Settings::default()
     })
     .title(app::Triib::title)
