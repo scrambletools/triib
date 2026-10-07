@@ -38,6 +38,8 @@ pub mod error;
 pub mod id;
 pub mod lite;
 #[cfg(feature = "alloc")]
+pub mod maap;
+#[cfg(feature = "alloc")]
 pub mod media_clock;
 #[cfg(feature = "alloc")]
 pub mod model;

@@ -16,6 +16,7 @@ use atdecc::entity::{
     EndpointModel, Entity, EntityEvent, InputBinding, InputReservation, OutputReservation,
     StreamModel,
 };
+use atdecc::maap::{self, Maap, MaapEvent};
 use atdecc::stream_format::{FormatKind, StreamFormat};
 use atdecc::{
     ADP_ACMP_MULTICAST, ClockIdentity, EntityId, EntityModelId, Instant, MacAddress, StreamId,
@@ -118,6 +119,10 @@ struct Endpoint {
     declared: Option<Vec<u8>>,
     /// When a talker whose stream changed declares it again.
     redeclare_at: Option<Duration>,
+    /// When a talker last withdrew its declaration.
+    withdrawn_at: Option<Duration>,
+    /// The stream a listener's thread takes.
+    listening_to: Option<atdecc::entity::ProbedStream>,
     /// Its place in the configuration's list.
     place: usize,
 }
@@ -189,6 +194,8 @@ impl Endpoint {
             listener: None,
             declared: None,
             redeclare_at: None,
+            withdrawn_at: None,
+            listening_to: None,
             place: 0,
         }
     }
@@ -204,6 +211,8 @@ pub struct Runtime {
     endpoints: Vec<Endpoint>,
     msrp_participant: Participant,
     mvrp_participant: Participant,
+    /// The claim on the talkers' destination addresses, one each.
+    maap: Option<Maap>,
     clock: Arc<MediaClock>,
     /// The talker declarations registered, by stream ID.
     talkers: HashMap<u64, TalkerDeclaration>,
@@ -288,7 +297,9 @@ impl Runtime {
         }
         let avtp = Arc::new(Socket::open(&interface, atdecc::ETHERTYPE_AVTP)?);
         avtp.join_multicast(ADP_ACMP_MULTICAST)?;
-        let _ = avtp.keep_payloads_starting(0xfa..=0xfc);
+        avtp.join_multicast(maap::DESTINATION)?;
+        let _ =
+            avtp.keep_payloads_starting(atdecc::avtp::subtype::ADP..=atdecc::avtp::subtype::MAAP);
         let msrp = Arc::new(Socket::open(&interface, avb_mrp::ETHERTYPE_MSRP)?);
         msrp.join_multicast(avb_mrp::MSRP_DESTINATION)?;
         let mvrp = Arc::new(Socket::open(&interface, avb_mrp::ETHERTYPE_MVRP)?);
@@ -352,6 +363,11 @@ impl Runtime {
             .0
             .iter()
             .fold(0u64, |seed, octet| (seed << 8) | u64::from(*octet));
+        let talkers = endpoints
+            .iter()
+            .filter(|endpoint| endpoint.config.kind == Kind::Talker)
+            .count();
+        let maap = (talkers > 0).then(|| Maap::new(mac, talkers as u16));
         Ok(Runtime {
             interface,
             mac,
@@ -362,6 +378,7 @@ impl Runtime {
             endpoints,
             msrp_participant: Participant::new(msrp::FORMAT, Duration::ZERO, seed),
             mvrp_participant: Participant::new(mvrp::FORMAT, Duration::ZERO, seed ^ 0x5555),
+            maap,
             clock,
             talkers: HashMap::new(),
             ready_remotely: HashMap::new(),
@@ -428,8 +445,9 @@ impl Runtime {
             Domain::CLASS_A.value(),
             None,
         );
-        for index in 0..self.endpoints.len() {
-            self.declare_talker(index);
+        // Talkers declare their streams once MAAP gives them addresses.
+        if let Some(maap) = &mut self.maap {
+            maap.start(now);
         }
         while !self.stop.load(Ordering::Relaxed) {
             let wait = self.next_wait();
@@ -573,7 +591,12 @@ impl Runtime {
         .into_iter()
         .min()
         .map(|at| at.saturating_sub(since));
-        [entity, mrp, Some(Duration::from_millis(250))]
+        let maap = self
+            .maap
+            .as_ref()
+            .and_then(Maap::poll_timeout)
+            .map(|at| at.saturating_duration_since(now));
+        [entity, mrp, maap, Some(Duration::from_millis(250))]
             .into_iter()
             .flatten()
             .min()
@@ -584,6 +607,11 @@ impl Runtime {
         let now = self.now();
         let since = self.elapsed();
         match input {
+            Input::Avtp(source, bytes) if bytes.first() == Some(&atdecc::avtp::subtype::MAAP) => {
+                if let Some(maap) = &mut self.maap {
+                    maap.handle_frame(now, source, &bytes);
+                }
+            }
             Input::Avtp(source, bytes) => {
                 for endpoint in &mut self.endpoints {
                     endpoint.entity.handle_frame(now, source, &bytes);
@@ -635,6 +663,12 @@ impl Runtime {
         }
         self.msrp_participant.handle_timeout(since);
         self.mvrp_participant.handle_timeout(since);
+        if let Some(maap) = &mut self.maap {
+            maap.handle_timeout(now);
+        }
+        while let Some(event) = self.maap.as_mut().and_then(Maap::poll_event) {
+            self.maap_event(event);
+        }
         for index in 0..self.endpoints.len() {
             if self.endpoints[index]
                 .redeclare_at
@@ -698,6 +732,9 @@ impl Runtime {
             }
             handed = true;
         }
+        while let Some((destination, pdu)) = self.maap.as_mut().and_then(Maap::poll_transmit) {
+            let _ = self.avtp.send(destination, &pdu);
+        }
         while let Some(pdu) = self.msrp_participant.poll_transmit() {
             let _ = self.msrp.send(avb_mrp::MSRP_DESTINATION, &pdu);
         }
@@ -748,6 +785,60 @@ impl Runtime {
         );
     }
 
+    /// Whether the talkers have their destination addresses.
+    fn addressed(&self) -> bool {
+        self.maap
+            .as_ref()
+            .is_some_and(|maap| maap.address(0).is_some())
+    }
+
+    /// Talkers take the addresses MAAP gave them, or stop when it lost
+    /// them, and our listeners of them follow.
+    fn maap_event(&mut self, event: MaapEvent) {
+        let since = self.elapsed();
+        let now = self.now();
+        let talkers: Vec<usize> = (0..self.endpoints.len())
+            .filter(|index| self.endpoints[*index].config.kind == Kind::Talker)
+            .collect();
+        match event {
+            MaapEvent::Acquired(first) => {
+                log(format!("MAAP: streams go to {first} on"));
+                for (place, index) in talkers.into_iter().enumerate() {
+                    let Some(address) = self
+                        .maap
+                        .as_ref()
+                        .and_then(|maap| maap.address(place as u16))
+                    else {
+                        continue;
+                    };
+                    self.endpoints[index]
+                        .entity
+                        .set_output_destination(0, address);
+                    // Declared again only once a bridge has let the old
+                    // declaration go.
+                    let at = self.endpoints[index]
+                        .withdrawn_at
+                        .map_or(since, |withdrawn| withdrawn + REDECLARE)
+                        .max(since);
+                    self.endpoints[index].redeclare_at = Some(at);
+                }
+                // Our listeners of our talkers find where they went.
+                for endpoint in &mut self.endpoints {
+                    if endpoint.config.kind == Kind::Listener {
+                        endpoint.entity.probe_again(now, 0);
+                    }
+                }
+            }
+            MaapEvent::Lost => {
+                log("MAAP: another device took the streams' addresses, claiming others");
+                for index in talkers {
+                    self.endpoints[index].talker = None;
+                    self.withdraw_talker(index);
+                }
+            }
+        }
+    }
+
     /// Withdraws a talker's declaration, which a stream needs to stop.
     fn withdraw_talker(&mut self, index: usize) {
         let Some((stream_id, _)) = self.endpoints[index].entity.output_stream(0) else {
@@ -759,6 +850,7 @@ impl Runtime {
             msrp::attribute::TALKER_ADVERTISE,
             &stream_id.0.to_be_bytes(),
         );
+        self.endpoints[index].withdrawn_at = Some(since);
         self.endpoints[index].entity.set_output_reservation(
             0,
             OutputReservation {
@@ -857,8 +949,9 @@ impl Runtime {
                 registering: true,
             },
         );
+        let addressed = self.addressed();
         let endpoint = &mut self.endpoints[index];
-        if ready && endpoint.talker.is_none() && endpoint.redeclare_at.is_none() {
+        if ready && endpoint.talker.is_none() && endpoint.redeclare_at.is_none() && addressed {
             log(format!(
                 "{}: a listener is ready, streaming",
                 endpoint.config.name
@@ -943,7 +1036,8 @@ impl Runtime {
         };
         let own = self.own_talker(stream.stream_id.0);
         let declaration = match own {
-            Some(talker) => self.declaration(talker),
+            Some(talker) if self.addressed() => self.declaration(talker),
+            Some(_) => None,
             None => self.talkers.get(&stream.stream_id.0).copied(),
         };
         let key = stream.stream_id.0.to_be_bytes().to_vec();
@@ -1024,6 +1118,7 @@ impl Runtime {
                         endpoint.config.name, stream.stream_id
                     ));
                     endpoint.listener = Some(listener);
+                    endpoint.listening_to = Some(stream);
                 }
                 Err(error) => log(format!(
                     "{}: could not listen: {error}",
@@ -1084,6 +1179,11 @@ impl Runtime {
                     "{name}: probed stream {} to {}",
                     stream.stream_id, stream.destination
                 ));
+                // A stream that moved is taken from where it went.
+                let endpoint = &mut self.endpoints[index];
+                if endpoint.listener.is_some() && endpoint.listening_to != Some(stream) {
+                    endpoint.listener = None;
+                }
                 self.update_listener(index);
             }
             EntityEvent::InputUnsettled { .. } => self.stop_listener(index),

@@ -293,6 +293,29 @@ impl Entity {
     }
 
     /// The stream a bound input's probe found.
+    /// Sends output `index`'s stream to `destination` from now on, as MAAP
+    /// gave it, telling registered controllers.
+    pub fn set_output_destination(&mut self, index: u16, destination: MacAddress) {
+        let Some(output) = self.outputs.get_mut(usize::from(index)) else {
+            return;
+        };
+        if output.destination != destination {
+            output.destination = destination;
+            self.notify_stream_info(DescriptorType::STREAM_OUTPUT, index);
+        }
+    }
+
+    /// Probes the talker of bound input `index` again, as when its stream
+    /// may have moved.
+    pub fn probe_again(&mut self, now: Instant, index: u16) {
+        if let Some(input) = self.inputs.get_mut(usize::from(index))
+            && input.binding.is_some()
+            && !matches!(input.probe, Some(Probe::Waiting { .. }))
+        {
+            input.probe = Some(Probe::Due(now));
+        }
+    }
+
     /// Binds stream input `index` as it was bound before the entity last
     /// stopped, as a Milan listener keeps its binding across a restart,
     /// and probes the talker at once.
