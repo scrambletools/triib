@@ -406,7 +406,9 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
     let name = triib.preset_name.trim();
     let save = (!name.is_empty()).then_some(Message::PresetSaved);
     let header = row![
-        styled(fl!("toolbar-presets"), Type::HeadlineSmall).width(Fill),
+        styled(fl!("toolbar-presets"), Type::HeadlineSmall)
+            .width(Fill)
+            .align_x(scramble_ui::dir::text_start()),
         component::tip(
             button::icon_button(Icon::Close).on_press(Message::PresetsClosed),
             fl!("common-close"),

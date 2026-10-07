@@ -58,7 +58,9 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
     };
     let header = scramble_ui::column![
         scramble_ui::row![
-            styled(fl!("settings-title"), Type::HeadlineSmall).width(Fill),
+            styled(fl!("settings-title"), Type::HeadlineSmall)
+                .width(Fill)
+                .align_x(scramble_ui::dir::text_start()),
             component::tip(
                 button::icon_button(Icon::Close).on_press(Message::SettingsClosed),
                 fl!("common-close"),

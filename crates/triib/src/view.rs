@@ -170,12 +170,18 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let selected = triib
         .interface()
         .map(|interface| Choice::new(interface, brief));
-    let picker = dropdown::pick(choices, selected, |choice: Choice| {
-        Message::InterfacePicked(choice.name)
-    })
-    .placeholder(fl!("toolbar-choose-interface"))
-    .size(button::Size::ExtraSmall)
-    .width(picker_width);
+    // The picker reads in the language's direction, though the bar holding
+    // it keeps its layout.
+    let picker: Element<'_, Message> = {
+        let _reading = dir::reading();
+        dropdown::pick(choices, selected, |choice: Choice| {
+            Message::InterfacePicked(choice.name)
+        })
+        .placeholder(fl!("toolbar-choose-interface"))
+        .size(button::Size::ExtraSmall)
+        .width(picker_width)
+        .into()
+    };
 
     let view = triib.settings.view;
     let view_tool = |glyph, label, target| {
@@ -421,6 +427,8 @@ fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
         selected: open == tab,
         on_press: Message::InspectorTab(tab),
     };
+    // The tabs keep their order in every language.
+    let fixed = dir::fixed();
     let tabs = component::tabs(vec![
         tab(fl!("inspector-entity"), Icon::Info, InspectorTab::Entity),
         tab(
@@ -444,6 +452,7 @@ fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
             InspectorTab::Descriptors,
         ),
     ]);
+    drop(fixed);
     component::side_sheet_tabbed(
         fl!("inspector-title"),
         Message::InspectorToggled,
