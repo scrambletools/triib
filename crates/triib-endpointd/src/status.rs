@@ -11,6 +11,10 @@ use crate::config::Kind;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DaemonStatus {
     pub pid: u32,
+    /// When it started on the endpoints it runs, in milliseconds since the
+    /// Unix epoch.
+    #[serde(default)]
+    pub started: u64,
     pub interface: String,
     pub gptp: String,
     #[serde(rename = "endpoint", default)]

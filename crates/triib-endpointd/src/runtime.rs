@@ -21,6 +21,7 @@ use atdecc::{
 use avb_mrp::msrp::{self, Domain, ListenerState, TalkerDeclaration};
 use avb_mrp::{Participant, Registration, mvrp};
 use avb_net::Socket;
+use triib_stream::audio::{Sink, Source};
 use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 
 use crate::config::{Config, EndpointConfig, Kind};
@@ -172,6 +173,9 @@ pub struct Runtime {
     modified: Option<SystemTime>,
     last_look: Clock,
     gptp_text: String,
+    /// When it started on this configuration, in milliseconds since the
+    /// Unix epoch.
+    started: u64,
 }
 
 /// Why the runtime ended.
@@ -283,7 +287,7 @@ impl Runtime {
             .iter()
             .enumerate()
             .filter_map(|(place, endpoint)| {
-                let instance = endpoint.instance.unwrap_or(place as u8).min(239);
+                let instance = endpoint.instance_at(place);
                 if used.contains(&instance) {
                     log(format!(
                         "instance {instance} is taken; leaving out {}",
@@ -324,6 +328,9 @@ impl Runtime {
             config,
             last_look: Clock::now(),
             gptp_text: "ptp4l not asked yet".into(),
+            started: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map_or(0, |since| since.as_millis() as u64),
         })
     }
 
@@ -458,6 +465,7 @@ impl Runtime {
             .collect();
         let status = DaemonStatus {
             pid: std::process::id(),
+            started: self.started,
             interface: self.interface.clone(),
             gptp: self.gptp_text.clone(),
             endpoints,
@@ -771,7 +779,23 @@ impl Runtime {
             max_transit_time: Duration::from_nanos(u64::from(transit)),
             source: endpoint.config.source(),
         };
-        match Talker::start(config, self.clock.clone()) {
+        // An audio device that isn't there, as on another computer than
+        // the one its name came from, leaves the stream running silent.
+        let started = Talker::start(config.clone(), self.clock.clone()).or_else(|error| {
+            if config.source == Source::Silence {
+                return Err(error);
+            }
+            log(format!(
+                "{}: {error}, sending silence",
+                endpoint.config.name
+            ));
+            let silent = TalkerConfig {
+                source: Source::Silence,
+                ..config
+            };
+            Talker::start(silent, self.clock.clone())
+        });
+        match started {
             Ok(talker) => self.endpoints[index].talker = Some(talker),
             Err(error) => log(format!(
                 "{}: could not start the stream: {error}",
@@ -865,7 +889,21 @@ impl Runtime {
                 format: model.current_format,
                 sink: endpoint.config.sink(),
             };
-            match Listener::start(config, self.clock.clone()) {
+            let started = Listener::start(config.clone(), self.clock.clone()).or_else(|error| {
+                if config.sink == Sink::Discard {
+                    return Err(error);
+                }
+                log(format!(
+                    "{}: {error}, playing nowhere",
+                    endpoint.config.name
+                ));
+                let discarding = ListenerConfig {
+                    sink: Sink::Discard,
+                    ..config
+                };
+                Listener::start(discarding, self.clock.clone())
+            });
+            match started {
                 Ok(listener) => {
                     log(format!(
                         "{}: listening to {}",

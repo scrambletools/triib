@@ -29,11 +29,6 @@ fn save(path: &std::path::Path, config: &Config) -> Result<(), String> {
     triib_store::save(path, config).map_err(|error| error.to_string())
 }
 
-/// The instance of each endpoint, as the daemon gives them.
-fn instance(place: usize, endpoint: &EndpointConfig) -> u8 {
-    endpoint.instance.unwrap_or(place as u8).min(239)
-}
-
 /// The place in the file of the endpoint whose entity is `entity_id`.
 fn place_of(config: &Config, mac: MacAddress, entity_id: EntityId) -> Option<usize> {
     config
@@ -41,7 +36,7 @@ fn place_of(config: &Config, mac: MacAddress, entity_id: EntityId) -> Option<usi
         .iter()
         .enumerate()
         .position(|(place, endpoint)| {
-            triib_endpointd::runtime::entity_id(mac, instance(place, endpoint)) == entity_id
+            triib_endpointd::runtime::entity_id(mac, endpoint.instance_at(place)) == entity_id
         })
 }
 
@@ -53,7 +48,7 @@ pub fn add(interface: &str, kind: Kind, name: String) -> Result<(), String> {
         .endpoints
         .iter()
         .enumerate()
-        .map(|(place, endpoint)| instance(place, endpoint))
+        .map(|(place, endpoint)| endpoint.instance_at(place))
         .collect();
     let free = (0..240u8)
         .find(|candidate| !taken.contains(candidate))
@@ -79,9 +74,7 @@ pub fn add(interface: &str, kind: Kind, name: String) -> Result<(), String> {
 pub fn remove(interface: &str, mac: MacAddress, entity_id: EntityId) -> Result<(), String> {
     let (path, mut config) = load(interface)?;
     let place = place_of(&config, mac, entity_id).ok_or("not one of this computer's")?;
-    for (index, endpoint) in config.endpoints.iter_mut().enumerate() {
-        endpoint.instance = Some(instance(index, endpoint));
-    }
+    config.endpoints = pinned(std::mem::take(&mut config.endpoints));
     config.endpoints.remove(place);
     save(&path, &config)
 }
@@ -102,6 +95,51 @@ pub fn set_audio(
         Kind::Listener => endpoint.sink = Some(audio),
     }
     save(&path, &config)
+}
+
+/// The endpoints on `interface`, each with its instance written down so
+/// its entity ID stays the same, for a preset to keep.
+pub fn endpoints(interface: &str) -> Vec<EndpointConfig> {
+    if cfg!(test) {
+        return Vec::new();
+    }
+    let Some(config) = config::path().and_then(|path| triib_store::load::<Config>(&path).ok())
+    else {
+        return Vec::new();
+    };
+    if config.interface != interface {
+        return Vec::new();
+    }
+    pinned(config.endpoints)
+}
+
+fn pinned(mut endpoints: Vec<EndpointConfig>) -> Vec<EndpointConfig> {
+    for (place, endpoint) in endpoints.iter_mut().enumerate() {
+        endpoint.instance = Some(endpoint.instance_at(place));
+    }
+    endpoints
+}
+
+/// Runs `endpoints` on `interface` in place of the ones there, starting
+/// the daemon when it isn't running. Says whether they will start again,
+/// which they do when anything changed.
+pub fn restore(interface: &str, endpoints: &[EndpointConfig]) -> Result<bool, String> {
+    if cfg!(test) {
+        return Ok(false);
+    }
+    let path = config::path().ok_or("no data folder")?;
+    let running = triib_endpointd::status::read().is_some();
+    let now = triib_store::load::<Config>(&path).ok();
+    let same = now.as_ref().is_some_and(|config| {
+        config.interface == interface && pinned(config.endpoints.clone()) == endpoints
+    });
+    if !same {
+        let (path, mut config) = load(interface)?;
+        config.endpoints = endpoints.to_vec();
+        save(&path, &config)?;
+    }
+    ensure_running()?;
+    Ok(!same || !running)
 }
 
 /// Starts triib-endpointd, from beside triib, unless it runs already.

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use triib_stream::audio::{Sink, Source};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
     /// The interface the entities are on: wired, with a PTP hardware clock
@@ -26,7 +26,7 @@ pub enum Kind {
     Listener,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointConfig {
     pub kind: Kind,
     /// Kept apart from the others' to keep its entity ID stable, from 0 to
@@ -54,6 +54,12 @@ fn eight() -> u16 {
 }
 
 impl EndpointConfig {
+    /// Its instance, as its entity ID takes it, when it is `place` in the
+    /// list.
+    pub fn instance_at(&self, place: usize) -> u8 {
+        self.instance.unwrap_or(place as u8).min(239)
+    }
+
     pub fn source(&self) -> Source {
         match self.source.as_deref() {
             None | Some("silence") => Source::Silence,
