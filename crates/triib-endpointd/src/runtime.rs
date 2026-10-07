@@ -38,6 +38,11 @@ const VLAN: u16 = 2;
 const TALKER_LATENCY: u32 = 125_000;
 /// How often the streams' counters are logged.
 const REPORT: Duration = Duration::from_secs(30);
+/// How long a talker whose stream changed waits with its declaration
+/// withdrawn before declaring the new one: long enough for the bridge to
+/// let the old go, as a bridge can keep the old frame size when a
+/// declaration changes in place, and drop what no longer fits.
+const REDECLARE: Duration = Duration::from_secs(2);
 
 /// What the sockets and ptp4l hand the runtime.
 enum Input {
@@ -57,6 +62,13 @@ fn aaf_48k(channels: u16, bits: u8) -> StreamFormat {
             | (u64::from(channels & 0x3ff) << 22)
             | (6 << 12),
     )
+}
+
+/// IEC 61883-6 AM824 at 48 kHz, non-blocking, every quadlet multi-bit
+/// linear audio, as the MOTU 8D and macOS use.
+fn am824_48k(channels: u16) -> StreamFormat {
+    let quadlets = u64::from(channels.min(255));
+    StreamFormat((0xa0 << 48) | (0x02 << 40) | (quadlets << 32) | (0x40 << 24) | (quadlets << 8))
 }
 
 /// An entity ID from the interface's address and the endpoint's instance,
@@ -88,6 +100,8 @@ struct Endpoint {
     listener: Option<Listener>,
     /// The stream its Listener declaration names, while it declares one.
     declared: Option<Vec<u8>>,
+    /// When a talker whose stream changed declares it again.
+    redeclare_at: Option<Duration>,
     /// Its place in the configuration's list.
     place: usize,
 }
@@ -100,11 +114,20 @@ impl Endpoint {
         interface: &str,
         clock: ClockIdentity,
     ) -> Self {
-        let channels = config.channels.clamp(1, 64);
-        let formats = vec![aaf_48k(channels, 32), aaf_48k(channels, 24)];
+        // As many as six samples of each fit in one Ethernet frame.
+        let channels = config.channels.clamp(1, 60);
+        let formats = vec![
+            aaf_48k(channels, 32),
+            aaf_48k(channels, 24),
+            am824_48k(channels),
+        ];
+        let current_format = config
+            .stream_format()
+            .filter(|format| formats.contains(format))
+            .unwrap_or(formats[0]);
         let stream = StreamModel {
             name: config.name.clone(),
-            current_format: formats[0],
+            current_format,
             formats,
             channels,
         };
@@ -143,6 +166,7 @@ impl Endpoint {
             talker: None,
             listener: None,
             declared: None,
+            redeclare_at: None,
             place: 0,
         }
     }
@@ -414,14 +438,23 @@ impl Runtime {
         }
     }
 
-    /// Keeps a name a controller gave in the configuration.
-    fn keep_name(&mut self, index: usize) {
+    /// Keeps the name and stream format a controller gave in the
+    /// configuration.
+    fn keep_settings(&mut self, index: usize) {
         let endpoint = &self.endpoints[index];
-        let name = endpoint.entity.model().entity_name.clone();
+        let model = endpoint.entity.model();
+        let name = model.entity_name.clone();
+        let format = model
+            .outputs
+            .iter()
+            .chain(&model.inputs)
+            .next()
+            .map(|stream| format!("{:#018x}", stream.current_format.0));
         let Some(entry) = self.config.endpoints.get_mut(endpoint.place) else {
             return;
         };
         entry.name = name;
+        entry.format = format;
         if let Some(path) = &self.path {
             if let Err(error) = triib_store::save(path, &self.config) {
                 log(format!("endpoints.toml: {error}"));
@@ -551,6 +584,16 @@ impl Runtime {
         }
         self.msrp_participant.handle_timeout(since);
         self.mvrp_participant.handle_timeout(since);
+        for index in 0..self.endpoints.len() {
+            if self.endpoints[index]
+                .redeclare_at
+                .is_some_and(|at| at <= since)
+            {
+                self.endpoints[index].redeclare_at = None;
+                self.declare_talker(index);
+                self.update_talker(index);
+            }
+        }
         loop {
             for index in 0..self.endpoints.len() {
                 while let Some(event) = self.endpoints[index].entity.poll_event() {
@@ -619,12 +662,12 @@ impl Runtime {
         let endpoint = &self.endpoints[index];
         let (stream_id, destination) = endpoint.entity.output_stream(0)?;
         let format = endpoint.entity.model().outputs.first()?.current_format;
-        let layout = triib_stream::aaf::Layout::of(format)?;
+        let media = triib_stream::media::Media::of(format)?;
         Some(TalkerDeclaration {
             stream_id: stream_id.0,
             destination,
             vlan_id: VLAN,
-            max_frame_size: layout.pdu_length() as u16,
+            max_frame_size: media.pdu_length() as u16,
             max_interval_frames: 1,
             priority: PRIORITY,
             rank: true,
@@ -650,6 +693,26 @@ impl Runtime {
             OutputReservation {
                 ready_listeners: 0,
                 registering: true,
+            },
+        );
+    }
+
+    /// Withdraws a talker's declaration, which a stream needs to stop.
+    fn withdraw_talker(&mut self, index: usize) {
+        let Some((stream_id, _)) = self.endpoints[index].entity.output_stream(0) else {
+            return;
+        };
+        let since = self.elapsed();
+        self.msrp_participant.withdraw(
+            since,
+            msrp::attribute::TALKER_ADVERTISE,
+            &stream_id.0.to_be_bytes(),
+        );
+        self.endpoints[index].entity.set_output_reservation(
+            0,
+            OutputReservation {
+                ready_listeners: 0,
+                registering: false,
             },
         );
     }
@@ -744,7 +807,7 @@ impl Runtime {
             },
         );
         let endpoint = &mut self.endpoints[index];
-        if ready && endpoint.talker.is_none() {
+        if ready && endpoint.talker.is_none() && endpoint.redeclare_at.is_none() {
             log(format!(
                 "{}: a listener is ready, streaming",
                 endpoint.config.name
@@ -978,12 +1041,11 @@ impl Runtime {
             }
             EntityEvent::StreamFormatChanged { format, .. } => {
                 log(format!("{name}: format {format}"));
-                let endpoint = &mut self.endpoints[index];
-                if endpoint.talker.take().is_some() {
-                    self.declare_talker(index);
-                    self.start_talker(index);
-                } else if endpoint.config.kind == Kind::Talker {
-                    self.declare_talker(index);
+                self.keep_settings(index);
+                if self.endpoints[index].config.kind == Kind::Talker {
+                    self.endpoints[index].talker = None;
+                    self.withdraw_talker(index);
+                    self.endpoints[index].redeclare_at = Some(self.elapsed() + REDECLARE);
                 }
                 if self.endpoints[index].listener.take().is_some() {
                     self.update_listener(index);
@@ -1004,7 +1066,7 @@ impl Runtime {
                     "{name}: renamed {}",
                     self.endpoints[index].entity.model().entity_name
                 ));
-                self.keep_name(index);
+                self.keep_settings(index);
             }
         }
     }
@@ -1066,7 +1128,7 @@ impl Runtime {
                     stats.sequence_mismatches,
                     stats.late,
                     stats.early,
-                    stats.peak
+                    listener.take_peak()
                 ));
             }
         }
@@ -1131,6 +1193,7 @@ mod tests {
     fn the_formats_are_the_bench_ones() {
         assert_eq!(aaf_48k(8, 32), StreamFormat(0x0205_0220_0200_6000));
         assert_eq!(aaf_48k(8, 24), StreamFormat(0x0205_0218_0200_6000));
+        assert_eq!(am824_48k(8), StreamFormat(0x00a0_0208_4000_0800));
     }
 
     #[test]

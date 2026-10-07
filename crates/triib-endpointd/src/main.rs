@@ -34,6 +34,7 @@ fn first_config() -> Config {
         source: None,
         sink: None,
         first_channel: 0,
+        format: None,
     };
     Config {
         interface,

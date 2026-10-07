@@ -1,5 +1,5 @@
-//! An AAF talker: one frame each class interval, paced on gPTP time, its
-//! presentation time the max transit time ahead.
+//! A talker of AAF or AM824: one frame each class interval, paced on gPTP
+//! time, its presentation time the max transit time ahead.
 
 use std::io;
 use std::sync::Arc;
@@ -13,8 +13,8 @@ use avb_net::clock::monotonic_now;
 use avb_net::stream::FrameSender;
 
 use crate::MediaClock;
-use crate::aaf::{self, HEADER_LEN, Header, Layout};
 use crate::audio::{Input, Source};
+use crate::media::{Media, Packetizer};
 
 /// The VLAN tag's ethertype, and AVTP's.
 const ETHERTYPE_VLAN: u16 = 0x8100;
@@ -70,14 +70,14 @@ pub struct Talker {
 impl Talker {
     /// Starts sending `config`'s stream on `clock`'s time.
     pub fn start(config: TalkerConfig, clock: Arc<MediaClock>) -> io::Result<Self> {
-        let layout = Layout::of(config.format).ok_or_else(|| {
+        let media = Media::of(config.format).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::Unsupported,
-                "not an AAF format this talker sends",
+                "not an AAF or AM824 format this talker sends",
             )
         })?;
         let sender = FrameSender::open(&config.interface)?;
-        let input = Input::open(&config.source, layout.channels, layout.sample_rate)?;
+        let input = Input::open(&config.source, media.channels(), media.sample_rate())?;
         let stop = Arc::new(AtomicBool::new(false));
         let counters = Arc::new(Counters::default());
         let handle = {
@@ -85,7 +85,7 @@ impl Talker {
             let counters = counters.clone();
             std::thread::Builder::new()
                 .name("talker".into())
-                .spawn(move || run(&config, layout, &sender, input, &clock, &stop, &counters))?
+                .spawn(move || run(&config, media, &sender, input, &clock, &stop, &counters))?
         };
         Ok(Talker {
             stop,
@@ -129,23 +129,23 @@ fn ethernet_header(config: &TalkerConfig) -> [u8; ETHERNET_LEN] {
 
 fn run(
     config: &TalkerConfig,
-    layout: Layout,
+    media: Media,
     sender: &FrameSender,
     mut input: Input,
     clock: &MediaClock,
     stop: &AtomicBool,
     counters: &Counters,
 ) {
-    let interval = layout.interval_nanos() as i64;
+    let interval = media.interval_nanos() as i64;
     let transit = config.max_transit_time.as_nanos() as i64;
-    let mut frame = vec![0u8; ETHERNET_LEN + layout.pdu_length()];
+    let mut frame = vec![0u8; ETHERNET_LEN + media.pdu_length()];
     frame[..ETHERNET_LEN].copy_from_slice(&ethernet_header(config));
     let mut samples =
-        vec![0.0f32; usize::from(layout.channels) * usize::from(layout.samples_per_frame)];
+        vec![0.0f32; usize::from(media.channels()) * usize::from(media.samples_per_frame())];
+    let mut packetizer = Packetizer::new(media, config.stream_id);
     // The first frame goes out at an interval boundary a millisecond on.
     let start = |now: i64| (now / interval + 1) * interval + 1_000_000;
     let mut next = start(clock.now());
-    let mut sequence: u8 = 0;
     let mut media_reset = false;
     let mut adjustments = 0;
     while !stop.load(Ordering::Relaxed) {
@@ -164,27 +164,16 @@ fn run(
             continue;
         }
         input.read(&mut samples);
-        let header = Header {
-            sequence,
-            stream_id: config.stream_id,
-            timestamp: Some((next + transit) as u32),
+        packetizer.write(
+            next + transit,
             media_reset,
-            nsr: layout.nsr,
-            sample_format: layout.sample_format,
-            bit_depth: layout.bit_depth,
-            channels: layout.channels,
-            data_length: layout.data_length() as u16,
-        };
-        let mut encoded = [0; HEADER_LEN];
-        header.encode(&mut encoded);
-        let pdu = &mut frame[ETHERNET_LEN..];
-        pdu[..HEADER_LEN].copy_from_slice(&encoded);
-        aaf::write_samples(&samples, &layout, &mut pdu[HEADER_LEN..]);
+            &samples,
+            &mut frame[ETHERNET_LEN..],
+        );
         match sender.send(&frame) {
             Ok(()) => counters.frames_sent.fetch_add(1, Ordering::Relaxed),
             Err(_) => counters.send_errors.fetch_add(1, Ordering::Relaxed),
         };
-        sequence = sequence.wrapping_add(1);
         next += interval;
         adjustments += 1;
         if adjustments % 800 == 0 {

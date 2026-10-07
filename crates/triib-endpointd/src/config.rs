@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use atdecc::stream_format::StreamFormat;
 use serde::{Deserialize, Serialize};
 use triib_stream::audio::{Sink, Source};
 
@@ -47,6 +48,10 @@ pub struct EndpointConfig {
     /// The device channel the stream's first channel goes to or comes from.
     #[serde(default)]
     pub first_channel: u16,
+    /// The stream format a controller last chose, in hex; the first one
+    /// offered when left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
 }
 
 fn eight() -> u16 {
@@ -54,6 +59,14 @@ fn eight() -> u16 {
 }
 
 impl EndpointConfig {
+    /// The stream format a controller last chose.
+    pub fn stream_format(&self) -> Option<StreamFormat> {
+        let text = self.format.as_deref()?;
+        u64::from_str_radix(text.trim_start_matches("0x"), 16)
+            .ok()
+            .map(StreamFormat)
+    }
+
     /// Its instance, as its entity ID takes it, when it is `place` in the
     /// list.
     pub fn instance_at(&self, place: usize) -> u8 {

@@ -65,6 +65,7 @@ pub fn add(interface: &str, kind: Kind, name: String) -> Result<(), String> {
         source,
         sink,
         first_channel: 0,
+        format: None,
     });
     save(&path, &config)
 }

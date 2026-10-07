@@ -726,6 +726,7 @@ mod tests {
                 source: Some("default".to_owned()),
                 sink: None,
                 first_channel: 0,
+                format: None,
             },
             EndpointConfig {
                 kind: Kind::Listener,
@@ -735,6 +736,7 @@ mod tests {
                 source: None,
                 sink: Some("Speakers".to_owned()),
                 first_channel: 2,
+                format: Some("0x00a0020840000800".to_owned()),
             },
         ]
     }

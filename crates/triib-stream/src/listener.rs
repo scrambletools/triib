@@ -1,5 +1,6 @@
-//! An AAF listener: the frames of one stream, their samples played on
-//! the sink, counted as Milan's stream input counters count them.
+//! A listener of AAF or AM824: the frames of one stream, their samples
+//! played on the sink, counted as Milan's stream input counters count
+//! them.
 
 use std::io;
 use std::sync::Arc;
@@ -12,8 +13,8 @@ use avb_net::MacAddress;
 use avb_net::stream::{FrameReceiver, avtp_payload};
 
 use crate::MediaClock;
-use crate::aaf::{self, Header, Layout};
 use crate::audio::{Output, Sink};
+use crate::media::{self, Media};
 
 /// How long without a frame before the stream counts as interrupted.
 const SILENCE: Duration = Duration::from_millis(100);
@@ -31,7 +32,7 @@ pub struct ListenerConfig {
 }
 
 /// A listener's counters (Milan 1.3, Table 5.10).
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ListenerStats {
     pub frames_received: u64,
     pub media_locked: u64,
@@ -43,8 +44,6 @@ pub struct ListenerStats {
     pub early: u64,
     /// Frames are arriving.
     pub locked: bool,
-    /// The loudest sample since the last look, from 0 to 1.
-    pub peak: f32,
 }
 
 #[derive(Default)]
@@ -70,14 +69,14 @@ pub struct Listener {
 
 impl Listener {
     pub fn start(config: ListenerConfig, clock: Arc<MediaClock>) -> io::Result<Self> {
-        let layout = Layout::of(config.format).ok_or_else(|| {
+        let media = Media::of(config.format).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::Unsupported,
-                "not an AAF format this listener takes",
+                "not an AAF or AM824 format this listener takes",
             )
         })?;
-        let receiver = FrameReceiver::open(&config.interface, aaf::SUBTYPE, config.destination)?;
-        let output = Output::open(&config.sink, layout.channels, layout.sample_rate)?;
+        let receiver = FrameReceiver::open(&config.interface, media.subtype(), config.destination)?;
+        let output = Output::open(&config.sink, media.channels(), media.sample_rate())?;
         let stop = Arc::new(AtomicBool::new(false));
         let counters = Arc::new(Counters::default());
         let handle = {
@@ -85,11 +84,7 @@ impl Listener {
             let counters = counters.clone();
             std::thread::Builder::new()
                 .name("listener".into())
-                .spawn(move || {
-                    run(
-                        &config, layout, &receiver, &output, &clock, &stop, &counters,
-                    )
-                })?
+                .spawn(move || run(&config, media, &receiver, &output, &clock, &stop, &counters))?
         };
         Ok(Listener {
             stop,
@@ -111,8 +106,12 @@ impl Listener {
             late: read(&counters.late),
             early: read(&counters.early),
             locked: counters.locked.load(Ordering::Relaxed),
-            peak: f32::from_bits(counters.peak.swap(0, Ordering::Relaxed)),
         }
+    }
+
+    /// The loudest sample since the last time this was asked, from 0 to 1.
+    pub fn take_peak(&self) -> f32 {
+        f32::from_bits(self.counters.peak.swap(0, Ordering::Relaxed))
     }
 }
 
@@ -127,7 +126,7 @@ impl Drop for Listener {
 
 fn run(
     config: &ListenerConfig,
-    layout: Layout,
+    media: Media,
     receiver: &FrameReceiver,
     output: &Output,
     clock: &MediaClock,
@@ -155,13 +154,16 @@ fn run(
                 continue;
             }
         };
-        let Some((header, data)) = avtp_payload(&frame[..received]).and_then(Header::decode) else {
+        samples.clear();
+        let Some(header) =
+            avtp_payload(&frame[..received]).and_then(|pdu| media::read(pdu, &media, &mut samples))
+        else {
             continue;
         };
         if header.stream_id != config.stream_id {
             continue;
         }
-        if !header.matches(&layout) {
+        if !header.matches {
             counters.unsupported_formats.fetch_add(1, Ordering::Relaxed);
             continue;
         }
@@ -185,8 +187,6 @@ fn run(
                 counters.early.fetch_add(1, Ordering::Relaxed);
             }
         }
-        samples.clear();
-        aaf::read_samples(data, &layout, &mut samples);
         let loudest = samples
             .iter()
             .fold(0.0f32, |most, sample| most.max(sample.abs()));
