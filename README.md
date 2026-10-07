@@ -8,7 +8,7 @@ listeners, routed to the computer's audio. Built in Rust with
 [prev](https://github.com/scrambletools/prev) through
 [scramble-ui](https://github.com/scrambletools/scramble-ui).
 
-> **Status:** early. On Linux, triib discovers ATDECC entities, reads their
+> **Status:** early. On Linux, macOS and Windows, triib discovers ATDECC entities, reads their
 > entity models (names, streams, clocks, Milan support) and keeps them for
 > next time, shows and changes stream connections in a matrix, maps the
 > network from each entity's gPTP path, identifies entities, renames
@@ -21,6 +21,22 @@ listeners, routed to the computer's audio. Built in Rust with
 > Lite, what their streams take of each link and the alarms the AVB Lite
 > profile calls for. It speaks 38 languages, following the system's or the
 > one picked in Settings. See the [plan](docs/PLAN.md).
+
+## Installing
+
+Releases have packages for each system, each setting up what triib needs
+to send and receive raw Ethernet:
+
+| System | Package | What it sets up |
+|---|---|---|
+| Linux | .deb, .rpm, AUR | `CAP_NET_RAW` for `triib` and `triib-cli` |
+| Linux | .tar.gz | nothing: run `sudo setcap cap_net_raw+ep` on both programs |
+| macOS (Apple Silicon) | .pkg | access to `/dev/bpf*` for the user installing it, at every start, as Wireshark's ChmodBPF does; `triib-cli` in /usr/local/bin |
+| Windows | .msi, .zip | nothing itself: install [Npcap](https://npcap.com) first, which the installer and triib point to when it is missing |
+
+On macOS the Mac's own AVB entity cannot be read from the same Mac, as
+the system never hands it the commands triib writes; triib says so.
+[docs/RELEASING.md](docs/RELEASING.md) has the details.
 
 ## Building
 
@@ -75,6 +91,12 @@ On Linux, sending and receiving ATDECC frames needs `CAP_NET_RAW`:
 ```
 sudo setcap cap_net_raw+ep target/debug/triib
 ```
+
+On macOS it needs access to `/dev/bpf*`, as Wireshark's ChmodBPF or
+triib's package gives (or, until the next restart,
+`sudo chown $USER /dev/bpf*`), and on Windows it needs
+[Npcap](https://npcap.com). `cargo run -p triib-cli -- interfaces` says
+whether raw Ethernet is ready.
 
 ## Workspace
 

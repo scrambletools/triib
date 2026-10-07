@@ -1,0 +1,96 @@
+<!--
+  triib's Windows installer, built with WiX 5 by packaging/windows/build.ps1:
+
+    wix build packaging\windows\triib.wxs -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext
+      -d Version=0.1.0 -d Source=dist -o triib.msi
+
+  It installs for the current user, with no administrator prompt, into
+  %LOCALAPPDATA%\Programs\triib, adds triib to the Start menu and its
+  folder to the user's PATH for triib-cli. triib reaches the network
+  through Npcap, which its license keeps out of other installers: when it
+  is missing, the last page offers its download page instead of opening
+  triib.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <?define AppKey = Software\Scramble Tools\triib ?>
+
+  <Package Name="triib" Manufacturer="Scramble Tools" Version="$(var.Version)"
+           UpgradeCode="3c0f0a54-6f2e-4d5c-9b1e-7d3a2f8e4b61" Scope="perUser"
+           Language="1033" InstallerVersion="500">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of triib is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <?ifdef Icon ?>
+    <Icon Id="triib.ico" SourceFile="$(var.Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="triib.ico" />
+    <?endif ?>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/scrambletools/triib" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/scrambletools/triib" />
+
+    <!-- Npcap's installer, a 32-bit program, records its folder here. -->
+    <Property Id="NPCAP">
+      <RegistrySearch Id="NpcapFolder" Root="HKLM" Key="SOFTWARE\Npcap" Type="raw" Bitness="always32" />
+    </Property>
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="Programs" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="triib" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!-- Per-user components are kept track of by a value under the app's
+         key rather than by their files, so those with files need GUIDs of
+         their own. Keep them: changing one breaks upgrades. -->
+    <ComponentGroup Id="Program" Directory="INSTALLFOLDER">
+      <Component Id="App" Guid="b7f4c2a1-58d3-4e6a-9c0b-2f1e7d4a8c35">
+        <File Id="triib.exe" Source="$(var.Source)\triib.exe" />
+        <RegistryValue Root="HKCU" Key="$(var.AppKey)" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        <RemoveFolder Id="RemovePrograms" Directory="Programs" On="uninstall" />
+      </Component>
+      <Component Id="Cli" Guid="4d9a6e2f-1b7c-4f83-a5e0-c6b2d9f17a48">
+        <File Id="triib_cli.exe" Source="$(var.Source)\triib-cli.exe" />
+        <RegistryValue Root="HKCU" Key="$(var.AppKey)" Name="Cli" Type="integer" Value="1" KeyPath="yes" />
+        <Environment Id="Path" Name="PATH" Value="[INSTALLFOLDER]" Part="last" Action="set" System="no" />
+      </Component>
+    </ComponentGroup>
+
+    <Component Id="StartMenu" Directory="ProgramMenuFolder">
+      <?ifdef Icon ?>
+      <Shortcut Id="StartMenuShortcut" Name="triib" Description="Discover, connect and set up AVB and Milan devices"
+                Target="[INSTALLFOLDER]triib.exe" WorkingDirectory="INSTALLFOLDER" Icon="triib.ico" />
+      <?else ?>
+      <Shortcut Id="StartMenuShortcut" Name="triib" Description="Discover, connect and set up AVB and Milan devices"
+                Target="[INSTALLFOLDER]triib.exe" WorkingDirectory="INSTALLFOLDER" />
+      <?endif ?>
+      <RegistryValue Root="HKCU" Key="$(var.AppKey)" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="Program" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+
+    <!-- One page with the license, then the last page's choice: Npcap's
+         download page when Npcap is missing, else opening triib. The
+         program's path is known only once costing is done. -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)license.rtf" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Action="OfferNpcapText" Sequence="ui" Before="CostFinalize"
+                 Value="Open the Npcap download page; triib needs Npcap to reach the network" Condition="NOT NPCAP" />
+    <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Action="OfferTriibText" Sequence="ui" Before="CostFinalize"
+                 Value="Open triib" Condition="NPCAP" />
+    <SetProperty Id="WixShellExecTarget" Action="OfferNpcapTarget" Sequence="ui" After="CostFinalize"
+                 Value="https://npcap.com/#download" Condition="NOT NPCAP" />
+    <SetProperty Id="WixShellExecTarget" Action="OfferTriibTarget" Sequence="ui" After="CostFinalize"
+                 Value="[#triib.exe]" Condition="NPCAP" />
+    <CustomAction Id="OpenAtFinish" DllEntry="WixShellExec" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" Impersonate="yes" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="OpenAtFinish"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Package>
+</Wix>

@@ -1,0 +1,99 @@
+# Releasing triib
+
+Everything a release ships is built from this repository:
+
+| Path | What |
+|---|---|
+| `data/io.github.scrambletools.triib.desktop` | Desktop entry |
+| `data/io.github.scrambletools.triib.metainfo.xml` | AppStream metadata, with the release history |
+| `data/icons/hicolor/` | App icon, once one is chosen: every package picks it up when it is there |
+| `packaging/licenses/` | The licenses of the fonts triib carries, from scramble-ui |
+| `scripts/dist-install.sh` | Installs a build of triib and triib-cli and the files above into a system layout; the Linux packages use it |
+| `packaging/nfpm.yaml`, `packaging/linux/postinstall.sh` | Debian and RPM packages, made with nfpm, which grant both programs `CAP_NET_RAW` as they install |
+| `packaging/arch/triib/` | AUR package, whose install script grants the same |
+| `packaging/windows/` | Windows MSI (WiX 5) and zip, made by `build.ps1` |
+| `packaging/macos/` | triib.app and its installer package, made by `bundle.sh --pkg`, with the capture access helper |
+| `.github/workflows/release.yml` | Builds all of them for a tag and drafts the GitHub release |
+
+Each package is built for x86_64 and ARM64 on GitHub's runners of that
+architecture; the macOS package is built for Apple Silicon only.
+
+Packages are built with `TRIIB_PRODUCTION=1`, which makes the installed
+copy: settings in `triib.toml` (`~/.config` on Linux, `%APPDATA%\triib`
+on Windows, `~/Library/Application Support/triib` on macOS), cache under
+`triib`, app id `io.github.scrambletools.triib`. Builds without it are
+development builds, which keep their own.
+
+## What each system needs
+
+triib sends and receives raw Ethernet, which each system guards:
+
+- **Linux:** the `CAP_NET_RAW` capability. The .deb, .rpm and AUR
+  packages set it on `/usr/bin/triib` and `/usr/bin/triib-cli` when they
+  install (`setcap`, from libcap). The tarball cannot; after unpacking,
+  run `sudo setcap cap_net_raw+ep` on both programs. There is no AppImage
+  or Flatpak, as neither can carry the capability.
+- **macOS:** read and write access to the BPF devices, `/dev/bpf*`,
+  which are root's alone at every start. The installer package puts
+  `triib.app` in /Applications, links `triib-cli` into /usr/local/bin,
+  adds the user installing it to the `access_bpf` group, and installs the
+  launch daemon `io.github.scrambletools.triib.bpf`, which opens the
+  devices to that group at every start. Wireshark's ChmodBPF uses the
+  same group, so either serves both. Group membership takes effect at
+  the next login. `sudo "/Library/Application Support/triib/uninstall"`
+  removes it all. The system's own AVB entity on the same Mac cannot be
+  read from there, as macOS never hands it the commands written to BPF;
+  triib says so.
+- **Windows:** Npcap, from https://npcap.com. Its license does not let
+  other installers carry it, so the MSI looks for it and, when it is
+  missing, offers Npcap's download page on its last page instead of
+  opening triib; triib itself says the same, with a link, until Npcap is
+  installed. Npcap installed with "Restrict Npcap driver's access to
+  Administrators only" makes triib need to run as administrator, which
+  triib explains. The MSI installs for the current user, with no
+  administrator prompt, and puts triib's folder on the user's PATH for
+  triib-cli.
+
+## Steps
+
+1. Update the version in `Cargo.toml` (the workspace version) and run
+   `cargo check` so `Cargo.lock` follows; update `pkgver` in
+   `packaging/arch/triib/PKGBUILD` and add a `<release>` to the
+   metainfo.
+2. Write the version's section in `CHANGELOG.md`, as `## [X.Y.Z]`; the
+   release notes are taken from it, or made by GitHub when there is none.
+3. Try the packaging without releasing: run the Release workflow by hand
+   (Actions, Release, Run workflow), which builds every package as an
+   artifact, or with "Packages to build" only one system's, such as
+   `gh workflow run release.yml -f only=windows`.
+4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow
+   checks that the tag matches `Cargo.toml`, builds the packages and
+   drafts a release with them, `SHA256SUMS`, and a `PKGBUILD` with the
+   source checksum filled in, beside its `triib.install`. Check the draft
+   and publish it.
+5. AUR: in a clone of `ssh://aur@aur.archlinux.org/triib.git`, replace
+   `PKGBUILD` with the one from the release and copy
+   `packaging/arch/triib/triib.install`, run
+   `makepkg --printsrcinfo >.SRCINFO`, build it once with `makepkg`,
+   commit and push.
+
+## Windows code signing
+
+Until releases are signed, Windows shows SmartScreen's warning for the
+MSI and the programs. The workflow signs them with Microsoft's Azure
+Artifact Signing once the repository variables `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_SIGNING_ENDPOINT`,
+`AZURE_SIGNING_ACCOUNT` and `AZURE_CERTIFICATE_PROFILE` are set, signing
+in with GitHub's OpenID Connect token as the environment `release`. The
+account, identity validation and certificate profile can be prev's: set
+it up as prev's `docs/RELEASING.md` describes, adding a federated
+credential for this repository, entity type Environment, name `release`.
+
+## macOS signing
+
+The app and package are signed ad hoc, so Gatekeeper blocks a downloaded
+copy until the user chooses Open Anyway in System Settings, Privacy &
+Security. A Developer ID Application certificate, with a Developer ID
+Installer certificate for the package (`productsign`), and notarization
+with `xcrun notarytool submit --wait` and `xcrun stapler staple`, remove
+the warning.

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.scrambletools.triib</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+
+  <name>triib</name>
+  <summary>Discover, connect and set up AVB and Milan devices</summary>
+
+  <developer id="io.github.scrambletools">
+    <name>Scramble Tools</name>
+  </developer>
+
+  <description>
+    <p>
+      triib is a lightweight ATDECC (IEEE 1722.1) controller with Milan and
+      AVB Lite support. It finds the AVB devices on a network, reads what
+      they offer and lets you connect and set them up.
+    </p>
+    <ul>
+      <li>Connect talkers and listeners in a matrix, and save and recall presets</li>
+      <li>See the network as the devices' gPTP paths show it, with each stream's way through it</li>
+      <li>Change names, stream formats, sampling rates, clock sources, channel mappings and controls</li>
+      <li>Follow AVB Lite devices, their streams and the alarms the profile calls for</li>
+      <li>Log every ATDECC frame sent and heard, marking those that break the rules</li>
+    </ul>
+    <p>
+      Sending and receiving raw Ethernet needs the CAP_NET_RAW capability,
+      which the package sets.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.scrambletools.triib.desktop</launchable>
+
+  <url type="homepage">https://github.com/scrambletools/triib</url>
+  <url type="bugtracker">https://github.com/scrambletools/triib/issues</url>
+  <url type="vcs-browser">https://github.com/scrambletools/triib</url>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-10-07" />
+  </releases>
+</component>

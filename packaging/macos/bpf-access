@@ -1,0 +1,16 @@
+#!/bin/sh
+# Opens the BPF capture devices to the access_bpf group, which they lose
+# at every start, so its members can run triib without root. The same
+# group Wireshark's ChmodBPF uses; run at each start by the launch daemon
+# io.github.scrambletools.triib.bpf.
+group=access_bpf
+dseditgroup -q -o read "$group" >/dev/null 2>&1 || dseditgroup -q -o create "$group"
+# macOS makes a device when the last one is opened; making some ahead of
+# time lets them all carry the group.
+index=0
+while [ "$index" -lt 64 ]; do
+    : < "/dev/bpf$index" 2>/dev/null
+    index=$((index + 1))
+done
+chgrp "$group" /dev/bpf*
+chmod g+rw /dev/bpf*

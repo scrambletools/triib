@@ -1,0 +1,13 @@
+# Lets triib and triib-cli send and receive raw Ethernet without root.
+grant() {
+    setcap cap_net_raw+ep usr/bin/triib
+    setcap cap_net_raw+ep usr/bin/triib-cli
+}
+
+post_install() {
+    grant
+}
+
+post_upgrade() {
+    grant
+}

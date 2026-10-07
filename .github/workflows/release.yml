@@ -1,0 +1,274 @@
+name: Release
+
+# A tag such as v0.2.0 builds every package and drafts a GitHub release
+# with them. Running the workflow by hand builds the same packages, or
+# only those of one system, without a release, to try the packaging.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      only:
+        description: Packages to build
+        type: choice
+        options: [all, linux, windows, macos]
+        default: all
+
+env:
+  CARGO_TERM_COLOR: always
+  NFPM_VERSION: 2.43.0
+
+jobs:
+  linux:
+    # Built on an older system so the packages run on newer ones too. The
+    # Debian and RPM packages grant both programs CAP_NET_RAW as they
+    # install; a plain archive cannot, so it says how in the README. No
+    # AppImage or Flatpak, which cannot carry the capability.
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'linux' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+            deb: amd64
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            deb: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+      - name: Version
+        id: version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match version $version in Cargo.toml" >&2
+            exit 1
+          fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+      - name: Check the desktop entry
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+          desktop-file-validate data/*.desktop
+      - name: Build
+        run: cargo build --release --locked -p triib -p triib-cli
+        env:
+          TRIIB_PRODUCTION: '1'
+      - name: Check that they run
+        run: |
+          target/release/triib --version
+          target/release/triib-cli --version
+      - name: Stage
+        run: scripts/dist-install.sh target/release stage /usr
+      - name: Debian and RPM packages
+        run: |
+          curl -sSLf -o nfpm.deb \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_$(dpkg --print-architecture).deb"
+          sudo dpkg -i nfpm.deb
+          mkdir -p dist
+          export VERSION=${{ steps.version.outputs.version }}
+          ARCH=${{ matrix.deb }} nfpm package -f packaging/nfpm.yaml -p deb -t dist/
+          ARCH=${{ matrix.arch }} nfpm package -f packaging/nfpm.yaml -p rpm -t dist/
+      - name: Plain archive
+        run: |
+          tar -C stage -czf dist/triib-${{ steps.version.outputs.version }}-${{ matrix.arch }}-linux.tar.gz usr
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+
+  windows:
+    # triib.exe and triib-cli.exe, the MSI installer and a zip. Npcap's
+    # license keeps it out of the installer, which offers its download
+    # page when it is missing. Microsoft's Azure Artifact Signing signs the
+    # programs and the MSI once the repository variable
+    # AZURE_SIGNING_ACCOUNT is set (see docs/RELEASING.md); until then the
+    # files are unsigned. The job signs in to Azure with GitHub's OpenID
+    # Connect token, so no secret is kept, as the environment "release"
+    # that Azure trusts.
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'windows' }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      SIGNING: ${{ vars.AZURE_SIGNING_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+      - name: Build
+        run: cargo build --release --locked -p triib -p triib-cli
+        env:
+          TRIIB_PRODUCTION: '1'
+      # triib.exe is a Windows GUI program, which PowerShell would not wait
+      # for.
+      - name: Check that they run
+        shell: pwsh
+        run: |
+          $run = Start-Process target\release\triib.exe -ArgumentList --version -Wait -PassThru -NoNewWindow -RedirectStandardOutput version.txt
+          $version = Get-Content -Raw version.txt
+          Write-Host $version
+          if ($run.ExitCode -ne 0 -or $version -notmatch '^triib \d') { throw "triib.exe --version failed" }
+          target\release\triib-cli.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "triib-cli.exe --version failed" }
+      - name: Collect the programs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target\release\triib.exe, target\release\triib-cli.exe dist\
+      - if: env.SIGNING == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      # Signs the programs themselves, before the installer and zip take
+      # them.
+      - if: env.SIGNING == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist
+          files-folder-filter: exe
+          description: triib
+          description-url: https://github.com/scrambletools/triib
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+      - name: Installer and zip
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          packaging\windows\build.ps1 -Version $version -Source dist -Out packages -Arch ${{ matrix.arch }}
+      - if: env.SIGNING == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\packages
+          files-folder-filter: msi
+          description: triib
+          description-url: https://github.com/scrambletools/triib
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+      # The signatures, checked: an unsigned file must not go out as a
+      # signed release.
+      - if: env.SIGNING == 'true'
+        name: Check the signatures
+        shell: pwsh
+        run: |
+          foreach ($file in @(Get-ChildItem dist\*.exe) + @(Get-ChildItem packages\*.msi)) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            Write-Host "$($file.Name): $($signature.Status) $($signature.SignerCertificate.Subject)"
+            if ($signature.Status -ne 'Valid') { throw "$($file.Name) is not signed" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: packages/*
+
+  macos:
+    # triib.app in an installer package for Apple Silicon, which also lets
+    # the user capture without root (packaging/macos), signed ad hoc until
+    # a Developer ID signature and notarization are set up.
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'macos' }}
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos
+      - name: App and installer package
+        run: packaging/macos/bundle.sh --pkg --out dist
+        env:
+          TRIIB_PRODUCTION: '1'
+      - name: Check that it runs
+        run: |
+          version=$(dist/triib.app/Contents/MacOS/triib --version)
+          echo "$version"
+          [[ $version == triib\ [0-9]* ]]
+          dist/triib.app/Contents/MacOS/triib-cli --version
+          pkgutil --payload-files dist/*.pkg | grep -q 'Library/LaunchDaemons/io.github.scrambletools.triib.bpf.plist'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: dist/*.pkg
+
+  aur:
+    # The AUR package builds from GitHub's source archive of the tag; its
+    # checksum is only known once the tag exists.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: PKGBUILD with the source checksum
+        run: |
+          curl -sSLf -o source.tar.gz \
+            "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          sum=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          mkdir -p aur
+          sed "s/^sha256sums=('SKIP')/sha256sums=('$sum')/" packaging/arch/triib/PKGBUILD >aur/PKGBUILD
+          cp packaging/arch/triib/triib.install aur/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aur
+          path: aur/*
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [linux, aur, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect files and notes
+        run: |
+          mkdir -p upload
+          cp artifacts/linux-*/* artifacts/windows-*/* artifacts/macos-*/* upload/
+          # The PKGBUILD and its install file, to build the Arch package.
+          cp artifacts/aur/* upload/
+          (cd upload && sha256sum * >SHA256SUMS)
+          version=${GITHUB_REF_NAME#v}
+          # This version's section of the changelog, without its heading.
+          touch notes.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v version="$version" '
+              /^## / { found = index($0, "[" version "]") > 0; next }
+              found' CHANGELOG.md >notes.md
+          fi
+      - name: Draft the release
+        run: |
+          if [ -s notes.md ]; then notes=(--notes-file notes.md); else notes=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" upload/* \
+            --draft --title "triib ${GITHUB_REF_NAME#v}" "${notes[@]}"
+        env:
+          GH_TOKEN: ${{ github.token }}

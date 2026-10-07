@@ -1,0 +1,20 @@
+#!/bin/sh
+# After the package installs: the user installing it joins access_bpf,
+# the launch daemon opens the capture devices now and at every start,
+# and triib-cli goes on the PATH.
+group=access_bpf
+support="/Library/Application Support/triib"
+daemon=/Library/LaunchDaemons/io.github.scrambletools.triib.bpf.plist
+
+dseditgroup -q -o read "$group" >/dev/null 2>&1 || dseditgroup -q -o create "$group"
+user=$(stat -f%Su /dev/console)
+if [ -n "$user" ] && [ "$user" != root ]; then
+    dseditgroup -q -o edit -a "$user" -t user "$group"
+fi
+chown root:wheel "$daemon"
+chmod 644 "$daemon"
+launchctl bootout system "$daemon" 2>/dev/null || true
+launchctl bootstrap system "$daemon" || "$support/bpf-access"
+mkdir -p /usr/local/bin
+ln -sf /Applications/triib.app/Contents/MacOS/triib-cli /usr/local/bin/triib-cli
+exit 0

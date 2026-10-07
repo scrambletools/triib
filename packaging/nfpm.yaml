@@ -1,0 +1,57 @@
+# Debian and RPM packages, made with nfpm (https://nfpm.goreleaser.com)
+# from a tree staged by scripts/dist-install.sh:
+#
+#   scripts/dist-install.sh target/release stage /usr
+#   VERSION=0.1.0 ARCH=amd64 nfpm package -f packaging/nfpm.yaml -p deb
+#   VERSION=0.1.0 ARCH=amd64 nfpm package -f packaging/nfpm.yaml -p rpm
+#
+# Installing grants both programs CAP_NET_RAW (packaging/linux).
+name: triib
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: 1
+section: sound
+priority: optional
+maintainer: Scramble Tools <https://github.com/scrambletools>
+vendor: Scramble Tools
+homepage: https://github.com/scrambletools/triib
+license: MIT OR Apache-2.0
+description: |-
+  Discover, connect and set up AVB and Milan devices
+  triib is a lightweight ATDECC (IEEE 1722.1) controller with Milan and
+  AVB Lite support: a connection matrix, the network as gPTP shows it,
+  device settings, presets and a frame log, with triib-cli for the
+  command line.
+
+contents:
+  - src: ./stage/usr/
+    dst: /usr
+    type: tree
+
+scripts:
+  postinstall: ./packaging/linux/postinstall.sh
+
+overrides:
+  deb:
+    depends:
+      - libc6
+      - libgcc-s1
+      - libcap2-bin
+      - libwayland-client0
+      - libxkbcommon0
+      - libvulkan1
+    recommends:
+      - mesa-vulkan-drivers
+  rpm:
+    depends:
+      - libcap
+      - libwayland-client
+      - libxkbcommon
+      - vulkan-loader
+    recommends:
+      - mesa-vulkan-drivers
+
+rpm:
+  group: Applications/Multimedia
+  summary: Discover, connect and set up AVB and Milan devices

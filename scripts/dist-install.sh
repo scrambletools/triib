@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Installs a built triib and triib-cli and their data files into a system
+# layout, for packages: the binaries, desktop entry, icons when there are
+# any, AppStream metadata and licenses.
+#
+#   scripts/dist-install.sh BINARY_DIR [DESTDIR] [PREFIX]
+#
+# BINARY_DIR holds triib and triib-cli from a release build made with
+# TRIIB_PRODUCTION=1. DESTDIR is the staging root (empty for a direct
+# install) and PREFIX defaults to /usr. Packages then grant the binaries
+# CAP_NET_RAW when installed.
+set -euo pipefail
+
+binaries=${1:?usage: dist-install.sh BINARY_DIR [DESTDIR] [PREFIX]}
+destdir=${2:-}
+prefix=${3:-/usr}
+root=$(cd "$(dirname "$0")/.." && pwd)
+id=io.github.scrambletools.triib
+share="$destdir$prefix/share"
+
+install -Dm755 "$binaries/triib" "$destdir$prefix/bin/triib"
+install -Dm755 "$binaries/triib-cli" "$destdir$prefix/bin/triib-cli"
+install -Dm644 "$root/data/$id.desktop" "$share/applications/$id.desktop"
+install -Dm644 "$root/data/$id.metainfo.xml" "$share/metainfo/$id.metainfo.xml"
+if [ -d "$root/data/icons" ]; then
+    (cd "$root/data/icons" && find hicolor -type f) | while read -r icon; do
+        install -Dm644 "$root/data/icons/$icon" "$share/icons/$icon"
+    done
+fi
+for license in LICENSE-MIT LICENSE-APACHE; do
+    install -Dm644 "$root/$license" "$share/licenses/triib/$license"
+done
+for font_license in OFL.txt LICENSE-MaterialSymbols.txt; do
+    install -Dm644 "$root/packaging/licenses/$font_license" \
+        "$share/licenses/triib/fonts/$font_license"
+done
+install -Dm644 "$root/README.md" "$share/doc/triib/README.md"
