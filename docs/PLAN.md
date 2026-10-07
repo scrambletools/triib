@@ -173,7 +173,14 @@ timestamps is uncertain. Before writing the macOS backend, on the Mac mini:
    limits documented; otherwise our own `triib-endpointd` as on Linux.
 
 The first two questions come before the macOS controller backend (P2),
-the last two before virtual endpoints on macOS (P4). The result decides
+the last two before virtual endpoints on macOS (P4).
+
+Answered for P2 (2026-10-07, AVB on): BPF receives and sends `0x22F0`
+and `0x88F7` frames, and responses to triib's controller arrive, so the
+controller uses BPF and the framework was not needed. The system's own
+entity is heard but cannot be commanded from the same Mac, as nothing
+written to BPF reaches it; the framework may be the way to read it
+there, later. triib's entity ID and the system's differ on the same MAC. The result decides
 only the macOS backends in `avb-net` and the clock source for virtual
 endpoints; nothing above them changes.
 
@@ -571,6 +578,46 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   same entities as Linux.
 - Packages for both with what they need set up (Npcap on Windows), and
   the release pipeline from prev.
+- Done (checked 2026-10-07 from the Windows PC's I226-V and the Mac
+  mini's en0, against the same entities as Linux):
+  - macOS through BPF: the investigation's first question answered yes,
+    so the AudioVideoBridging framework is not needed for the
+    controller. Each socket is its own `/dev/bpf` with an ethertype
+    filter, seeing what the computer sends so the system's own AVB
+    entity is heard; group addresses are added to the interface when
+    the process may, else the device listens promiscuously. Interfaces
+    come from getifaddrs and SIOCGIFMEDIA.
+  - Windows through Npcap, loaded from its own folder: a promiscuous
+    capture to read, where AVB's group addresses and gPTP arrive, and
+    another to send; interfaces from GetAdaptersAddresses by their
+    friendly names, physical when a connector is present.
+  - On both, a socket leaves out only the frames it sent itself.
+    `avb_net::check_access` is the capability probe, `triib-cli
+    interfaces` prints it, and each system's reason (no `CAP_NET_RAW`,
+    no access to `/dev/bpf*`, Npcap missing or for administrators only)
+    reaches the app with its fix: a command to copy, or a link to Npcap.
+  - Both hear the bridge's gPTP: the network view and `triib-cli
+    network` place this computer at its bridge port (synced on the Mac,
+    whose system runs gPTP). Where the listener cannot open, the view
+    says this computer cannot listen for gPTP instead of reporting no
+    bridge.
+  - The Mac's own AVB entity cannot be read from the same Mac: macOS
+    never hands it what is written to BPF, and there is no loopback. The
+    controller does not try, and the views say it runs on this computer
+    and to read it from another one. No clash between triib's entity ID
+    and the system's on the same MAC.
+  - Discovery, reading, connections (a CRF binding made and undone from
+    each), media clocks, mappings, controls, AVB Lite status, the log
+    and the network view all work on both; idle CPU on Windows about 1%.
+  - Packages: Debian and RPM (and AUR) set `CAP_NET_RAW`; the macOS
+    installer package opens the BPF devices to `access_bpf` at every
+    start, as Wireshark's ChmodBPF does; the per-user Windows MSI looks
+    for Npcap and offers its download page when it is missing, as
+    Npcap's license keeps it out of other installers. The release
+    workflow builds them for a tag (docs/RELEASING.md).
+- To do: try the macOS package's install on a Mac (it needs an
+  administrator's password), run the release workflow once by hand, and
+  the app icon for the packages.
 
 ### P3: virtual endpoints on Linux
 
