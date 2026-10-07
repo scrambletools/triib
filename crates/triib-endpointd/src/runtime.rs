@@ -160,6 +160,8 @@ pub struct Runtime {
     clock: Arc<MediaClock>,
     /// The talker declarations registered, by stream ID.
     talkers: HashMap<u64, TalkerDeclaration>,
+    /// Our talkers' streams a listener on the network is ready for.
+    ready_remotely: HashMap<u64, bool>,
     stop: Arc<AtomicBool>,
     inputs: Receiver<Input>,
     last_report: Clock,
@@ -312,6 +314,7 @@ impl Runtime {
             mvrp_participant: Participant::new(mvrp::FORMAT, Duration::ZERO, seed ^ 0x5555),
             clock,
             talkers: HashMap::new(),
+            ready_remotely: HashMap::new(),
             stop,
             inputs,
             last_report: Clock::now(),
@@ -540,16 +543,20 @@ impl Runtime {
         }
         self.msrp_participant.handle_timeout(since);
         self.mvrp_participant.handle_timeout(since);
-        for index in 0..self.endpoints.len() {
-            while let Some(event) = self.endpoints[index].entity.poll_event() {
-                self.entity_event(index, event);
+        loop {
+            for index in 0..self.endpoints.len() {
+                while let Some(event) = self.endpoints[index].entity.poll_event() {
+                    self.entity_event(index, event);
+                }
+            }
+            while let Some(registration) = self.msrp_participant.poll_event() {
+                self.registration(registration);
+            }
+            while self.mvrp_participant.poll_event().is_some() {}
+            if !self.flush() {
+                break;
             }
         }
-        while let Some(registration) = self.msrp_participant.poll_event() {
-            self.registration(registration);
-        }
-        while self.mvrp_participant.poll_event().is_some() {}
-        self.flush();
         if self.last_counters.elapsed() >= Duration::from_secs(1) {
             self.last_counters = Clock::now();
             self.update_counters();
@@ -560,11 +567,34 @@ impl Runtime {
         }
     }
 
-    fn flush(&mut self) {
-        for endpoint in &mut self.endpoints {
-            while let Some((destination, bytes)) = endpoint.entity.poll_transmit() {
-                let _ = self.avtp.send(destination, &bytes);
+    /// Sends what the entities and participants queued, saying whether an
+    /// entity had a frame from another of ours to handle.
+    fn flush(&mut self) -> bool {
+        let now = self.now();
+        let mut handed = false;
+        // The socket never brings back its own frames, so our entities'
+        // frames for each other go to them here as well as on the wire.
+        loop {
+            let mut sent = Vec::new();
+            for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
+                while let Some((destination, bytes)) = endpoint.entity.poll_transmit() {
+                    let _ = self.avtp.send(destination, &bytes);
+                    if destination == ADP_ACMP_MULTICAST || destination == self.mac {
+                        sent.push((index, bytes));
+                    }
+                }
             }
+            if sent.is_empty() || self.endpoints.len() < 2 {
+                break;
+            }
+            for (from, bytes) in sent {
+                for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
+                    if index != from {
+                        endpoint.entity.handle_frame(now, self.mac, &bytes);
+                    }
+                }
+            }
+            handed = true;
         }
         while let Some(pdu) = self.msrp_participant.poll_transmit() {
             let _ = self.msrp.send(avb_mrp::MSRP_DESTINATION, &pdu);
@@ -572,6 +602,7 @@ impl Runtime {
         while let Some(pdu) = self.mvrp_participant.poll_transmit() {
             let _ = self.mvrp.send(avb_mrp::MVRP_DESTINATION, &pdu);
         }
+        handed
     }
 
     /// The Talker Advertise for a talker endpoint's stream, from its
@@ -654,22 +685,53 @@ impl Runtime {
         }
     }
 
-    /// A listener's declaration for one of our talkers' streams changed:
-    /// the stream starts when one is ready and stops when none is.
-    fn listener_heard(&mut self, stream_id: u64, state: Option<ListenerState>) {
-        let Some(index) = self.endpoints.iter().position(|endpoint| {
+    /// Which of our talkers sends `stream_id`.
+    fn own_talker(&self, stream_id: u64) -> Option<usize> {
+        self.endpoints.iter().position(|endpoint| {
             endpoint
                 .entity
                 .output_stream(0)
                 .is_some_and(|(id, _)| id.0 == stream_id)
-        }) else {
+        })
+    }
+
+    /// A listener's declaration for one of our talkers' streams changed.
+    fn listener_heard(&mut self, stream_id: u64, state: Option<ListenerState>) {
+        let ready = state.is_some_and(ListenerState::ready);
+        self.ready_remotely.insert(stream_id, ready);
+        if let Some(index) = self.own_talker(stream_id) {
+            self.update_talker(index);
+        }
+    }
+
+    /// Starts a talker's stream when a listener is ready for it, on the
+    /// network or here, and stops it when none is.
+    fn update_talker(&mut self, index: usize) {
+        let Some((stream_id, _)) = self.endpoints[index].entity.output_stream(0) else {
             return;
         };
-        let ready = state.is_some_and(ListenerState::ready);
+        let remote = self
+            .ready_remotely
+            .get(&stream_id.0)
+            .copied()
+            .unwrap_or(false);
+        let local = self
+            .endpoints
+            .iter()
+            .filter(|endpoint| {
+                endpoint.listener.is_some()
+                    && endpoint
+                        .entity
+                        .input_stream(0)
+                        .is_some_and(|stream| stream.stream_id == stream_id)
+            })
+            .count();
+        let listeners = usize::from(remote) + local;
+        let ready = listeners > 0;
         self.endpoints[index].entity.set_output_reservation(
             0,
             OutputReservation {
-                ready_listeners: u16::from(ready),
+                ready_listeners: listeners.min(usize::from(u16::MAX)) as u16,
                 registering: true,
             },
         );
@@ -733,13 +795,19 @@ impl Runtime {
     }
 
     /// Declares a listener endpoint's input as its talker's declaration
-    /// allows, and listens when it is advertised.
+    /// allows, and listens when it is advertised. A talker of ours needs
+    /// no reservation, as the bridge never sends our own declarations back
+    /// to us; its frames reach the listener as they leave.
     fn update_listener(&mut self, index: usize) {
         let since = self.elapsed();
         let Some(stream) = self.endpoints[index].entity.input_stream(0) else {
             return;
         };
-        let declaration = self.talkers.get(&stream.stream_id.0).copied();
+        let own = self.own_talker(stream.stream_id.0);
+        let declaration = match own {
+            Some(talker) => self.declaration(talker),
+            None => self.talkers.get(&stream.stream_id.0).copied(),
+        };
         let key = stream.stream_id.0.to_be_bytes().to_vec();
         let (state, reservation) = match declaration {
             Some(declaration) => (
@@ -760,6 +828,12 @@ impl Runtime {
             None => (None, InputReservation::default()),
         };
         match state {
+            Some(_) if own.is_some() => {
+                if let Some(key) = self.endpoints[index].declared.take() {
+                    self.msrp_participant
+                        .withdraw(since, msrp::attribute::LISTENER, &key);
+                }
+            }
             Some(state) => {
                 self.msrp_participant.declare(
                     since,
@@ -811,6 +885,16 @@ impl Runtime {
             ));
             endpoint.listener = None;
         }
+        self.update_own_talkers();
+    }
+
+    /// Our talkers, again, after one of our listeners started or stopped.
+    fn update_own_talkers(&mut self) {
+        for index in 0..self.endpoints.len() {
+            if self.endpoints[index].config.kind == Kind::Talker {
+                self.update_talker(index);
+            }
+        }
     }
 
     fn stop_listener(&mut self, index: usize) {
@@ -826,6 +910,7 @@ impl Runtime {
             self.msrp_participant
                 .withdraw(since, msrp::attribute::LISTENER, &key);
         }
+        self.update_own_talkers();
     }
 
     fn entity_event(&mut self, index: usize, event: EntityEvent) {
@@ -978,7 +1063,7 @@ impl Runtime {
             let now = self.elapsed();
             self.msrp_participant.handle_timeout(now);
             self.mvrp_participant.handle_timeout(now);
-            self.flush();
+            let _ = self.flush();
             std::thread::sleep(Duration::from_millis(20));
         }
         log("stopped");
