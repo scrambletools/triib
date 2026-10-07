@@ -96,6 +96,18 @@ fn main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
+    // One daemon at a time: another would claim the same entity IDs.
+    let _lock = match triib_endpointd::status::take_lock() {
+        Ok(Some(lock)) => lock,
+        Ok(None) => {
+            eprintln!("triib-endpointd runs already");
+            return ExitCode::FAILURE;
+        }
+        Err(error) => {
+            eprintln!("could not take the daemon's lock: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let stop = Arc::new(AtomicBool::new(false));
     {
         let stop = stop.clone();

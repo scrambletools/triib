@@ -2,6 +2,8 @@
 //! folder, written every two seconds while it runs and removed when it
 //! stops.
 
+use std::fs::{File, TryLockError};
+use std::io;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -44,6 +46,23 @@ fn eight() -> u16 {
 /// Where the daemon says what it is doing.
 pub fn status_path() -> Option<PathBuf> {
     triib_store::paths::runtime_dir().map(|dir| dir.join("endpointd.toml"))
+}
+
+/// Holds the lock only one daemon of a user's may take, for as long as it
+/// lives: `None` when another holds it.
+pub fn take_lock() -> io::Result<Option<File>> {
+    let dir = triib_store::paths::runtime_dir().unwrap_or_else(std::env::temp_dir);
+    std::fs::create_dir_all(&dir)?;
+    let file = File::options()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("endpointd.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => Err(error),
+    }
 }
 
 /// What the daemon says, while it runs: its file is there and its

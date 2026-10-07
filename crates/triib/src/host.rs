@@ -2,12 +2,24 @@
 //! adding, changing and removing them in its `endpoints.toml`, starting
 //! it, and what it says each is doing.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
+
 use atdecc::{EntityId, MacAddress};
 use triib_endpointd::config::{self, Config, EndpointConfig, Kind};
 use triib_endpointd::status::{DaemonStatus, EndpointStatus};
 
 /// Whether this system runs host talkers and listeners.
 pub const SUPPORTED: bool = cfg!(target_os = "linux");
+/// A preset waits for this computer's endpoints, so the app hears what
+/// the daemon says every time it looks, changed or not, to keep its
+/// deadline.
+pub static RECALLING: AtomicBool = AtomicBool::new(false);
+
+/// How long a daemon just started has to say it runs, before the app
+/// would start another; the daemon's lock turns that one away anyway.
+const STARTING: Duration = Duration::from_secs(5);
 
 /// The endpoints file, or a new one for `interface`, with the interface
 /// set to it either way.
@@ -157,11 +169,18 @@ pub fn set_channels(
     save(&path, &config)
 }
 
-/// Starts triib-endpointd, from beside triib, unless it runs already.
+/// Starts triib-endpointd, from beside triib, unless it runs already or
+/// was started a moment ago and has not said so yet.
 pub fn ensure_running() -> Result<(), String> {
+    static STARTED: Mutex<Option<Instant>> = Mutex::new(None);
     if triib_endpointd::status::read().is_some() {
         return Ok(());
     }
+    let mut started = STARTED.lock().unwrap_or_else(PoisonError::into_inner);
+    if started.is_some_and(|at| at.elapsed() < STARTING) {
+        return Ok(());
+    }
+    *started = Some(Instant::now());
     start()
 }
 

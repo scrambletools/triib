@@ -378,6 +378,21 @@ impl Triib {
         crate::host::status_of(self.endpoints.as_ref(), entity_id).is_some()
     }
 
+    /// Goes on with a preset recalled while this computer's endpoints
+    /// start again, once they are back or have taken too long.
+    fn go_on_recalling(&mut self) -> Task<Message> {
+        let Some((preset, since, until)) = &self.pending_recall else {
+            return Task::none();
+        };
+        if !crate::presets::host_ready(self, preset, *since) && std::time::Instant::now() < *until {
+            return Task::none();
+        }
+        let preset = preset.clone();
+        self.pending_recall = None;
+        crate::host::RECALLING.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.recall_now(&preset)
+    }
+
     /// Changes what differs from `preset` and says what it did.
     fn recall_now(&mut self, preset: &Preset) -> Task<Message> {
         let name = preset.name.as_str();
@@ -701,6 +716,8 @@ impl Triib {
                                 Some(crate::fl!("presets-starting-host", name = name.as_str()));
                             let until = std::time::Instant::now() + HOST_RESTART;
                             self.pending_recall = Some((preset, since, until));
+                            crate::host::RECALLING
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
                             return Task::none();
                         }
                         Ok(false) => {}
@@ -787,14 +804,7 @@ impl Triib {
             Message::External(External::Interfaces(interfaces)) => self.interfaces = interfaces,
             Message::External(External::Endpoints(status)) => {
                 self.endpoints = status;
-                if let Some((preset, since, until)) = &self.pending_recall
-                    && (crate::presets::host_ready(self, preset, *since)
-                        || std::time::Instant::now() >= *until)
-                {
-                    let preset = preset.clone();
-                    self.pending_recall = None;
-                    return self.recall_now(&preset);
-                }
+                return self.go_on_recalling();
             }
             Message::External(External::AudioDevices(inputs, outputs)) => {
                 self.audio_devices = (inputs, outputs);
@@ -830,7 +840,10 @@ impl Triib {
                     self.notice = Some(error);
                 }
             }
-            Message::External(External::Network(report)) => self.network_report(report),
+            Message::External(External::Network(report)) => {
+                self.network_report(report);
+                return self.go_on_recalling();
+            }
             Message::Nothing => {}
         }
         Task::none()

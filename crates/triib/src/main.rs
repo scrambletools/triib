@@ -141,7 +141,8 @@ fn watch_endpoints() {
             loop {
                 turn += 1;
                 let now = triib_endpointd::status::read();
-                if Some(&now) != last.as_ref() {
+                let recalling = host::RECALLING.load(std::sync::atomic::Ordering::Relaxed);
+                if recalling || Some(&now) != last.as_ref() {
                     post(External::Endpoints(now.clone()));
                     last = Some(now);
                 }

@@ -253,3 +253,33 @@ fn a_restored_binding_probes_the_talker_again() {
     );
     assert_eq!(network.listener.input_binding(0), Some(binding));
 }
+
+#[test]
+fn a_talker_without_an_address_is_probed_again_until_it_has_one() {
+    let mut network = Network::new();
+    let mut talker = Entity::new(
+        model(TALKER, "Talker", true),
+        &[(STREAM, atdecc::entity::UNADDRESSED)],
+    );
+    talker.start(network.now);
+    network.talker = talker;
+    network.controller.discover(None);
+    network.run(3000);
+    let now = network.now;
+    network.controller.connect(now, (TALKER, 0), (LISTENER, 0));
+    network.run(1000);
+    let settled = |network: &Network| {
+        network.entity_events.iter().find_map(|event| match event {
+            EntityEvent::InputSettled { index: 0, stream } => Some(*stream),
+            _ => None,
+        })
+    };
+    assert_eq!(settled(&network), None, "no address to settle on yet");
+    // The address comes, and the next probe finds it.
+    network.talker.set_output_destination(0, DESTINATION);
+    network.run(5000);
+    assert_eq!(
+        settled(&network).map(|stream| stream.destination),
+        Some(DESTINATION)
+    );
+}

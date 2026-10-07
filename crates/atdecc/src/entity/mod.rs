@@ -45,6 +45,8 @@ const DISCOVER_DELAY: Duration = Duration::from_millis(500);
 /// How long a listener waits for its talker's PROBE_TX_RESPONSE, and
 /// between probes once it has given up waiting (Milan 1.3, 5.5.3).
 const PROBE_TIMEOUT: Duration = Duration::from_millis(200);
+/// An output's destination before it has one, as while MAAP claims it.
+pub const UNADDRESSED: MacAddress = MacAddress([0; 6]);
 const PROBE_RETRY: Duration = Duration::from_secs(4);
 /// How long a lock lasts without being renewed (Milan 1.3, 5.4.2.2).
 const LOCK_TIME: Duration = Duration::from_secs(60);
@@ -613,6 +615,13 @@ impl Entity {
                     response.stream_vlan_id = 0;
                     response.connection_count = output.reservation.ready_listeners;
                     response.flags = AcmpFlags::default();
+                    // No address yet, as while MAAP claims one: a probing
+                    // listener tries again later.
+                    if output.destination == UNADDRESSED
+                        && command.message_type == AcmpMessageType::PROBE_TX_COMMAND
+                    {
+                        response.status = AcmpStatus::TALKER_DEST_MAC_FAIL;
+                    }
                 }
                 AcmpMessageType::DISCONNECT_TX_COMMAND => {}
                 _ => response.status = AcmpStatus::NOT_SUPPORTED,
@@ -1274,9 +1283,10 @@ impl Entity {
                 format = self.model.outputs[usize::from(index)].current_format;
                 stream_id = output.stream_id;
                 destination = output.destination;
-                flags |= StreamInfoFlags::STREAM_ID_VALID
-                    | StreamInfoFlags::STREAM_DEST_MAC_VALID
-                    | StreamInfoFlags::STREAM_VLAN_ID_VALID;
+                flags |= StreamInfoFlags::STREAM_ID_VALID | StreamInfoFlags::STREAM_VLAN_ID_VALID;
+                if destination != UNADDRESSED {
+                    flags |= StreamInfoFlags::STREAM_DEST_MAC_VALID;
+                }
                 if output.reservation.registering {
                     flags_ex |= 1;
                 }

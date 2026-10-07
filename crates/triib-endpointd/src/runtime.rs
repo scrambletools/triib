@@ -14,7 +14,7 @@ use std::time::{Duration, Instant as Clock};
 use atdecc::acmp::AcmpFlags;
 use atdecc::entity::{
     EndpointModel, Entity, EntityEvent, InputBinding, InputReservation, OutputReservation,
-    StreamModel,
+    StreamModel, UNADDRESSED,
 };
 use atdecc::maap::{self, Maap, MaapEvent};
 use atdecc::stream_format::{FormatKind, StreamFormat};
@@ -95,19 +95,9 @@ pub fn entity_id(mac: MacAddress, instance: u8) -> EntityId {
     EntityId(u64::from_be_bytes([a, b, c, 0xff, instance, d, e, f]))
 }
 
-/// The stream a talker's output sends, and its destination, from the
-/// locally administered range 91:E0:F0:00 is in.
-fn output_stream(mac: MacAddress, instance: u8, index: u16) -> (StreamId, MacAddress) {
-    let unique = (u16::from(instance) << 8) | index;
-    let destination = MacAddress([
-        0x91,
-        0xe0,
-        0xf0,
-        0x00,
-        mac.0[5],
-        instance.wrapping_add(index as u8),
-    ]);
-    (StreamId::new(mac, unique), destination)
+/// The stream a talker's output sends.
+fn output_stream(mac: MacAddress, instance: u8, index: u16) -> StreamId {
+    StreamId::new(mac, (u16::from(instance) << 8) | index)
 }
 
 struct Endpoint {
@@ -182,8 +172,9 @@ impl Endpoint {
             inputs: if talker { vec![] } else { vec![stream] },
             clock_source: 0,
         };
+        // A talker's stream has no destination until MAAP gives it one.
         let outputs = if talker {
-            vec![output_stream(mac, instance, 0)]
+            vec![(output_stream(mac, instance, 0), UNADDRESSED)]
         } else {
             vec![]
         };
@@ -507,21 +498,48 @@ impl Runtime {
             .entity
             .input_binding(0)
             .map(|binding| binding_text(binding.talker, binding.talker_unique_id));
-        let Some(entry) = self.config.endpoints.get_mut(endpoint.place) else {
+        let instance = endpoint.config.instance_at(endpoint.place);
+        let place = endpoint.place;
+        let keep = |entry: &mut EndpointConfig| {
+            let same = (&entry.name, &entry.format, &entry.bound) == (&name, &format, &bound);
+            entry.name.clone_from(&name);
+            entry.format.clone_from(&format);
+            entry.bound.clone_from(&bound);
+            !same
+        };
+        let Some(entry) = self.config.endpoints.get_mut(place) else {
             return;
         };
-        if (&entry.name, &entry.format, &entry.bound) == (&name, &format, &bound) {
+        if !keep(entry) {
             return;
         }
-        entry.name = name;
-        entry.format = format;
-        entry.bound = bound;
-        if let Some(path) = &self.path {
-            if let Err(error) = triib_store::save(path, &self.config) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        if modified(Some(&path)) != self.modified {
+            // The file changed since it was read, as when the app wrote
+            // it: the change goes into what it holds now, which the
+            // daemon then reads again, rather than over it.
+            let Ok(mut now) = triib_store::load::<Config>(&path) else {
+                return;
+            };
+            let found = now
+                .endpoints
+                .iter()
+                .enumerate()
+                .position(|(place, entry)| entry.instance_at(place) == instance);
+            if let Some(found) = found
+                && keep(&mut now.endpoints[found])
+                && let Err(error) = triib_store::save(&path, &now)
+            {
                 log(format!("endpoints.toml: {error}"));
             }
-            self.modified = modified(Some(path));
+            return;
         }
+        if let Err(error) = triib_store::save(&path, &self.config) {
+            log(format!("endpoints.toml: {error}"));
+        }
+        self.modified = modified(Some(&path));
     }
 
     fn write_status(&self) {
@@ -669,10 +687,12 @@ impl Runtime {
         while let Some(event) = self.maap.as_mut().and_then(Maap::poll_event) {
             self.maap_event(event);
         }
+        let addressed = self.addressed();
         for index in 0..self.endpoints.len() {
-            if self.endpoints[index]
-                .redeclare_at
-                .is_some_and(|at| at <= since)
+            if addressed
+                && self.endpoints[index]
+                    .redeclare_at
+                    .is_some_and(|at| at <= since)
             {
                 self.endpoints[index].redeclare_at = None;
                 self.declare_talker(index);
@@ -833,6 +853,8 @@ impl Runtime {
                 log("MAAP: another device took the streams' addresses, claiming others");
                 for index in talkers {
                     self.endpoints[index].talker = None;
+                    // Declared again once MAAP gives it an address.
+                    self.endpoints[index].redeclare_at = None;
                     self.withdraw_talker(index);
                 }
             }
@@ -1085,7 +1107,17 @@ impl Runtime {
             .entity
             .set_input_reservation(0, reservation);
         let advertised = state == Some(ListenerState::Ready);
+        // Where the stream goes, as its talker declares it now: a probe
+        // can have answered before the talker had its address, or before
+        // it moved.
+        let stream = atdecc::entity::ProbedStream {
+            destination: declaration.map_or(stream.destination, |declared| declared.destination),
+            ..stream
+        };
         let endpoint = &mut self.endpoints[index];
+        if endpoint.listener.is_some() && endpoint.listening_to != Some(stream) {
+            endpoint.listener = None;
+        }
         if advertised && endpoint.listener.is_none() {
             let Some(model) = endpoint.entity.model().inputs.first() else {
                 return;
@@ -1367,11 +1399,6 @@ mod tests {
     fn ids_stay_apart_from_the_apps() {
         let mac = MacAddress([0xf0, 0xa7, 0x31, 0xf4, 0x0f, 0x14]);
         assert_eq!(entity_id(mac, 0), EntityId(0xf0a7_31ff_00f4_0f14));
-        let (stream, destination) = output_stream(mac, 2, 0);
-        assert_eq!(stream, StreamId(0xf0a7_31f4_0f14_0200));
-        assert_eq!(
-            destination,
-            MacAddress([0x91, 0xe0, 0xf0, 0x00, 0x14, 0x02])
-        );
+        assert_eq!(output_stream(mac, 2, 0), StreamId(0xf0a7_31f4_0f14_0200));
     }
 }
