@@ -50,6 +50,8 @@ pub mod time;
 pub mod blocking;
 #[cfg(feature = "alloc")]
 pub mod controller;
+#[cfg(feature = "alloc")]
+pub mod entity;
 #[cfg(feature = "std")]
 pub mod neighbor;
 

@@ -1,0 +1,222 @@
+//! A controller and two entities, a talker and a listener, on one
+//! network in memory: the controller finds and reads both, binds the
+//! listener to the talker, the listener probes the talker for its stream,
+//! and unbinding undoes it.
+
+use std::collections::VecDeque;
+use std::time::Duration;
+
+use atdecc::controller::{Config, Controller, Event, Outcome};
+use atdecc::descriptor::DescriptorType;
+use atdecc::entity::{EndpointModel, Entity, EntityEvent, StreamModel};
+use atdecc::model::EnumerationState;
+use atdecc::stream_format::StreamFormat;
+use atdecc::{
+    ADP_ACMP_MULTICAST, ClockIdentity, EntityId, EntityModelId, Instant, MacAddress, StreamId,
+};
+
+const CONTROLLER_MAC: MacAddress = MacAddress([0x02, 0, 0, 0, 0, 1]);
+const HOST_MAC: MacAddress = MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]);
+const TALKER: EntityId = EntityId(0x9c6b_00ff_0030_9a2b);
+const LISTENER: EntityId = EntityId(0x9c6b_00ff_0130_9a2b);
+const AAF_48K_8CH: StreamFormat = StreamFormat(0x0205_0220_0200_6000);
+const STREAM: StreamId = StreamId(0x9c6b_0030_9a2b_0000);
+const DESTINATION: MacAddress = MacAddress([0x91, 0xe0, 0xf0, 0x00, 0x12, 0x34]);
+
+fn stream(name: &str) -> StreamModel {
+    StreamModel {
+        name: name.into(),
+        formats: vec![AAF_48K_8CH],
+        current_format: AAF_48K_8CH,
+        channels: 8,
+    }
+}
+
+fn model(entity_id: EntityId, name: &str, talker: bool) -> EndpointModel {
+    EndpointModel {
+        entity_id,
+        entity_model_id: EntityModelId(0x8c1f_6436_c000_0002),
+        entity_name: name.into(),
+        group_name: String::new(),
+        vendor_name: "Scramble Tools".into(),
+        model_name: "triib endpoint".into(),
+        firmware_version: "0.1.0".into(),
+        serial_number: String::new(),
+        mac: HOST_MAC,
+        interface_name: "enp2s0".into(),
+        clock_identity: ClockIdentity(0x9c6b_00ff_fe30_9a2b),
+        sampling_rates: vec![48_000],
+        current_sampling_rate: 48_000,
+        outputs: if talker {
+            vec![stream("Host out")]
+        } else {
+            vec![]
+        },
+        inputs: if talker {
+            vec![]
+        } else {
+            vec![stream("Host in")]
+        },
+        clock_source: 0,
+    }
+}
+
+struct Network {
+    now: Instant,
+    controller: Controller,
+    talker: Entity,
+    listener: Entity,
+    entity_events: Vec<EntityEvent>,
+    controller_events: Vec<Event>,
+}
+
+impl Network {
+    fn new() -> Self {
+        let mut talker = Entity::new(model(TALKER, "Talker", true), &[(STREAM, DESTINATION)]);
+        let mut listener = Entity::new(model(LISTENER, "Listener", false), &[]);
+        talker.start(Instant::ZERO);
+        listener.start(Instant::ZERO);
+        Network {
+            now: Instant::ZERO,
+            controller: Controller::new(Config::new(EntityId(0x0200_00ff_fe00_0001))),
+            talker,
+            listener,
+            entity_events: Vec::new(),
+            controller_events: Vec::new(),
+        }
+    }
+
+    /// Runs everyone for `millis`, handing each frame to whoever it is for.
+    fn run(&mut self, millis: u64) {
+        let until = self.now + Duration::from_millis(millis);
+        while self.now < until {
+            self.now += Duration::from_millis(5);
+            let now = self.now;
+            self.controller.handle_timeout(now);
+            self.talker.handle_timeout(now);
+            self.listener.handle_timeout(now);
+            // Frames in flight: their source, destination and octets.
+            let mut frames: VecDeque<(MacAddress, MacAddress, Vec<u8>)> = VecDeque::new();
+            loop {
+                let mut out = [0; 1500];
+                while let Ok(Some(transmit)) = self.controller.poll_transmit(&mut out) {
+                    frames.push_back((
+                        CONTROLLER_MAC,
+                        transmit.destination,
+                        out[..transmit.length].to_vec(),
+                    ));
+                }
+                for entity in [&mut self.talker, &mut self.listener] {
+                    while let Some((destination, bytes)) = entity.poll_transmit() {
+                        frames.push_back((HOST_MAC, destination, bytes));
+                    }
+                }
+                let Some((source, destination, bytes)) = frames.pop_front() else {
+                    break;
+                };
+                let multicast = destination == ADP_ACMP_MULTICAST;
+                if multicast || destination == CONTROLLER_MAC {
+                    let _ = self.controller.handle_frame(now, source, &bytes);
+                }
+                if multicast || destination == HOST_MAC {
+                    self.talker.handle_frame(now, source, &bytes);
+                    self.listener.handle_frame(now, source, &bytes);
+                }
+            }
+            for entity in [&mut self.talker, &mut self.listener] {
+                self.entity_events
+                    .extend(std::iter::from_fn(|| entity.poll_event()));
+            }
+            self.controller_events
+                .extend(std::iter::from_fn(|| self.controller.poll_event()));
+        }
+    }
+}
+
+#[test]
+fn a_controller_reads_both_entities() {
+    let mut network = Network::new();
+    network.controller.discover(None);
+    network.run(3000);
+    for (entity_id, name, stream) in [
+        (
+            TALKER,
+            "Talker",
+            (DescriptorType::STREAM_OUTPUT, "Host out"),
+        ),
+        (
+            LISTENER,
+            "Listener",
+            (DescriptorType::STREAM_INPUT, "Host in"),
+        ),
+    ] {
+        let model = network.controller.model(entity_id).expect("read");
+        assert_eq!(model.state, EnumerationState::Complete, "{name}");
+        assert_eq!(model.entity_name(), Some(name));
+        assert_eq!(model.name_of(stream.0, 0), Some(stream.1));
+        let milan = model.milan.expect("GET_MILAN_INFO answered");
+        assert_eq!(milan.specification_version, Some([1, 3, 0, 0]));
+        let info = model.stream_info(stream.0, 0).expect("GET_STREAM_INFO");
+        assert_eq!(info.stream_format, AAF_48K_8CH);
+    }
+    let talker = network.controller.model(TALKER).unwrap();
+    let output = talker
+        .stream_info(DescriptorType::STREAM_OUTPUT, 0)
+        .unwrap();
+    assert_eq!(
+        (output.stream_id, output.stream_dest_mac),
+        (STREAM, DESTINATION)
+    );
+}
+
+#[test]
+fn binding_probes_the_talker_and_unbinding_undoes_it() {
+    let mut network = Network::new();
+    network.controller.discover(None);
+    network.run(3000);
+    let now = network.now;
+    let bind = network.controller.connect(now, (TALKER, 0), (LISTENER, 0));
+    network.run(1000);
+    assert!(
+        network
+            .controller_events
+            .contains(&Event::CommandFinished(bind, Outcome::Done)),
+        "{:?}",
+        network.controller_events
+    );
+    assert!(network.entity_events.iter().any(|event| matches!(
+        event,
+        EntityEvent::InputBound { index: 0, binding } if binding.talker == TALKER
+    )));
+    let settled = network.entity_events.iter().find_map(|event| match event {
+        EntityEvent::InputSettled { index: 0, stream } => Some(*stream),
+        _ => None,
+    });
+    let settled = settled.expect("the probe found the stream");
+    assert_eq!(
+        (settled.stream_id, settled.destination),
+        (STREAM, DESTINATION)
+    );
+    let binding = network
+        .controller
+        .model(LISTENER)
+        .and_then(|model| model.binding(0))
+        .copied()
+        .expect("the controller knows the binding");
+    assert_eq!(binding.talker_stream(), Some((TALKER, 0)));
+
+    let now = network.now;
+    let unbind = network.controller.disconnect(now, (LISTENER, 0));
+    network.run(1000);
+    assert!(
+        network
+            .controller_events
+            .contains(&Event::CommandFinished(unbind, Outcome::Done))
+    );
+    assert!(
+        network
+            .entity_events
+            .contains(&EntityEvent::InputUnbound { index: 0 })
+    );
+    assert_eq!(network.listener.input_binding(0), None);
+}
