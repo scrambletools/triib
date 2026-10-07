@@ -1,0 +1,117 @@
+//! triib-endpointd: triib's talker and listener entities on an AVB
+//! network, each its own ATDECC entity that any controller can connect,
+//! with audio from and to the computer's devices.
+//!
+//! It takes gPTP from ptp4l, which must run on the interface, and needs
+//! `CAP_NET_RAW`. The endpoints are listed in `endpoints.toml` in triib's
+//! data folder, written with a talker and a listener the first time.
+
+mod config;
+mod gptp;
+mod runtime;
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use config::{Config, EndpointConfig, Kind};
+
+const USAGE: &str = "usage: triib-endpointd [--config FILE] [--interface NAME]";
+
+/// A first configuration: a talker and a listener on the first wired
+/// interface with a PTP hardware clock.
+fn first_config() -> Config {
+    let interface = avb_net::interfaces()
+        .into_iter()
+        .find(|interface| {
+            interface.physical && !interface.wireless && interface.hardware_clock.is_some()
+        })
+        .map(|interface| interface.name)
+        .unwrap_or_default();
+    let endpoint = |kind, name: &str| EndpointConfig {
+        kind,
+        instance: None,
+        name: name.into(),
+        channels: 8,
+        source: None,
+        sink: None,
+        first_channel: 0,
+    };
+    Config {
+        interface,
+        ptp4l_socket: "/var/run/ptp4lro".into(),
+        endpoints: vec![
+            endpoint(Kind::Talker, "triib talker"),
+            endpoint(Kind::Listener, "triib listener"),
+        ],
+    }
+}
+
+fn main() -> ExitCode {
+    let mut arguments = std::env::args().skip(1);
+    let mut path: Option<PathBuf> = None;
+    let mut interface: Option<String> = None;
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "--config" => path = arguments.next().map(PathBuf::from),
+            "--interface" => interface = arguments.next(),
+            "--version" | "-V" => {
+                println!("triib-endpointd {}", env!("CARGO_PKG_VERSION"));
+                return ExitCode::SUCCESS;
+            }
+            _ => {
+                eprintln!("{USAGE}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    let Some(path) = path.or_else(config::path) else {
+        eprintln!("no data folder for endpoints.toml; give one with --config");
+        return ExitCode::FAILURE;
+    };
+    let mut config = if path.exists() {
+        match triib_store::load::<Config>(&path) {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!("{}: {error}", path.display());
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        let config = first_config();
+        if let Err(error) = triib_store::save(&path, &config) {
+            eprintln!("{}: {error}", path.display());
+            return ExitCode::FAILURE;
+        }
+        println!("wrote {}", path.display());
+        config
+    };
+    if let Some(interface) = interface {
+        config.interface = interface;
+    }
+    if config.interface.is_empty() {
+        eprintln!(
+            "no interface: name one in {} or with --interface",
+            path.display()
+        );
+        return ExitCode::FAILURE;
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    {
+        let stop = stop.clone();
+        let _ = ctrlc::set_handler(move || stop.store(true, Ordering::Relaxed));
+    }
+    println!(
+        "triib-endpointd {} on {}",
+        env!("CARGO_PKG_VERSION"),
+        config.interface
+    );
+    match runtime::Runtime::new(config, stop).and_then(runtime::Runtime::run) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}

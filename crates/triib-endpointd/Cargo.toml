@@ -1,0 +1,24 @@
+[package]
+name = "triib-endpointd"
+description = "triib's talker and listener entities, routed to the computer's audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "triib-endpointd"
+path = "src/main.rs"
+
+[dependencies]
+atdecc = { workspace = true, features = ["std"] }
+avb-mrp = { workspace = true, features = ["std"] }
+avb-net = { workspace = true, features = ["std"] }
+triib-store.workspace = true
+triib-stream = { path = "../triib-stream" }
+serde = { version = "1", features = ["derive"] }
+ctrlc = { version = "3", features = ["termination"] }
