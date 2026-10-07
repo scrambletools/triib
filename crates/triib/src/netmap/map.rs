@@ -1439,7 +1439,7 @@ impl Widget<Message, Theme, iced::Renderer> for NetMap {
         _style: &renderer::Style,
         layout: Layout<'_>,
         _cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<Memory>();
         let bounds = layout.bounds();
@@ -1521,7 +1521,10 @@ impl Widget<Message, Theme, iced::Renderer> for NetMap {
             self.draw_still(frame, &colors);
         });
         let (glow, dots) = (glow.into_geometry(), dots.into_geometry());
-        renderer.with_layer(bounds, |renderer| {
+        // A layer is not clipped by the scrollable holding the map, so it
+        // takes only the part in view.
+        let visible = bounds.intersection(viewport).unwrap_or_default();
+        renderer.with_layer(visible, |renderer| {
             renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
                 renderer.draw_geometry(glow);
                 renderer.draw_geometry(still);
