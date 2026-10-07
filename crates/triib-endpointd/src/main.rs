@@ -107,11 +107,16 @@ fn main() -> ExitCode {
         env!("CARGO_PKG_VERSION"),
         config.interface
     );
-    match runtime::Runtime::new(config, stop).and_then(runtime::Runtime::run) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("{error}");
-            ExitCode::FAILURE
+    loop {
+        match runtime::Runtime::new(config, Some(path.clone()), stop.clone())
+            .and_then(runtime::Runtime::run)
+        {
+            Ok(runtime::Exit::Stop) => return ExitCode::SUCCESS,
+            Ok(runtime::Exit::Reload(changed)) => config = changed,
+            Err(error) => {
+                eprintln!("{error}");
+                return ExitCode::FAILURE;
+            }
         }
     }
 }

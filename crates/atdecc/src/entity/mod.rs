@@ -163,6 +163,7 @@ struct Input {
     /// The status of the last probe.
     probe_status: AcmpStatus,
     reservation: InputReservation,
+    counters: [u32; 32],
 }
 
 #[derive(Debug, Clone)]
@@ -171,6 +172,7 @@ struct Output {
     destination: MacAddress,
     reservation: OutputReservation,
     max_transit_time: u32,
+    counters: [u32; 32],
 }
 
 /// An entity this one has heard advertise.
@@ -233,6 +235,7 @@ impl Entity {
                 destination,
                 reservation: OutputReservation::default(),
                 max_transit_time: MAX_TRANSIT_TIME,
+                counters: [0; 32],
             })
             .collect();
         let inputs = model
@@ -243,6 +246,7 @@ impl Entity {
                 probe: None,
                 probe_status: AcmpStatus::SUCCESS,
                 reservation: InputReservation::default(),
+                counters: [0; 32],
             })
             .collect();
         Entity {
@@ -347,6 +351,37 @@ impl Entity {
         if input.reservation != reservation {
             input.reservation = reservation;
             self.notify_stream_info(DescriptorType::STREAM_INPUT, index);
+        }
+    }
+
+    /// Takes a stream's counters, by their place in GET_COUNTERS (Milan
+    /// 1.3, 5.4.2.25): registered controllers hear when they change. Call
+    /// it no more than once a second.
+    pub fn set_stream_counters(
+        &mut self,
+        descriptor_type: DescriptorType,
+        index: u16,
+        counters: [u32; 32],
+    ) {
+        let slot = match descriptor_type {
+            DescriptorType::STREAM_INPUT => self
+                .inputs
+                .get_mut(usize::from(index))
+                .map(|input| &mut input.counters),
+            DescriptorType::STREAM_OUTPUT => self
+                .outputs
+                .get_mut(usize::from(index))
+                .map(|output| &mut output.counters),
+            _ => None,
+        };
+        let Some(slot) = slot else {
+            return;
+        };
+        if *slot != counters {
+            *slot = counters;
+            if let Some(payload) = self.counters(descriptor_type, index) {
+                self.notify(AemCommandType::GET_COUNTERS, &payload, None);
+            }
         }
     }
 
@@ -1274,11 +1309,18 @@ impl Entity {
             DescriptorType::STREAM_OUTPUT if usize::from(index) < self.outputs.len() => 0xff,
             _ => return None,
         };
+        let block = match descriptor_type {
+            DescriptorType::STREAM_INPUT => self.inputs[usize::from(index)].counters,
+            DescriptorType::STREAM_OUTPUT => self.outputs[usize::from(index)].counters,
+            _ => [0; 32],
+        };
         let mut answer = Vec::with_capacity(136);
         answer.extend_from_slice(&descriptor_type.0.to_be_bytes());
         answer.extend_from_slice(&index.to_be_bytes());
         answer.extend_from_slice(&valid.to_be_bytes());
-        answer.resize(136, 0);
+        for counter in block {
+            answer.extend_from_slice(&counter.to_be_bytes());
+        }
         Some(answer)
     }
 

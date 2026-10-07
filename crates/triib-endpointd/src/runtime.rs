@@ -4,9 +4,11 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::time::SystemTime;
 use std::time::{Duration, Instant as Clock};
 
 use atdecc::entity::{
@@ -22,7 +24,7 @@ use avb_net::Socket;
 use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 
 use crate::config::{Config, EndpointConfig, Kind};
-use crate::gptp::{self, Status};
+use crate::gptp;
 
 /// Entity model IDs under Scramble Tools' MA-S `8C-1F-64-36-C`.
 const TALKER_MODEL: EntityModelId = EntityModelId(0x8c1f_6436_c000_0002);
@@ -40,7 +42,7 @@ enum Input {
     Avtp(MacAddress, Vec<u8>),
     Msrp(Vec<u8>),
     Mvrp(Vec<u8>),
-    Gptp(Option<Status>),
+    Gptp(Option<gptp::Status>),
 }
 
 /// AAF at 48 kHz, 6 samples a frame, 32-bit, in `bits` of them.
@@ -84,6 +86,8 @@ struct Endpoint {
     listener: Option<Listener>,
     /// The stream its Listener declaration names, while it declares one.
     declared: Option<Vec<u8>>,
+    /// Its place in the configuration's list.
+    place: usize,
 }
 
 impl Endpoint {
@@ -137,6 +141,7 @@ impl Endpoint {
             talker: None,
             listener: None,
             declared: None,
+            place: 0,
         }
     }
 }
@@ -157,6 +162,44 @@ pub struct Runtime {
     stop: Arc<AtomicBool>,
     inputs: Receiver<Input>,
     last_report: Clock,
+    last_counters: Clock,
+    /// The configuration running, its file, and when that last changed.
+    config: Config,
+    path: Option<PathBuf>,
+    modified: Option<SystemTime>,
+    last_look: Clock,
+    gptp_text: String,
+}
+
+/// Why the runtime ended.
+pub enum Exit {
+    Stop,
+    /// The configuration changed; start again with this one.
+    Reload(Config),
+}
+
+/// The modification time of `path`.
+fn modified(path: Option<&PathBuf>) -> Option<SystemTime> {
+    std::fs::metadata(path?).ok()?.modified().ok()
+}
+
+/// What the daemon is doing, for the app: written to `endpointd.toml` in
+/// the runtime folder.
+#[derive(serde::Serialize)]
+struct DaemonStatus {
+    pid: u32,
+    interface: String,
+    gptp: String,
+    #[serde(rename = "endpoint")]
+    endpoints: Vec<EndpointStatus>,
+}
+
+#[derive(serde::Serialize)]
+struct EndpointStatus {
+    entity_id: String,
+    name: String,
+    kind: Kind,
+    state: String,
 }
 
 fn log(message: impl AsRef<str>) {
@@ -192,7 +235,7 @@ fn read_into(
 }
 
 impl Runtime {
-    pub fn new(config: Config, stop: Arc<AtomicBool>) -> io::Result<Self> {
+    pub fn new(config: Config, path: Option<PathBuf>, stop: Arc<AtomicBool>) -> io::Result<Self> {
         let interface = config.interface.clone();
         let found = avb_net::interfaces()
             .into_iter()
@@ -265,13 +308,10 @@ impl Runtime {
                     return None;
                 }
                 used.push(instance);
-                Some(Endpoint::new(
-                    endpoint.clone(),
-                    instance,
-                    mac,
-                    &interface,
-                    own_clock,
-                ))
+                let mut made =
+                    Endpoint::new(endpoint.clone(), instance, mac, &interface, own_clock);
+                made.place = place;
+                Some(made)
             })
             .collect();
         let seed = mac
@@ -293,6 +333,12 @@ impl Runtime {
             stop,
             inputs,
             last_report: Clock::now(),
+            last_counters: Clock::now(),
+            modified: modified(path.as_ref()),
+            path,
+            config,
+            last_look: Clock::now(),
+            gptp_text: "ptp4l not asked yet".into(),
         })
     }
 
@@ -304,8 +350,9 @@ impl Runtime {
         Instant::from_nanos(self.elapsed().as_nanos() as u64)
     }
 
-    /// Runs until told to stop, then says goodbye.
-    pub fn run(mut self) -> io::Result<()> {
+    /// Runs until told to stop or the configuration changes, then says
+    /// goodbye.
+    pub fn run(mut self) -> io::Result<Exit> {
         let now = self.now();
         let since = self.elapsed();
         for endpoint in &mut self.endpoints {
@@ -341,9 +388,86 @@ impl Runtime {
                 Err(RecvTimeoutError::Disconnected) => break,
             }
             self.turn();
+            if self.last_look.elapsed() >= Duration::from_secs(2) {
+                self.last_look = Clock::now();
+                self.write_status();
+                if let Some(config) = self.changed_config() {
+                    log("endpoints.toml changed, starting again");
+                    self.shut_down();
+                    return Ok(Exit::Reload(config));
+                }
+            }
         }
         self.shut_down();
-        Ok(())
+        if let Some(path) = status_path() {
+            let _ = std::fs::remove_file(path);
+        }
+        Ok(Exit::Stop)
+    }
+
+    /// The configuration file, when it changed into something else.
+    fn changed_config(&mut self) -> Option<Config> {
+        let now = modified(self.path.as_ref());
+        if now == self.modified {
+            return None;
+        }
+        self.modified = now;
+        match triib_store::load::<Config>(self.path.as_ref()?) {
+            Ok(config) if config != self.config => Some(config),
+            Ok(_) => None,
+            Err(error) => {
+                log(format!("endpoints.toml: {error}"));
+                None
+            }
+        }
+    }
+
+    /// Keeps a name a controller gave in the configuration.
+    fn keep_name(&mut self, index: usize) {
+        let endpoint = &self.endpoints[index];
+        let name = endpoint.entity.model().entity_name.clone();
+        let Some(entry) = self.config.endpoints.get_mut(endpoint.place) else {
+            return;
+        };
+        entry.name = name;
+        if let Some(path) = &self.path {
+            if let Err(error) = triib_store::save(path, &self.config) {
+                log(format!("endpoints.toml: {error}"));
+            }
+            self.modified = modified(Some(path));
+        }
+    }
+
+    fn write_status(&self) {
+        let Some(path) = status_path() else {
+            return;
+        };
+        let endpoints = self
+            .endpoints
+            .iter()
+            .map(|endpoint| EndpointStatus {
+                entity_id: endpoint.entity.entity_id().to_string(),
+                name: endpoint.entity.model().entity_name.clone(),
+                kind: endpoint.config.kind,
+                state: match endpoint.config.kind {
+                    Kind::Talker if endpoint.talker.is_some() => "streaming",
+                    Kind::Talker => "waiting for a listener",
+                    Kind::Listener if endpoint.listener.is_some() => "listening",
+                    Kind::Listener if endpoint.entity.input_binding(0).is_some() => {
+                        "bound, waiting for the talker"
+                    }
+                    Kind::Listener => "not bound",
+                }
+                .into(),
+            })
+            .collect();
+        let status = DaemonStatus {
+            pid: std::process::id(),
+            interface: self.interface.clone(),
+            gptp: self.gptp_text.clone(),
+            endpoints,
+        };
+        let _ = triib_store::save(&path, &status);
     }
 
     fn next_wait(&self) -> Duration {
@@ -381,6 +505,18 @@ impl Runtime {
             Input::Msrp(bytes) => self.msrp_participant.handle_pdu(since, &bytes),
             Input::Mvrp(bytes) => self.mvrp_participant.handle_pdu(since, &bytes),
             Input::Gptp(status) => {
+                self.gptp_text = match &status {
+                    Some(status) => format!(
+                        "grandmaster {}, {}",
+                        status.gptp.grandmaster,
+                        if status.gptp.as_capable {
+                            "asCapable"
+                        } else {
+                            "not asCapable"
+                        }
+                    ),
+                    None => "ptp4l does not answer".into(),
+                };
                 match &status {
                     Some(status) => log(format!(
                         "gPTP: grandmaster {}, peer delay {} ns, {}",
@@ -422,6 +558,10 @@ impl Runtime {
         }
         while self.mvrp_participant.poll_event().is_some() {}
         self.flush();
+        if self.last_counters.elapsed() >= Duration::from_secs(1) {
+            self.last_counters = Clock::now();
+            self.update_counters();
+        }
         if self.last_report.elapsed() >= REPORT {
             self.last_report = Clock::now();
             self.report();
@@ -744,10 +884,52 @@ impl Runtime {
             EntityEvent::ClockSourceChanged(source) => {
                 log(format!("{name}: clock source {source}"))
             }
-            EntityEvent::NameChanged => log(format!(
-                "{name}: renamed {}",
-                self.endpoints[index].entity.model().entity_name
-            )),
+            EntityEvent::NameChanged => {
+                log(format!(
+                    "{name}: renamed {}",
+                    self.endpoints[index].entity.model().entity_name
+                ));
+                self.keep_name(index);
+            }
+        }
+    }
+
+    /// Hands each running stream's counters to its entity, in Milan's
+    /// places for them.
+    fn update_counters(&mut self) {
+        let low = |value: u64| value as u32;
+        for endpoint in &mut self.endpoints {
+            if let Some(talker) = &endpoint.talker {
+                let stats = talker.stats();
+                let mut counters = [0; 32];
+                counters[0] = 1; // stream_start
+                counters[3] = low(stats.media_resets);
+                counters[5] = low(stats.frames_sent);
+                counters[7] = low(stats.frames_sent);
+                endpoint.entity.set_stream_counters(
+                    atdecc::DescriptorType::STREAM_OUTPUT,
+                    0,
+                    counters,
+                );
+            }
+            if let Some(listener) = &endpoint.listener {
+                let stats = listener.stats();
+                let mut counters = [0; 32];
+                counters[0] = low(stats.media_locked);
+                counters[1] = low(stats.media_unlocked);
+                counters[2] = low(stats.interrupted);
+                counters[3] = low(stats.sequence_mismatches);
+                counters[6] = low(stats.frames_received);
+                counters[8] = low(stats.unsupported_formats);
+                counters[9] = low(stats.late);
+                counters[10] = low(stats.early);
+                counters[11] = low(stats.frames_received);
+                endpoint.entity.set_stream_counters(
+                    atdecc::DescriptorType::STREAM_INPUT,
+                    0,
+                    counters,
+                );
+            }
         }
     }
 
@@ -809,6 +991,11 @@ impl Runtime {
         }
         log("stopped");
     }
+}
+
+/// Where the daemon says what it is doing.
+pub fn status_path() -> Option<PathBuf> {
+    triib_store::paths::runtime_dir().map(|dir| dir.join("endpointd.toml"))
 }
 
 fn is_talker(attribute_type: u8) -> bool {
