@@ -518,6 +518,9 @@ presets-nothing-differs = ไม่มีสิ่งใดต่างจาก
 presets-recalling = กำลังเรียกคืน “{ $name }”: เปลี่ยน { $count } รายการ
 presets-missing = { $report } ไม่อยู่ที่นี่หรือยังไม่ได้อ่าน: { $missing }
 presets-deleted = ลบ “{ $name }” แล้ว
+presets-host-note = และยังเก็บ Talker และ Listener ของคอมพิวเตอร์เครื่องนี้ไว้ด้วย โดยจะเริ่มใหม่เมื่อเรียกคืน
+presets-host-endpoints = { $count } รายการบนคอมพิวเตอร์เครื่องนี้
+presets-starting-host = กำลังเริ่ม Talker และ Listener ของคอมพิวเตอร์เครื่องนี้สำหรับ “{ $name }” ส่วนที่เหลือจะตามมาเมื่อกลับมาแล้ว
 
 ## Controls
 

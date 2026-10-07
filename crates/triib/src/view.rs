@@ -2360,6 +2360,7 @@ pub(crate) mod tests {
         // its state and audio, and a button that removes it.
         triib.endpoints = Some(DaemonStatus {
             pid: 1,
+            started: 0,
             interface: "enp6s0".into(),
             gptp: "grandmaster 0x0001f2fffeff3b14, asCapable".into(),
             endpoints: vec![EndpointStatus {

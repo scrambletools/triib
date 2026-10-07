@@ -521,6 +521,9 @@ presets-nothing-differs = “{ $name }”과(와) 다른 점이 없습니다.
 presets-recalling = “{ $name }” 리콜 중: 변경 { $count }건.
 presets-missing = { $report } 없거나 읽지 않은 엔티티: { $missing }.
 presets-deleted = “{ $name }”을(를) 삭제했습니다.
+presets-host-note = 이 컴퓨터 자체의 토커와 리스너도 저장하며, 리콜하면 다시 시작합니다.
+presets-host-endpoints = 이 컴퓨터에 { $count }개
+presets-starting-host = “{ $name }”을(를) 위해 이 컴퓨터의 토커와 리스너를 시작하는 중입니다. 다시 나타나면 나머지를 적용합니다.
 
 ## Controls
 

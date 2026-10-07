@@ -768,6 +768,13 @@ presets-recalling = { $count ->
 # holds that are not on the network or not read yet.
 presets-missing = { $report } Not here or not read: { $missing }.
 presets-deleted = Deleted "{ $name }".
+# Follows presets-note where this computer can run talkers and listeners
+# of its own.
+presets-host-note = It also keeps this computer's own talkers and listeners, and starts them again on recall.
+# Beside the counts of entities and connections in a preset's row.
+presets-host-endpoints = { $count } on this computer
+# While a recalled preset waits for this computer's endpoints to start.
+presets-starting-host = Starting this computer's talkers and listeners for "{ $name }"; the rest follows once they are back.
 
 ## Controls
 # An entity's CONTROL descriptors, such as gain or mute.

@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 
 use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
@@ -29,6 +30,10 @@ pub const APP_ID: &str = if triib_store::paths::PRODUCTION {
 } else {
     "io.github.scrambletools.triib.dev"
 };
+
+/// How long a recalled preset waits for this computer's endpoints to
+/// start again before it goes on without them.
+const HOST_RESTART: Duration = Duration::from_secs(20);
 
 /// triib's own accent, when the desktop gives none.
 pub const TRIIB_SEED: Color = Color::from_rgb8(0x00, 0x89, 0x7b);
@@ -101,6 +106,10 @@ pub struct Triib {
     pub presets_open: bool,
     pub preset_name: String,
     pub preset_report: Option<String>,
+    /// A preset recalled while this computer's endpoints it runs start
+    /// again: the preset, from when (milliseconds since the Unix epoch),
+    /// and how long to wait for them.
+    pub(crate) pending_recall: Option<(Preset, u64, std::time::Instant)>,
     pub settings_tab: SettingsTab,
     /// Why the settings could not be read or saved, shown in Settings.
     pub settings_error: Option<String>,
@@ -265,6 +274,7 @@ impl Triib {
             presets_open: false,
             preset_name: String::new(),
             preset_report: None,
+            pending_recall: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error: None,
@@ -312,6 +322,7 @@ impl Triib {
             presets_open: false,
             preset_name: String::new(),
             preset_report: None,
+            pending_recall: None,
             settings_open: false,
             settings_tab: SettingsTab::default(),
             settings_error,
@@ -363,6 +374,29 @@ impl Triib {
     /// Whether `entity_id` is one of this computer's talkers or listeners.
     pub fn is_host(&self, entity_id: EntityId) -> bool {
         crate::host::status_of(self.endpoints.as_ref(), entity_id).is_some()
+    }
+
+    /// Changes what differs from `preset` and says what it did.
+    fn recall_now(&mut self, preset: &Preset) -> Task<Message> {
+        let name = preset.name.as_str();
+        let recall = crate::presets::recall(self, preset);
+        let changes = recall.actions.len();
+        let mut report = match changes {
+            0 => crate::fl!("presets-nothing-differs", name = name),
+            _ => crate::fl!("presets-recalling", name = name, count = changes),
+        };
+        if !recall.missing.is_empty() {
+            report = crate::fl!(
+                "presets-missing",
+                report = report,
+                missing = crate::i18n::list(recall.missing.clone())
+            );
+        }
+        self.preset_report = Some(report);
+        if changes > 0 {
+            return self.update(Message::ActInOrder(recall.actions));
+        }
+        Task::none()
     }
 
     fn add_host(&mut self, kind: triib_endpointd::config::Kind) {
@@ -620,7 +654,16 @@ impl Triib {
                 if name.is_empty() {
                     return Task::none();
                 }
-                let preset = crate::presets::capture(self, &name);
+                let mut preset = crate::presets::capture(self, &name);
+                if self.hosts_endpoints()
+                    && let Some(interface) = self.interface()
+                {
+                    let endpoints = crate::host::endpoints(&interface.name);
+                    preset.host = (!endpoints.is_empty()).then(|| crate::presets::HostPreset {
+                        mac: interface.mac.to_string(),
+                        endpoints,
+                    });
+                }
                 let entities = preset.entities.len();
                 self.preset_report = Some(match crate::presets::save(&preset) {
                     Ok(()) => {
@@ -637,23 +680,34 @@ impl Triib {
                 let Some(preset) = self.presets.iter().find(|preset| preset.name == name) else {
                     return Task::none();
                 };
-                let recall = crate::presets::recall(self, preset);
-                let changes = recall.actions.len();
-                let mut report = match changes {
-                    0 => crate::fl!("presets-nothing-differs", name = name.as_str()),
-                    _ => crate::fl!("presets-recalling", name = name.as_str(), count = changes),
+                let preset = match self.interface() {
+                    Some(interface) => crate::presets::moved_to(preset, interface.mac),
+                    None => preset.clone(),
                 };
-                if !recall.missing.is_empty() {
-                    report = crate::fl!(
-                        "presets-missing",
-                        report = report,
-                        missing = crate::i18n::list(recall.missing.clone())
-                    );
+                // This computer's endpoints first: when they start again,
+                // the rest waits for them.
+                if let Some(host) = &preset.host
+                    && self.hosts_endpoints()
+                    && let Some(interface) = self.interface().map(|found| found.name.clone())
+                {
+                    let since = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .map_or(0, |since| since.as_millis() as u64);
+                    match crate::host::restore(&interface, &host.endpoints) {
+                        Ok(true) => {
+                            self.preset_report =
+                                Some(crate::fl!("presets-starting-host", name = name.as_str()));
+                            let until = std::time::Instant::now() + HOST_RESTART;
+                            self.pending_recall = Some((preset, since, until));
+                            return Task::none();
+                        }
+                        Ok(false) => {}
+                        Err(error) => {
+                            self.notice = Some(crate::fl!("host-failed", reason = error));
+                        }
+                    }
                 }
-                self.preset_report = Some(report);
-                if changes > 0 {
-                    return self.update(Message::ActInOrder(recall.actions));
-                }
+                return self.recall_now(&preset);
             }
             Message::PresetDeleted(name) => {
                 self.preset_report = Some(match crate::presets::delete(&name) {
@@ -729,7 +783,17 @@ impl Triib {
             }
             Message::External(External::OmarchyThemeChanged) => self.reload_omarchy(),
             Message::External(External::Interfaces(interfaces)) => self.interfaces = interfaces,
-            Message::External(External::Endpoints(status)) => self.endpoints = status,
+            Message::External(External::Endpoints(status)) => {
+                self.endpoints = status;
+                if let Some((preset, since, until)) = &self.pending_recall
+                    && (crate::presets::host_ready(self, preset, *since)
+                        || std::time::Instant::now() >= *until)
+                {
+                    let preset = preset.clone();
+                    self.pending_recall = None;
+                    return self.recall_now(&preset);
+                }
+            }
             Message::External(External::AudioDevices(inputs, outputs)) => {
                 self.audio_devices = (inputs, outputs);
             }

@@ -603,6 +603,9 @@ presets-recalling = { $count ->
 }
 presets-missing = { $report } यहाँ नहीं हैं या पढ़ी नहीं गईं: { $missing }।
 presets-deleted = “{ $name }” हटाया गया।
+presets-host-note = यह इस कंप्यूटर के अपने Talker और Listener भी सहेजता है, और recall करने पर उन्हें फिर से शुरू करता है।
+presets-host-endpoints = इस कंप्यूटर पर { $count }
+presets-starting-host = “{ $name }” के लिए इस कंप्यूटर के Talker और Listener शुरू हो रहे हैं; उनके लौटने पर बाकी होगा।
 
 ## Controls
 

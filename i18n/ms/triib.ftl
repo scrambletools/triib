@@ -526,6 +526,9 @@ presets-nothing-differs = Tiada yang berbeza daripada "{ $name }".
 presets-recalling = Memanggil semula "{ $name }": { $count } perubahan.
 presets-missing = { $report } Tiada di sini atau belum dibaca: { $missing }.
 presets-deleted = "{ $name }" dipadam.
+presets-host-note = Ia juga menyimpan talker dan listener milik komputer ini, dan memulakannya semula apabila dipanggil semula.
+presets-host-endpoints = { $count } pada komputer ini
+presets-starting-host = Memulakan talker dan listener komputer ini untuk "{ $name }"; selebihnya menyusul sebaik sahaja ia kembali.
 
 ## Controls
 

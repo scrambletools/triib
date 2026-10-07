@@ -677,6 +677,9 @@ presets-recalling = { $count ->
 }
 presets-missing = { $report } Entități absente sau necitite: { $missing }.
 presets-deleted = S-a șters „{ $name }”.
+presets-host-note = Păstrează și talkerii și listenerii proprii ai acestui computer și îi pornește din nou la încărcare.
+presets-host-endpoints = { $count } pe acest computer
+presets-starting-host = Se pornesc talkerii și listenerii acestui computer pentru „{ $name }”; restul urmează când revin.
 
 ## Controls
 

@@ -612,6 +612,9 @@ presets-recalling = { $count ->
 }
 presets-missing = { $report } Haipo hapa au haijasomwa: { $missing }.
 presets-deleted = Imefuta "{ $name }".
+presets-host-note = Pia huhifadhi talker na listener za kompyuta hii, na kuziwasha tena inaporejeshwa.
+presets-host-endpoints = { $count } kwenye kompyuta hii
+presets-starting-host = Inawasha talker na listener za kompyuta hii kwa "{ $name }"; mengine yatafuata zitakaporudi.
 
 ## Controls
 

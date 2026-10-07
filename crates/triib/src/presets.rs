@@ -1,15 +1,15 @@
 //! Presets: how the network was set up when saved, as each entity's clock
 //! sources, sampling rates, stream formats and controls and what each of
-//! its stream inputs is bound to; recalled by changing what differs now.
-//! Each is a TOML file in triib's data folder, so it can be copied to
-//! another computer.
+//! its stream inputs is bound to, and this computer's own talkers and
+//! listeners; recalled by changing what differs now. Each is a TOML file
+//! in triib's data folder, so it can be copied to another computer.
 
 use std::path::PathBuf;
 
-use atdecc::EntityId;
 use atdecc::control::{ControlDescriptor, ControlType, Shape, encode_values};
 use atdecc::descriptor::{DescriptorType, SamplingRate, StreamFormat};
 use atdecc::model::{EntityModel, EnumerationState};
+use atdecc::{EntityId, MacAddress};
 use iced::widget::{container, mouse_area, opaque, text_input};
 use iced::{Center, Element, Fill};
 use scramble_ui::button::{self, Kind};
@@ -18,6 +18,7 @@ use scramble_ui::icon::Icon;
 use scramble_ui::{column, row};
 use scramble_ui::{component, enter, style};
 use serde::{Deserialize, Serialize};
+use triib_endpointd::config::EndpointConfig;
 
 use crate::app::{Message, Triib};
 use crate::fl;
@@ -31,6 +32,31 @@ pub struct Preset {
     pub name: String,
     #[serde(default)]
     pub entities: Vec<EntityPreset>,
+    /// This computer's own talkers and listeners, when it had any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<HostPreset>,
+}
+
+/// This computer's own talkers and listeners as `endpoints.toml` had
+/// them, and the address of the interface their entity IDs came from.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct HostPreset {
+    pub mac: String,
+    #[serde(default, rename = "endpoint")]
+    pub endpoints: Vec<EndpointConfig>,
+}
+
+impl HostPreset {
+    /// Its endpoints' entity IDs on the interface with `mac`.
+    pub fn entity_ids(&self, mac: MacAddress) -> Vec<EntityId> {
+        self.endpoints
+            .iter()
+            .enumerate()
+            .map(|(place, endpoint)| {
+                triib_endpointd::runtime::entity_id(mac, endpoint.instance_at(place))
+            })
+            .collect()
+    }
 }
 
 /// What one entity had. IDs and formats are kept as hex, as TOML's
@@ -195,7 +221,64 @@ pub fn capture(triib: &Triib, name: &str) -> Preset {
     Preset {
         name: name.to_owned(),
         entities,
+        host: None,
     }
+}
+
+/// `preset` with the entity IDs of its own talkers and listeners, in its
+/// entities and their bindings, made this computer's on the interface
+/// with `mac`, for one saved on another computer or interface.
+pub fn moved_to(preset: &Preset, mac: MacAddress) -> Preset {
+    let mut moved = preset.clone();
+    let Some(host) = &mut moved.host else {
+        return moved;
+    };
+    let Ok(from) = host.mac.parse::<MacAddress>() else {
+        return moved;
+    };
+    if from == mac {
+        return moved;
+    }
+    let renamed: Vec<(u64, String)> = host
+        .entity_ids(from)
+        .into_iter()
+        .zip(host.entity_ids(mac))
+        .map(|(old, new)| (old.0, hex(new.0)))
+        .collect();
+    host.mac = mac.to_string();
+    let rename = |id: &mut String| {
+        if let Some((_, new)) = renamed.iter().find(|(old, _)| number(id) == Some(*old)) {
+            id.clone_from(new);
+        }
+    };
+    for entity in &mut moved.entities {
+        rename(&mut entity.entity);
+        for binding in &mut entity.bindings {
+            if let Some(talker) = &mut binding.talker {
+                rename(talker);
+            }
+        }
+    }
+    moved
+}
+
+/// Whether the talkers and listeners `preset` runs on this computer are
+/// back after recalling it: the daemon started on them after `since`
+/// (milliseconds since the Unix epoch), and each is here and read.
+pub fn host_ready(triib: &Triib, preset: &Preset, since: u64) -> bool {
+    let (Some(host), Some(interface), Some(status)) =
+        (&preset.host, triib.interface(), &triib.endpoints)
+    else {
+        return false;
+    };
+    status.started >= since
+        && host.entity_ids(interface.mac).iter().all(|entity_id| {
+            triib.entities.contains_key(entity_id)
+                && triib
+                    .models
+                    .get(entity_id)
+                    .is_some_and(|model| model.state == EnumerationState::Complete)
+        })
 }
 
 /// What recalling a preset changes, in the order to send it, and the
@@ -415,8 +498,17 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
         ),
     ]
     .align_y(Center);
+    let mut note = column![aligned(
+        styled(fl!("presets-note"), Type::BodyMedium).style(style::on_surface_variant)
+    )]
+    .spacing(4);
+    if triib.hosts_endpoints() {
+        note = note.push(aligned(
+            styled(fl!("presets-host-note"), Type::BodyMedium).style(style::on_surface_variant),
+        ));
+    }
     let mut content = column![
-        aligned(styled(fl!("presets-note"), Type::BodyMedium).style(style::on_surface_variant),),
+        note,
         row![
             text_input(&fl!("inspector-name"), &triib.preset_name)
                 .align_x(scramble_ui::dir::input_align(&triib.preset_name))
@@ -443,18 +535,23 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
     for preset in &triib.presets {
         let entities = preset.entities.len();
         let connections = preset.connections();
+        let mut counts = vec![
+            fl!("status-entities", count = entities),
+            fl!("presets-connections", count = connections),
+        ];
+        if let Some(host) = preset
+            .host
+            .as_ref()
+            .filter(|host| !host.endpoints.is_empty())
+        {
+            counts.push(fl!("presets-host-endpoints", count = host.endpoints.len()));
+        }
         content = content.push(
             row![
                 column![
                     styled(preset.name.clone(), Type::BodyLarge),
-                    styled(
-                        crate::i18n::list([
-                            fl!("status-entities", count = entities),
-                            fl!("presets-connections", count = connections),
-                        ]),
-                        Type::BodySmall,
-                    )
-                    .style(style::on_surface_variant),
+                    styled(crate::i18n::list(counts), Type::BodySmall,)
+                        .style(style::on_surface_variant),
                 ]
                 .spacing(2)
                 .width(Fill),
@@ -616,6 +713,137 @@ mod tests {
         );
         let _ = triib.update(Message::PresetDeleted("Show".to_owned()));
         assert!(triib.presets.is_empty());
+    }
+
+    fn host_endpoints() -> Vec<EndpointConfig> {
+        use triib_endpointd::config::Kind;
+        vec![
+            EndpointConfig {
+                kind: Kind::Talker,
+                instance: Some(0),
+                name: "Host talker 1".to_owned(),
+                channels: 8,
+                source: Some("default".to_owned()),
+                sink: None,
+                first_channel: 0,
+            },
+            EndpointConfig {
+                kind: Kind::Listener,
+                instance: Some(3),
+                name: "Host listener 1".to_owned(),
+                channels: 8,
+                source: None,
+                sink: Some("Speakers".to_owned()),
+                first_channel: 2,
+            },
+        ]
+    }
+
+    #[test]
+    fn a_preset_moves_this_computers_endpoints_to_another() {
+        let saved_on = MacAddress([0xf0, 0xa7, 0x31, 0xf4, 0x0f, 0x14]);
+        let here = MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]);
+        let host = HostPreset {
+            mac: saved_on.to_string(),
+            endpoints: host_endpoints(),
+        };
+        let [talker, listener] = host.entity_ids(saved_on)[..] else {
+            panic!("two endpoints");
+        };
+        let bound_to_talker = || BindingPreset {
+            input: 0,
+            talker: Some(hex(talker.0)),
+            output: Some(0),
+        };
+        let preset = Preset {
+            name: "Show".to_owned(),
+            entities: vec![
+                EntityPreset {
+                    entity: hex(listener.0),
+                    name: "Host listener 1".to_owned(),
+                    bindings: vec![bound_to_talker()],
+                    ..EntityPreset::default()
+                },
+                EntityPreset {
+                    entity: hex(WIRED_ESP.0),
+                    name: "ESP".to_owned(),
+                    bindings: vec![bound_to_talker()],
+                    ..EntityPreset::default()
+                },
+            ],
+            host: Some(host),
+        };
+        assert_eq!(toml_round_trip(&preset), preset);
+        let moved = moved_to(&preset, here);
+        let talker_here = EntityId(0x9c6b_00ff_0030_9a2b);
+        let listener_here = EntityId(0x9c6b_00ff_0330_9a2b);
+        assert_eq!(
+            moved.host.as_ref().unwrap().entity_ids(here),
+            [talker_here, listener_here]
+        );
+        assert_eq!(moved.host.as_ref().unwrap().mac, here.to_string());
+        assert_eq!(moved.entities[0].entity, hex(listener_here.0));
+        assert_eq!(
+            moved.entities[0].bindings[0].talker,
+            Some(hex(talker_here.0))
+        );
+        // Another entity keeps its ID, bound to the talker where it is now.
+        assert_eq!(moved.entities[1].entity, hex(WIRED_ESP.0));
+        assert_eq!(
+            moved.entities[1].bindings[0].talker,
+            Some(hex(talker_here.0))
+        );
+        // On the computer it was saved on, nothing changes.
+        assert_eq!(moved_to(&preset, saved_on), preset);
+    }
+
+    #[test]
+    fn a_recall_waits_for_this_computers_endpoints() {
+        use triib_endpointd::status::DaemonStatus;
+
+        let mut triib = sample();
+        triib.settings.interface = Some("enp6s0".to_owned());
+        let here = triib.interface().unwrap().mac;
+        let host = HostPreset {
+            mac: here.to_string(),
+            endpoints: host_endpoints(),
+        };
+        let ids = host.entity_ids(here);
+        let preset = Preset {
+            name: "Show".to_owned(),
+            entities: Vec::new(),
+            host: Some(host),
+        };
+        // The daemon has not started on them yet.
+        triib.endpoints = Some(DaemonStatus {
+            pid: 1,
+            started: 1_000,
+            interface: "enp6s0".to_owned(),
+            gptp: String::new(),
+            endpoints: Vec::new(),
+        });
+        assert!(!host_ready(&triib, &preset, 2_000));
+        // It has, but their entities are not here yet.
+        triib.endpoints.as_mut().unwrap().started = 3_000;
+        assert!(!host_ready(&triib, &preset, 2_000));
+        // Here and read, as the wired ESP is.
+        for id in &ids {
+            let entity = triib.entities[&WIRED_ESP];
+            let model = triib.models[&WIRED_ESP].clone();
+            triib.entities.insert(*id, entity);
+            triib.models.insert(*id, model);
+        }
+        assert!(host_ready(&triib, &preset, 2_000));
+        // The app goes on with the preset when the daemon next says what
+        // it is doing.
+        triib.pending_recall = Some((preset, 2_000, std::time::Instant::now()));
+        let status = triib.endpoints.clone();
+        let _ = triib.update(Message::External(crate::External::Endpoints(status)));
+        assert!(triib.pending_recall.is_none());
+        assert_eq!(
+            triib.preset_report.as_deref(),
+            Some("Nothing differs from \"Show\".")
+        );
     }
 
     #[test]

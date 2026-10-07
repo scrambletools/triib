@@ -521,6 +521,9 @@ presets-nothing-differs = 「{ $name }」と異なる点はありません。
 presets-recalling = 「{ $name }」をリコール中：変更 { $count } 件。
 presets-missing = { $report } ネットワーク上にないか未読み込み：{ $missing }。
 presets-deleted = 「{ $name }」を削除しました。
+presets-host-note = このコンピューター自身のトーカーとリスナーも保存し、リコール時に再起動します。
+presets-host-endpoints = このコンピューター上に { $count } 件
+presets-starting-host = 「{ $name }」のために、このコンピューターのトーカーとリスナーを起動しています。戻り次第、残りを適用します。
 
 ## Controls
 

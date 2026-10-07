@@ -665,6 +665,9 @@ presets-recalling = { $count ->
 }
 presets-missing = { $report } Entitats absents o no llegides: { $missing }.
 presets-deleted = S’ha suprimit «{ $name }».
+presets-host-note = També desa els talkers i listeners propis d’aquest ordinador, i els torna a iniciar en recuperar-lo.
+presets-host-endpoints = { $count } en aquest ordinador
+presets-starting-host = S’estan iniciant els talkers i listeners d’aquest ordinador per a «{ $name }»; la resta seguirà quan tornin.
 
 ## Controls
 

@@ -605,6 +605,9 @@ presets-recalling = { $count ->
 }
 presets-missing = { $report } Nincs itt vagy nincs beolvasva: { $missing }.
 presets-deleted = Törölve: „{ $name }”.
+presets-host-note = A számítógép saját talkereit és listenereit is megőrzi, és visszahíváskor újraindítja őket.
+presets-host-endpoints = { $count } ezen a számítógépen
+presets-starting-host = A számítógép talkereinek és listenereinek indítása ehhez: „{ $name }”; a többi akkor következik, amikor újra elérhetők.
 
 ## Controls
 

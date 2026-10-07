@@ -521,6 +521,9 @@ presets-nothing-differs = 與「{ $name }」沒有差異。
 presets-recalling = 正在套用「{ $name }」：{ $count } 項變更。
 presets-missing = { $report }以下實體不在此處或尚未讀取：{ $missing }。
 presets-deleted = 已刪除「{ $name }」。
+presets-host-note = 也會保存本機自己的發送端和接收端，並在套用時重新啟動它們。
+presets-host-endpoints = 本機 { $count } 個
+presets-starting-host = 正在為「{ $name }」啟動本機的發送端和接收端；它們恢復後再套用其餘部分。
 
 ## Controls
 
