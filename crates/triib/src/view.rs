@@ -2331,6 +2331,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn this_computers_endpoints_are_added_and_shown_as_its_own() {
         use triib_endpointd::config::Kind as EndpointKind;
         use triib_endpointd::status::{DaemonStatus, EndpointStatus};

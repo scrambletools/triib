@@ -19,6 +19,6 @@ atdecc = { workspace = true, features = ["std"] }
 avb-mrp = { workspace = true, features = ["std"] }
 avb-net = { workspace = true, features = ["std"] }
 triib-store.workspace = true
-triib-stream = { path = "../triib-stream" }
+triib-stream.workspace = true
 serde = { version = "1", features = ["derive"] }
 ctrlc = { version = "3", features = ["termination"] }
