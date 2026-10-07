@@ -297,7 +297,14 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                     button::custom(
                         Kind::Row,
                         scramble_ui::row![
-                            icon::icon(describe::glyph(&row.entity.adp), 20),
+                            icon::icon(
+                                if triib.is_host(entity_id) {
+                                    Icon::Computer
+                                } else {
+                                    describe::glyph(&row.entity.adp)
+                                },
+                                20
+                            ),
                             styled(name, Type::BodyMedium).wrapping(Wrapping::None),
                         ]
                         .spacing(8)

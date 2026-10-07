@@ -536,3 +536,26 @@ network-npcap-administrators = Npcap 僅允許系統管理員傳送與接收原�
 
 matrix-stream-format = { $format }。
 matrix-stream-format-state = { $format }。{ $state }。
+
+## This computer's own talkers and listeners
+
+host-add-talker = 新增發送端
+host-add-listener = 新增接收端
+host-new-talker = 主機發送端 { $number }
+host-new-listener = 主機接收端 { $number }
+host-failed = 無法新增到本機：{ $reason }
+host-needs-clock = 本機自己的發送端和接收端需要具備 PTP 硬體時鐘的有線介面
+host-no-ptp4l = ptp4l 沒有回應，本機的串流無法保持 gPTP 時間
+host-state = 狀態
+host-streaming = 正在發送
+host-waiting = 正在等待接收端
+host-listening = 正在監聽
+host-bound = 已綁定，正在等待發送端
+host-unbound = 未綁定
+host-audio-from = 音訊來源
+host-audio-to = 音訊送往
+host-silence = 靜音
+host-tone = 測試音
+host-nowhere = 不輸出
+host-default-device = 預設裝置
+host-remove = 從本機移除

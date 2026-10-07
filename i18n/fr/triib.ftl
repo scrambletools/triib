@@ -680,3 +680,26 @@ network-npcap-administrators = Npcap ne permet qu’aux administrateurs d’envo
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Ajouter un talker
+host-add-listener = Ajouter un listener
+host-new-talker = Talker de l’hôte { $number }
+host-new-listener = Listener de l’hôte { $number }
+host-failed = Impossible de l’ajouter à cet ordinateur : { $reason }
+host-needs-clock = Les talkers et listeners propres à cet ordinateur nécessitent une interface filaire avec une horloge matérielle PTP
+host-no-ptp4l = ptp4l ne répond pas, les flux de cet ordinateur ne peuvent donc pas suivre l’heure gPTP
+host-state = État
+host-streaming = Diffusion
+host-waiting = En attente d’un listener
+host-listening = À l’écoute
+host-bound = Lié, en attente du talker
+host-unbound = Non lié
+host-audio-from = Audio depuis
+host-audio-to = Audio vers
+host-silence = Silence
+host-tone = Tonalité de test
+host-nowhere = Nulle part
+host-default-device = Périphérique par défaut
+host-remove = Retirer de cet ordinateur

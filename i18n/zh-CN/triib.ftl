@@ -536,3 +536,26 @@ network-npcap-administrators = Npcap 仅允许管理员收发原始以太网帧�
 
 matrix-stream-format = { $format }。
 matrix-stream-format-state = { $format }。{ $state }。
+
+## This computer's own talkers and listeners
+
+host-add-talker = 添加发送端
+host-add-listener = 添加接收端
+host-new-talker = 主机发送端 { $number }
+host-new-listener = 主机接收端 { $number }
+host-failed = 无法添加到本机：{ $reason }
+host-needs-clock = 本机自己的发送端和接收端需要带 PTP 硬件时钟的有线接口
+host-no-ptp4l = ptp4l 没有应答，本机的流无法保持 gPTP 时间
+host-state = 状态
+host-streaming = 正在发送
+host-waiting = 正在等待接收端
+host-listening = 正在监听
+host-bound = 已绑定，正在等待发送端
+host-unbound = 未绑定
+host-audio-from = 音频来自
+host-audio-to = 音频送往
+host-silence = 静音
+host-tone = 测试音
+host-nowhere = 不输出
+host-default-device = 默认设备
+host-remove = 从本机移除

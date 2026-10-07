@@ -406,15 +406,27 @@ fn content(triib: &Triib) -> Element<'_, Message> {
             NetworkState::Running { .. } | NetworkState::Starting => crate::matrix::view(triib),
             state => network_state_view(triib, state),
         },
-        View::Entities if !triib.entities.is_empty() => crate::entity_table::view(triib),
-        View::Entities => match &triib.network_state {
-            NetworkState::Running { .. } | NetworkState::Starting => component::empty_state(
-                Icon::ViewList,
-                fl!("entities-none-yet"),
-                fl!("entities-none-yet-note"),
-            ),
-            state => network_state_view(triib, state),
-        },
+        View::Entities => {
+            let body = if !triib.entities.is_empty() {
+                crate::entity_table::view(triib)
+            } else {
+                match &triib.network_state {
+                    NetworkState::Running { .. } | NetworkState::Starting => {
+                        component::empty_state(
+                            Icon::ViewList,
+                            fl!("entities-none-yet"),
+                            fl!("entities-none-yet-note"),
+                        )
+                    }
+                    state => return network_state_view(triib, state),
+                }
+            };
+            // This computer's own talkers and listeners are added here.
+            match crate::host_view::bar(triib) {
+                Some(bar) => scramble_ui::column![bar, body].into(),
+                None => body,
+            }
+        }
         View::Network => match &triib.network_state {
             NetworkState::Running { .. } | NetworkState::Starting => crate::netmap::view(triib),
             state => network_state_view(triib, state),
@@ -769,7 +781,7 @@ pub(crate) fn source_picker<'a>(
     }))
 }
 
-fn property<'a>(label: impl Into<String>, value: String) -> Element<'a, Message> {
+pub(crate) fn property<'a>(label: impl Into<String>, value: String) -> Element<'a, Message> {
     let label: String = label.into();
     scramble_ui::row![
         styled(label, Type::BodyMedium)
@@ -830,7 +842,8 @@ fn entity_details<'a>(
     column = column.extend(model_state(model));
     let items = match tab {
         InspectorTab::Entity => {
-            let mut items = entity_sections(triib, entity_id, model);
+            let mut items = crate::host_view::sections(triib, entity_id);
+            items.extend(entity_sections(triib, entity_id, model));
             items.extend(advertisement_details(entity));
             items
         }
@@ -2256,10 +2269,11 @@ pub(crate) mod tests {
 
     #[test]
     fn a_press_on_a_views_empty_space_clears_the_selection() {
-        // Below the entity list's rows; on a name; on a plain cell.
+        // Below the entity list's rows; on a name; on a plain cell. The
+        // rows start under the bar that adds this computer's endpoints.
         let list = presses(
             View::Entities,
-            &[(640.0, 600.0), (90.0, 148.0), (380.0, 148.0)],
+            &[(640.0, 600.0), (90.0, 197.0), (380.0, 197.0)],
         );
         assert!(clears(&list[0]), "{:?}", list[0]);
         assert!(
@@ -2314,6 +2328,69 @@ pub(crate) mod tests {
             size,
             window(triib),
         )
+    }
+
+    #[test]
+    fn this_computers_endpoints_are_added_and_shown_as_its_own() {
+        use triib_endpointd::config::Kind as EndpointKind;
+        use triib_endpointd::status::{DaemonStatus, EndpointStatus};
+
+        let mut triib = logging(View::Entities, true);
+        triib.settings.log = false;
+        let size = Size::new(1280.0, 800.0);
+        // On an interface with a hardware clock the bar offers both kinds.
+        {
+            let mut simulator = simulate(&triib, size);
+            assert!(simulator.find("Add talker").is_ok());
+            assert!(simulator.find("Add listener").is_ok());
+        }
+        let messages: Vec<Message> = {
+            let mut simulator = simulate(&triib, size);
+            simulator.click("Add listener").expect("the button");
+            simulator.into_messages().collect()
+        };
+        assert!(
+            messages
+                .iter()
+                .any(|message| matches!(message, Message::HostAdded(EndpointKind::Listener))),
+            "{messages:?}"
+        );
+        // The wired ESP, as if this computer ran it: the inspector shows
+        // its state and audio, and a button that removes it.
+        triib.endpoints = Some(DaemonStatus {
+            pid: 1,
+            interface: "enp6s0".into(),
+            gptp: "grandmaster 0x0001f2fffeff3b14, asCapable".into(),
+            endpoints: vec![EndpointStatus {
+                entity_id: WIRED_ESP.to_string(),
+                name: "Host listener 1".into(),
+                kind: EndpointKind::Listener,
+                state: "listening".into(),
+                audio: "discard".into(),
+            }],
+        });
+        triib.inspector_tab = InspectorTab::Entity;
+        let mut simulator = simulate(&triib, size);
+        assert!(simulator.find("Listening").is_ok());
+        assert!(simulator.find("Nowhere").is_ok());
+        simulator
+            .click("Remove from this computer")
+            .expect("the button");
+        let messages: Vec<Message> = simulator.into_messages().collect();
+        assert!(
+            messages
+                .iter()
+                .any(|message| matches!(message, Message::HostRemoved(id) if *id == WIRED_ESP)),
+            "{messages:?}"
+        );
+        // Without a hardware clock, the bar says why instead.
+        triib.interfaces[0].hardware_clock = None;
+        let mut simulator = simulate(&triib, size);
+        assert!(
+            simulator
+                .find("This computer's own talkers and listeners need a wired interface with a PTP hardware clock")
+                .is_ok()
+        );
     }
 
     #[test]

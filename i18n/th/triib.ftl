@@ -533,3 +533,26 @@ network-npcap-administrators = Npcap อนุญาตให้เฉพาะ�
 
 matrix-stream-format = { $format }
 matrix-stream-format-state = { $format } { $state }
+
+## This computer's own talkers and listeners
+
+host-add-talker = เพิ่ม Talker
+host-add-listener = เพิ่ม Listener
+host-new-talker = Talker ของโฮสต์ { $number }
+host-new-listener = Listener ของโฮสต์ { $number }
+host-failed = ไม่สามารถเพิ่มลงในคอมพิวเตอร์เครื่องนี้: { $reason }
+host-needs-clock = Talker และ Listener ของคอมพิวเตอร์เครื่องนี้ต้องใช้อินเทอร์เฟซแบบมีสายที่มีนาฬิกาฮาร์ดแวร์ PTP
+host-no-ptp4l = ptp4l ไม่ตอบ สตรีมของคอมพิวเตอร์เครื่องนี้จึงรักษาเวลา gPTP ไม่ได้
+host-state = สถานะ
+host-streaming = กำลังสตรีม
+host-waiting = รอ Listener
+host-listening = กำลังรับฟัง
+host-bound = ผูกแล้ว รอ Talker
+host-unbound = ไม่ได้ผูก
+host-audio-from = เสียงจาก
+host-audio-to = เสียงไปยัง
+host-silence = เงียบ
+host-tone = เสียงทดสอบ
+host-nowhere = ไม่ส่งไปไหน
+host-default-device = อุปกรณ์เริ่มต้น
+host-remove = นำออกจากคอมพิวเตอร์เครื่องนี้

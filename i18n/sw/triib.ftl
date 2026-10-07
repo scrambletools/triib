@@ -627,3 +627,26 @@ network-npcap-administrators = Npcap inaruhusu wasimamizi pekee kutuma na kupoke
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Ongeza talker
+host-add-listener = Ongeza listener
+host-new-talker = Talker ya mwenyeji { $number }
+host-new-listener = Listener ya mwenyeji { $number }
+host-failed = Haikuweza kuongezwa kwenye kompyuta hii: { $reason }
+host-needs-clock = Talker na listener za kompyuta hii zinahitaji kiolesura cha waya chenye saa ya maunzi ya PTP
+host-no-ptp4l = ptp4l haijibu, kwa hiyo mitiririko ya kompyuta hii haiwezi kushika muda wa gPTP
+host-state = Hali
+host-streaming = Inatiririsha
+host-waiting = Inasubiri listener
+host-listening = Inasikiliza
+host-bound = Imefungwa, inasubiri talker
+host-unbound = Haijafungwa
+host-audio-from = Sauti kutoka
+host-audio-to = Sauti kwenda
+host-silence = Ukimya
+host-tone = Toni ya majaribio
+host-nowhere = Popote
+host-default-device = Kifaa chaguomsingi
+host-remove = Ondoa kwenye kompyuta hii

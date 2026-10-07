@@ -622,3 +622,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Talker ekle
+host-add-listener = Listener ekle
+host-new-talker = Ana bilgisayar talker { $number }
+host-new-listener = Ana bilgisayar listener { $number }
+host-failed = Bu bilgisayara eklenemedi: { $reason }
+host-needs-clock = Bu bilgisayarın kendi talker ve listener'ları PTP donanım saati olan kablolu bir arayüze ihtiyaç duyar
+host-no-ptp4l = ptp4l yanıt vermiyor, bu yüzden bu bilgisayarın akışları gPTP zamanını tutamıyor
+host-state = Durum
+host-streaming = Yayın yapıyor
+host-waiting = Bir listener bekleniyor
+host-listening = Dinleniyor
+host-bound = Bağlı, talker bekleniyor
+host-unbound = Bağlı değil
+host-audio-from = Ses kaynağı
+host-audio-to = Ses hedefi
+host-silence = Sessizlik
+host-tone = Test tonu
+host-nowhere = Hiçbir yere
+host-default-device = Varsayılan aygıt
+host-remove = Bu bilgisayardan kaldır

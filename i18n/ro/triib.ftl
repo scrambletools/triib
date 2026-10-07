@@ -692,3 +692,26 @@ network-npcap-administrators = Npcap permite doar administratorilor să trimită
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Adaugă talker
+host-add-listener = Adaugă listener
+host-new-talker = Talker gazdă { $number }
+host-new-listener = Listener gazdă { $number }
+host-failed = Nu a putut fi adăugat pe acest computer: { $reason }
+host-needs-clock = Talkerii și listenerii proprii ai acestui computer au nevoie de o interfață cu fir cu ceas hardware PTP
+host-no-ptp4l = ptp4l nu răspunde, așa că fluxurile acestui computer nu pot păstra ora gPTP
+host-state = Stare
+host-streaming = Transmite
+host-waiting = Așteaptă un listener
+host-listening = În ascultare
+host-bound = Legat, așteaptă talkerul
+host-unbound = Nelegat
+host-audio-from = Audio de la
+host-audio-to = Audio către
+host-silence = Liniște
+host-tone = Ton de test
+host-nowhere = Nicăieri
+host-default-device = Dispozitiv implicit
+host-remove = Elimină de pe acest computer

@@ -8,6 +8,8 @@ mod describe;
 mod diagnostics_view;
 mod entity_table;
 mod header_band;
+mod host;
+mod host_view;
 mod i18n;
 mod lite_view;
 mod log_view;
@@ -34,6 +36,11 @@ pub enum External {
     OmarchyThemeChanged,
     Interfaces(Vec<avb_net::Interface>),
     Network(network::Report),
+    /// What triib-endpointd says it is doing, or `None` when it is not
+    /// running.
+    Endpoints(Option<triib_endpointd::status::DaemonStatus>),
+    /// The audio devices' names: inputs, then outputs.
+    AudioDevices(Vec<String>, Vec<String>),
 }
 
 static EXTERNAL_EVENTS: Mutex<Option<UnboundedReceiver<External>>> = Mutex::new(None);
@@ -71,6 +78,9 @@ fn main() -> iced::Result {
         omarchy::watch(dir, || post(External::OmarchyThemeChanged));
     }
     watch_interfaces();
+    if host::SUPPORTED {
+        watch_endpoints();
+    }
 
     iced::application(
         move || app::Triib::boot(omarchy_dir.clone()),
@@ -115,6 +125,34 @@ fn watch_interfaces() {
                     last = now;
                 }
                 std::thread::sleep(INTERFACE_POLL);
+            }
+        });
+}
+
+/// Posts what triib-endpointd says whenever it changes, and the audio
+/// devices now and then.
+fn watch_endpoints() {
+    let _ = std::thread::Builder::new()
+        .name("endpoint-watch".into())
+        .spawn(|| {
+            let mut last = None;
+            let mut devices = None;
+            let mut turn = 0u64;
+            loop {
+                turn += 1;
+                let now = triib_endpointd::status::read();
+                if Some(&now) != last.as_ref() {
+                    post(External::Endpoints(now.clone()));
+                    last = Some(now);
+                }
+                if turn % 15 == 1 {
+                    let found = triib_stream::audio::device_names();
+                    if Some(&found) != devices.as_ref() {
+                        post(External::AudioDevices(found.0.clone(), found.1.clone()));
+                        devices = Some(found);
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
             }
         });
 }

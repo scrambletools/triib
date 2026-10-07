@@ -620,3 +620,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {"."}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Talker-ஐச் சேர்
+host-add-listener = Listener-ஐச் சேர்
+host-new-talker = ஹோஸ்ட் Talker { $number }
+host-new-listener = ஹோஸ்ட் Listener { $number }
+host-failed = இந்தக் கணினியில் சேர்க்க முடியவில்லை: { $reason }
+host-needs-clock = இந்தக் கணினியின் சொந்த Talker மற்றும் Listener-களுக்கு PTP வன்பொருள் கடிகாரமுள்ள கம்பி interface தேவை
+host-no-ptp4l = ptp4l பதிலளிக்கவில்லை, எனவே இந்தக் கணினியின் stream-களால் gPTP நேரத்தைப் பின்பற்ற முடியாது
+host-state = நிலை
+host-streaming = stream செய்கிறது
+host-waiting = Listener-க்காகக் காத்திருக்கிறது
+host-listening = கேட்கிறது
+host-bound = பிணைக்கப்பட்டது, Talker-க்காகக் காத்திருக்கிறது
+host-unbound = பிணைக்கப்படவில்லை
+host-audio-from = ஒலி எங்கிருந்து
+host-audio-to = ஒலி எங்கே
+host-silence = அமைதி
+host-tone = சோதனை ஒலி
+host-nowhere = எங்கும் இல்லை
+host-default-device = இயல்புநிலைச் சாதனம்
+host-remove = இந்தக் கணினியிலிருந்து அகற்று

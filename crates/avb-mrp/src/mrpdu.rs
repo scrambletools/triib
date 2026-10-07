@@ -116,31 +116,36 @@ pub fn decode(pdu: &[u8], format: &Format) -> Decoded {
         let length = usize::from(*attribute_length);
         let known = (format.first_value_length)(*attribute_type) == Some(length);
         let four = (format.four_packed)(*attribute_type);
-        let used = vectors(list, length, four, |leave_all, first, events, fours, count| {
-            if !known {
-                return;
-            }
-            if leave_all && !decoded.leave_all.contains(attribute_type) {
-                decoded.leave_all.push(*attribute_type);
-            }
-            for index in 0..count {
-                let packed = events[usize::from(index / 3)];
-                let number = packed / [36, 6, 1][usize::from(index % 3)] % 6;
-                let Some(event) = Event::from_number(number) else {
-                    continue;
-                };
-                let four_packed = four.then(|| {
-                    let packed = fours[usize::from(index / 4)];
-                    (packed >> (6 - 2 * (index % 4))) & 0x3
-                });
-                decoded.values.push(Value {
-                    attribute_type: *attribute_type,
-                    value: (format.nth_value)(*attribute_type, first, index),
-                    event,
-                    four_packed,
-                });
-            }
-        });
+        let used = vectors(
+            list,
+            length,
+            four,
+            |leave_all, first, events, fours, count| {
+                if !known {
+                    return;
+                }
+                if leave_all && !decoded.leave_all.contains(attribute_type) {
+                    decoded.leave_all.push(*attribute_type);
+                }
+                for index in 0..count {
+                    let packed = events[usize::from(index / 3)];
+                    let number = packed / [36, 6, 1][usize::from(index % 3)] % 6;
+                    let Some(event) = Event::from_number(number) else {
+                        continue;
+                    };
+                    let four_packed = four.then(|| {
+                        let packed = fours[usize::from(index / 4)];
+                        (packed >> (6 - 2 * (index % 4))) & 0x3
+                    });
+                    decoded.values.push(Value {
+                        attribute_type: *attribute_type,
+                        value: (format.nth_value)(*attribute_type, first, index),
+                        event,
+                        four_packed,
+                    });
+                }
+            },
+        );
         rest = if format.list_length {
             next
         } else {
@@ -358,7 +363,13 @@ mod tests {
     #[test]
     fn short_or_strange_pdus_decode_to_what_they_hold() {
         assert_eq!(decode(&[], &msrp::FORMAT), Decoded::default());
-        assert_eq!(decode(&[0, 1, 25, 0, 99], &msrp::FORMAT), Decoded::default());
-        assert_eq!(decode(&[0, 9, 3, 0, 0, 0, 0], &msrp::FORMAT), Decoded::default());
+        assert_eq!(
+            decode(&[0, 1, 25, 0, 99], &msrp::FORMAT),
+            Decoded::default()
+        );
+        assert_eq!(
+            decode(&[0, 9, 3, 0, 0, 0, 0], &msrp::FORMAT),
+            Decoded::default()
+        );
     }
 }

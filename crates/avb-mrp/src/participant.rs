@@ -301,10 +301,7 @@ impl Participant {
         for received in decoded.values {
             let key = self.key(received.attribute_type, &received.value);
             let attribute = self.attributes.entry(key).or_insert_with(Attribute::new);
-            attribute.applicant = attribute
-                .applicant
-                .step(Step::Received(received.event))
-                .0;
+            attribute.applicant = attribute.applicant.step(Step::Received(received.event)).0;
             let before = attribute.registrar;
             match received.event {
                 Event::New | Event::JoinIn | Event::JoinMt => {
@@ -431,7 +428,10 @@ impl Participant {
             if send == Send::Leave {
                 attribute.declared = None;
             }
-            match messages.iter_mut().find(|message| message.attribute_type == *kind) {
+            match messages
+                .iter_mut()
+                .find(|message| message.attribute_type == *kind)
+            {
                 Some(message) => message.values.push((value, event, four_packed)),
                 None => messages.push(Message {
                     attribute_type: *kind,
@@ -442,7 +442,9 @@ impl Participant {
         }
         if self.leave_all_due && messages.is_empty() {
             // LeaveAll alone still goes out, for the first type known.
-            if let Some(kind) = (1..=u8::MAX).find(|kind| (self.format.first_value_length)(*kind).is_some()) {
+            if let Some(kind) =
+                (1..=u8::MAX).find(|kind| (self.format.first_value_length)(*kind).is_some())
+            {
                 messages.push(Message {
                     attribute_type: kind,
                     leave_all: true,
@@ -452,7 +454,8 @@ impl Participant {
         }
         self.leave_all_due = false;
         if !messages.is_empty() {
-            self.outgoing.push_back(mrpdu::encode(&messages, &self.format));
+            self.outgoing
+                .push_back(mrpdu::encode(&messages, &self.format));
         }
     }
 
@@ -473,11 +476,16 @@ impl Participant {
             .values()
             .filter_map(|attribute| attribute.leave_at)
             .min();
-        [Some(self.leave_all_at), Some(self.periodic_at), self.join_at, leaving]
-            .into_iter()
-            .flatten()
-            .min()
-            .unwrap_or(self.leave_all_at)
+        [
+            Some(self.leave_all_at),
+            Some(self.periodic_at),
+            self.join_at,
+            leaving,
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .unwrap_or(self.leave_all_at)
     }
 
     /// The attributes peers declare now: type, value and four-packed
@@ -493,8 +501,8 @@ impl Participant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msrp::{self, ListenerState, TalkerDeclaration};
     use crate::MacAddress;
+    use crate::msrp::{self, ListenerState, TalkerDeclaration};
 
     fn ms(millis: u64) -> Duration {
         Duration::from_millis(millis)

@@ -3808,7 +3808,9 @@ dependencies = [
  "rust-embed",
  "scramble-ui",
  "serde",
+ "triib-endpointd",
  "triib-store",
+ "triib-stream",
 ]
 
 [[package]]

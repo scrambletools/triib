@@ -643,3 +643,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Προσθήκη Talker
+host-add-listener = Προσθήκη Listener
+host-new-talker = Talker κεντρικού υπολογιστή { $number }
+host-new-listener = Listener κεντρικού υπολογιστή { $number }
+host-failed = Δεν ήταν δυνατή η προσθήκη σε αυτόν τον υπολογιστή: { $reason }
+host-needs-clock = Οι Talker και Listener αυτού του υπολογιστή χρειάζονται ενσύρματη διεπαφή με ρολόι υλικού PTP
+host-no-ptp4l = Το ptp4l δεν απαντά, έτσι οι ροές αυτού του υπολογιστή δεν μπορούν να κρατήσουν χρόνο gPTP
+host-state = Κατάσταση
+host-streaming = Μετάδοση
+host-waiting = Αναμονή για Listener
+host-listening = Ακρόαση
+host-bound = Δεσμευμένο, αναμονή για τον Talker
+host-unbound = Μη δεσμευμένο
+host-audio-from = Ήχος από
+host-audio-to = Ήχος προς
+host-silence = Σιωπή
+host-tone = Ήχος δοκιμής
+host-nowhere = Πουθενά
+host-default-device = Προεπιλεγμένη συσκευή
+host-remove = Αφαίρεση από αυτόν τον υπολογιστή

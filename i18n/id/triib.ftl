@@ -541,3 +541,26 @@ network-npcap-administrators = Npcap hanya mengizinkan administrator mengirim da
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Tambah talker
+host-add-listener = Tambah listener
+host-new-talker = Talker host { $number }
+host-new-listener = Listener host { $number }
+host-failed = Tidak dapat menambahkannya ke komputer ini: { $reason }
+host-needs-clock = Talker dan listener milik komputer ini memerlukan antarmuka kabel dengan jam perangkat keras PTP
+host-no-ptp4l = ptp4l tidak menjawab, jadi stream komputer ini tidak dapat menjaga waktu gPTP
+host-state = Status
+host-streaming = Mengalirkan
+host-waiting = Menunggu listener
+host-listening = Mendengarkan
+host-bound = Terikat, menunggu talker
+host-unbound = Tidak terikat
+host-audio-from = Audio dari
+host-audio-to = Audio ke
+host-silence = Senyap
+host-tone = Nada uji
+host-nowhere = Tidak ke mana pun
+host-default-device = Perangkat bawaan
+host-remove = Hapus dari komputer ini

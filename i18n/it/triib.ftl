@@ -688,3 +688,26 @@ network-npcap-administrators = Npcap consente solo agli amministratori di inviar
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Aggiungi talker
+host-add-listener = Aggiungi listener
+host-new-talker = Talker dell’host { $number }
+host-new-listener = Listener dell’host { $number }
+host-failed = Impossibile aggiungerlo a questo computer: { $reason }
+host-needs-clock = I talker e i listener di questo computer richiedono un’interfaccia cablata con un orologio hardware PTP
+host-no-ptp4l = ptp4l non risponde, quindi gli stream di questo computer non possono mantenere l’ora gPTP
+host-state = Stato
+host-streaming = In trasmissione
+host-waiting = In attesa di un listener
+host-listening = In ascolto
+host-bound = Associato, in attesa del talker
+host-unbound = Non associato
+host-audio-from = Audio da
+host-audio-to = Audio verso
+host-silence = Silenzio
+host-tone = Tono di prova
+host-nowhere = Da nessuna parte
+host-default-device = Dispositivo predefinito
+host-remove = Rimuovi da questo computer

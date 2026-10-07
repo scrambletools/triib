@@ -700,3 +700,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Přidat talker
+host-add-listener = Přidat listener
+host-new-talker = Talker hostitele { $number }
+host-new-listener = Listener hostitele { $number }
+host-failed = Nepodařilo se přidat do tohoto počítače: { $reason }
+host-needs-clock = Vlastní talkery a listenery tohoto počítače potřebují kabelové rozhraní s hardwarovými hodinami PTP
+host-no-ptp4l = ptp4l neodpovídá, takže streamy tohoto počítače nemohou držet čas gPTP
+host-state = Stav
+host-streaming = Vysílá
+host-waiting = Čeká na listener
+host-listening = Naslouchá
+host-bound = Svázáno, čeká na talker
+host-unbound = Nesvázáno
+host-audio-from = Zvuk z
+host-audio-to = Zvuk do
+host-silence = Ticho
+host-tone = Testovací tón
+host-nowhere = Nikam
+host-default-device = Výchozí zařízení
+host-remove = Odebrat z tohoto počítače

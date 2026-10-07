@@ -680,3 +680,26 @@ network-npcap-administrators = Npcap només permet als administradors enviar i r
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Afegeix un talker
+host-add-listener = Afegeix un listener
+host-new-talker = Talker de l’amfitrió { $number }
+host-new-listener = Listener de l’amfitrió { $number }
+host-failed = No s’ha pogut afegir a aquest ordinador: { $reason }
+host-needs-clock = Els talkers i listeners propis d’aquest ordinador necessiten una interfície amb fil amb rellotge de maquinari PTP
+host-no-ptp4l = ptp4l no respon, de manera que els fluxos d’aquest ordinador no poden mantenir l’hora gPTP
+host-state = Estat
+host-streaming = Emetent
+host-waiting = Esperant un listener
+host-listening = A l’escolta
+host-bound = Vinculat, esperant el talker
+host-unbound = Sense vincular
+host-audio-from = Àudio des de
+host-audio-to = Àudio cap a
+host-silence = Silenci
+host-tone = To de prova
+host-nowhere = Enlloc
+host-default-device = Dispositiu per defecte
+host-remove = Elimina d’aquest ordinador

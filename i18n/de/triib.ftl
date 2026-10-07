@@ -630,3 +630,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Talker hinzufügen
+host-add-listener = Listener hinzufügen
+host-new-talker = Host-Talker { $number }
+host-new-listener = Host-Listener { $number }
+host-failed = Konnte nicht zu diesem Computer hinzugefügt werden: { $reason }
+host-needs-clock = Die eigenen Talker und Listener dieses Computers brauchen eine kabelgebundene Schnittstelle mit PTP-Hardwareuhr
+host-no-ptp4l = ptp4l antwortet nicht, daher können die Streams dieses Computers die gPTP-Zeit nicht halten
+host-state = Zustand
+host-streaming = Sendet
+host-waiting = Wartet auf einen Listener
+host-listening = Empfängt
+host-bound = Gebunden, wartet auf den Talker
+host-unbound = Nicht gebunden
+host-audio-from = Audio von
+host-audio-to = Audio an
+host-silence = Stille
+host-tone = Testton
+host-nowhere = Nirgendwohin
+host-default-device = Standardgerät
+host-remove = Von diesem Computer entfernen

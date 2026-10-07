@@ -536,3 +536,26 @@ network-npcap-administrators = Npcap이 관리자에게만 원시 이더넷 프�
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = 토커 추가
+host-add-listener = 리스너 추가
+host-new-talker = 호스트 토커 { $number }
+host-new-listener = 호스트 리스너 { $number }
+host-failed = 이 컴퓨터에 추가할 수 없음: { $reason }
+host-needs-clock = 이 컴퓨터 자체의 토커와 리스너에는 PTP 하드웨어 클록이 있는 유선 인터페이스가 필요함
+host-no-ptp4l = ptp4l이 응답하지 않아 이 컴퓨터의 스트림이 gPTP 시간을 유지할 수 없음
+host-state = 상태
+host-streaming = 스트리밍 중
+host-waiting = 리스너 대기 중
+host-listening = 수신 대기 중
+host-bound = 바인딩됨, 토커 대기 중
+host-unbound = 바인딩 안 됨
+host-audio-from = 오디오 입력
+host-audio-to = 오디오 출력
+host-silence = 무음
+host-tone = 테스트 톤
+host-nowhere = 출력 안 함
+host-default-device = 기본 장치
+host-remove = 이 컴퓨터에서 제거

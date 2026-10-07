@@ -622,3 +622,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Talker hozzáadása
+host-add-listener = Listener hozzáadása
+host-new-talker = Gazda talker { $number }
+host-new-listener = Gazda listener { $number }
+host-failed = Nem sikerült hozzáadni ehhez a számítógéphez: { $reason }
+host-needs-clock = A számítógép saját talkereinek és listenereinek PTP hardveres órával rendelkező vezetékes interfész kell
+host-no-ptp4l = A ptp4l nem válaszol, így a számítógép streamjei nem tudják tartani a gPTP időt
+host-state = Állapot
+host-streaming = Küldés
+host-waiting = Listenerre vár
+host-listening = Figyelés
+host-bound = Kötve, a talkerre vár
+host-unbound = Nincs kötve
+host-audio-from = Hang forrása
+host-audio-to = Hang célja
+host-silence = Csend
+host-tone = Teszthang
+host-nowhere = Sehová
+host-default-device = Alapértelmezett eszköz
+host-remove = Eltávolítás erről a számítógépről

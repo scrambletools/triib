@@ -791,3 +791,26 @@ matrix-stream-format-state = { $format }. { $state }.
 # Keep the quotes and braces; change only what is between them, such as
 # {","}.
 common-decimal-separator = {"."}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Add talker
+host-add-listener = Add listener
+host-new-talker = Host talker { $number }
+host-new-listener = Host listener { $number }
+host-failed = Could not add it to this computer: { $reason }
+host-needs-clock = This computer's own talkers and listeners need a wired interface with a PTP hardware clock
+host-no-ptp4l = ptp4l does not answer, so this computer's streams cannot keep gPTP time
+host-state = State
+host-streaming = Streaming
+host-waiting = Waiting for a listener
+host-listening = Listening
+host-bound = Bound, waiting for the talker
+host-unbound = Not bound
+host-audio-from = Audio from
+host-audio-to = Audio to
+host-silence = Silence
+host-tone = Test tone
+host-nowhere = Nowhere
+host-default-device = Default device
+host-remove = Remove from this computer

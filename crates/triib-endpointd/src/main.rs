@@ -6,16 +6,13 @@
 //! `CAP_NET_RAW`. The endpoints are listed in `endpoints.toml` in triib's
 //! data folder, written with a talker and a listener the first time.
 
-mod config;
-mod gptp;
-mod runtime;
-
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use config::{Config, EndpointConfig, Kind};
+use triib_endpointd::config::{self, Config, EndpointConfig, Kind};
+use triib_endpointd::runtime;
 
 const USAGE: &str = "usage: triib-endpointd [--config FILE] [--interface NAME]";
 

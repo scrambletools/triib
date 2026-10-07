@@ -649,3 +649,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Lisää talker
+host-add-listener = Lisää listener
+host-new-talker = Isännän talker { $number }
+host-new-listener = Isännän listener { $number }
+host-failed = Lisääminen tähän tietokoneeseen ei onnistunut: { $reason }
+host-needs-clock = Tämän tietokoneen omat talkerit ja listenerit tarvitsevat langallisen liitännän, jossa on PTP-laitekello
+host-no-ptp4l = ptp4l ei vastaa, joten tämän tietokoneen streamit eivät pysy gPTP-ajassa
+host-state = Tila
+host-streaming = Lähettää
+host-waiting = Odottaa listeneriä
+host-listening = Kuuntelee
+host-bound = Sidottu, odottaa talkeria
+host-unbound = Ei sidottu
+host-audio-from = Ääni lähteestä
+host-audio-to = Ääni kohteeseen
+host-silence = Hiljaisuus
+host-tone = Testiääni
+host-nowhere = Ei minnekään
+host-default-device = Oletuslaite
+host-remove = Poista tästä tietokoneesta

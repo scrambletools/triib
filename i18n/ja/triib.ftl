@@ -536,3 +536,26 @@ network-npcap-administrators = Npcap は管理者にのみ raw イーサネッ�
 
 matrix-stream-format = { $format }。
 matrix-stream-format-state = { $format }。{ $state }。
+
+## This computer's own talkers and listeners
+
+host-add-talker = トーカーを追加
+host-add-listener = リスナーを追加
+host-new-talker = ホストのトーカー { $number }
+host-new-listener = ホストのリスナー { $number }
+host-failed = このコンピューターに追加できませんでした：{ $reason }
+host-needs-clock = このコンピューター自身のトーカーとリスナーには、PTP ハードウェアクロックを備えた有線インターフェイスが必要です
+host-no-ptp4l = ptp4l が応答しないため、このコンピューターのストリームは gPTP 時刻を保てません
+host-state = 状態
+host-streaming = 送信中
+host-waiting = リスナーを待機中
+host-listening = 受信待機中
+host-bound = バインド済み、トーカーを待機中
+host-unbound = バインドなし
+host-audio-from = オーディオの入力元
+host-audio-to = オーディオの出力先
+host-silence = 無音
+host-tone = テストトーン
+host-nowhere = 出力しない
+host-default-device = 既定のデバイス
+host-remove = このコンピューターから削除

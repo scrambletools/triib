@@ -25,6 +25,7 @@ use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 
 use crate::config::{Config, EndpointConfig, Kind};
 use crate::gptp;
+use crate::status::{DaemonStatus, EndpointStatus, status_path};
 
 /// Entity model IDs under Scramble Tools' MA-S `8C-1F-64-36-C`.
 const TALKER_MODEL: EntityModelId = EntityModelId(0x8c1f_6436_c000_0002);
@@ -59,7 +60,7 @@ fn aaf_48k(channels: u16, bits: u8) -> StreamFormat {
 
 /// An entity ID from the interface's address and the endpoint's instance,
 /// apart from the app's (FF-FE) and triib-cli's (FF-FD).
-fn entity_id(mac: MacAddress, instance: u8) -> EntityId {
+pub fn entity_id(mac: MacAddress, instance: u8) -> EntityId {
     let [a, b, c, d, e, f] = mac.0;
     EntityId(u64::from_be_bytes([a, b, c, 0xff, instance, d, e, f]))
 }
@@ -181,25 +182,6 @@ pub enum Exit {
 /// The modification time of `path`.
 fn modified(path: Option<&PathBuf>) -> Option<SystemTime> {
     std::fs::metadata(path?).ok()?.modified().ok()
-}
-
-/// What the daemon is doing, for the app: written to `endpointd.toml` in
-/// the runtime folder.
-#[derive(serde::Serialize)]
-struct DaemonStatus {
-    pid: u32,
-    interface: String,
-    gptp: String,
-    #[serde(rename = "endpoint")]
-    endpoints: Vec<EndpointStatus>,
-}
-
-#[derive(serde::Serialize)]
-struct EndpointStatus {
-    entity_id: String,
-    name: String,
-    kind: Kind,
-    state: String,
 }
 
 fn log(message: impl AsRef<str>) {
@@ -449,14 +431,24 @@ impl Runtime {
                 entity_id: endpoint.entity.entity_id().to_string(),
                 name: endpoint.entity.model().entity_name.clone(),
                 kind: endpoint.config.kind,
+                audio: match endpoint.config.kind {
+                    Kind::Talker => endpoint
+                        .config
+                        .source
+                        .clone()
+                        .unwrap_or_else(|| "silence".into()),
+                    Kind::Listener => endpoint
+                        .config
+                        .sink
+                        .clone()
+                        .unwrap_or_else(|| "discard".into()),
+                },
                 state: match endpoint.config.kind {
                     Kind::Talker if endpoint.talker.is_some() => "streaming",
-                    Kind::Talker => "waiting for a listener",
+                    Kind::Talker => "waiting",
                     Kind::Listener if endpoint.listener.is_some() => "listening",
-                    Kind::Listener if endpoint.entity.input_binding(0).is_some() => {
-                        "bound, waiting for the talker"
-                    }
-                    Kind::Listener => "not bound",
+                    Kind::Listener if endpoint.entity.input_binding(0).is_some() => "bound",
+                    Kind::Listener => "unbound",
                 }
                 .into(),
             })
@@ -991,11 +983,6 @@ impl Runtime {
         }
         log("stopped");
     }
-}
-
-/// Where the daemon says what it is doing.
-pub fn status_path() -> Option<PathBuf> {
-    triib_store::paths::runtime_dir().map(|dir| dir.join("endpointd.toml"))
 }
 
 fn is_talker(attribute_type: u8) -> bool {

@@ -639,3 +639,26 @@ matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
 
 common-decimal-separator = {","}
+
+## This computer's own talkers and listeners
+
+host-add-talker = Lägg till talker
+host-add-listener = Lägg till listener
+host-new-talker = Värd-talker { $number }
+host-new-listener = Värd-listener { $number }
+host-failed = Kunde inte lägga till den på den här datorn: { $reason }
+host-needs-clock = Den här datorns egna talkers och listeners behöver ett trådbundet gränssnitt med en PTP-maskinvaruklocka
+host-no-ptp4l = ptp4l svarar inte, så den här datorns strömmar kan inte hålla gPTP-tid
+host-state = Läge
+host-streaming = Strömmar
+host-waiting = Väntar på en listener
+host-listening = Lyssnar
+host-bound = Bunden, väntar på talkern
+host-unbound = Inte bunden
+host-audio-from = Ljud från
+host-audio-to = Ljud till
+host-silence = Tystnad
+host-tone = Testton
+host-nowhere = Ingenstans
+host-default-device = Standardenhet
+host-remove = Ta bort från den här datorn

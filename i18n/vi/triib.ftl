@@ -536,3 +536,26 @@ network-npcap-administrators = Npcap chỉ cho phép quản trị viên gửi v�
 
 matrix-stream-format = { $format }.
 matrix-stream-format-state = { $format }. { $state }.
+
+## This computer's own talkers and listeners
+
+host-add-talker = Thêm Talker
+host-add-listener = Thêm Listener
+host-new-talker = Talker máy chủ { $number }
+host-new-listener = Listener máy chủ { $number }
+host-failed = Không thể thêm vào máy tính này: { $reason }
+host-needs-clock = Talker và Listener của chính máy tính này cần giao diện có dây với đồng hồ phần cứng PTP
+host-no-ptp4l = ptp4l không phản hồi nên các luồng của máy tính này không thể giữ thời gian gPTP
+host-state = Trạng thái
+host-streaming = Đang phát
+host-waiting = Đang chờ Listener
+host-listening = Đang lắng nghe
+host-bound = Đã gắn, đang chờ Talker
+host-unbound = Chưa gắn
+host-audio-from = Âm thanh từ
+host-audio-to = Âm thanh tới
+host-silence = Im lặng
+host-tone = Âm thử
+host-nowhere = Không đi đâu
+host-default-device = Thiết bị mặc định
+host-remove = Gỡ khỏi máy tính này

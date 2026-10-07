@@ -69,6 +69,11 @@ pub struct Triib {
     /// Why this computer cannot listen for the bridge's gPTP messages,
     /// when it cannot.
     pub cannot_listen: Option<String>,
+    /// What triib-endpointd says this computer's talkers and listeners
+    /// are doing, while it runs.
+    pub endpoints: Option<triib_endpointd::status::DaemonStatus>,
+    /// The audio devices' names: inputs, then outputs.
+    pub audio_devices: (Vec<String>, Vec<String>),
     /// What the network view brings forward.
     pub network_focus: Option<Focus>,
     /// The toolbar's "More" menu is open.
@@ -142,6 +147,13 @@ pub enum Message {
     Copy(String),
     /// Opens a link in the browser.
     OpenLink(String),
+    /// Adds a talker or listener on this computer.
+    HostAdded(triib_endpointd::config::Kind),
+    /// Removes one of this computer's talkers or listeners.
+    HostRemoved(EntityId),
+    /// Takes one of this computer's endpoints' audio from or to a device,
+    /// a tone, silence or nowhere.
+    HostAudio(EntityId, String),
     Act(Action),
     /// Several actions, sent in order, such as removing a channel's mapping
     /// before mapping it anew.
@@ -238,6 +250,8 @@ impl Triib {
             hover: Hover::default(),
             neighbor: None,
             cannot_listen: None,
+            endpoints: None,
+            audio_devices: (Vec::new(), Vec::new()),
             network_focus: None,
             overflow_open: false,
             network_list: false,
@@ -283,6 +297,8 @@ impl Triib {
             hover: Hover::default(),
             neighbor: None,
             cannot_listen: None,
+            endpoints: None,
+            audio_devices: (Vec::new(), Vec::new()),
             network_focus: None,
             overflow_open: false,
             network_list: false,
@@ -335,6 +351,44 @@ impl Triib {
     }
 
     /// The chosen interface, when it is present.
+    /// Whether the chosen interface can carry this computer's own talkers
+    /// and listeners: wired, with a PTP hardware clock.
+    pub fn hosts_endpoints(&self) -> bool {
+        crate::host::SUPPORTED
+            && self.interface().is_some_and(|interface| {
+                interface.physical && !interface.wireless && interface.hardware_clock.is_some()
+            })
+    }
+
+    /// Whether `entity_id` is one of this computer's talkers or listeners.
+    pub fn is_host(&self, entity_id: EntityId) -> bool {
+        crate::host::status_of(self.endpoints.as_ref(), entity_id).is_some()
+    }
+
+    fn add_host(&mut self, kind: triib_endpointd::config::Kind) {
+        let Some(interface) = self.interface().map(|interface| interface.name.clone()) else {
+            return;
+        };
+        let count = self.endpoints.as_ref().map_or(0, |status| {
+            status
+                .endpoints
+                .iter()
+                .filter(|endpoint| endpoint.kind == kind)
+                .count()
+        }) + 1;
+        let name = match kind {
+            triib_endpointd::config::Kind::Talker => crate::fl!("host-new-talker", number = count),
+            triib_endpointd::config::Kind::Listener => {
+                crate::fl!("host-new-listener", number = count)
+            }
+        };
+        let result =
+            crate::host::add(&interface, kind, name).and_then(|()| crate::host::ensure_running());
+        if let Err(error) = result {
+            self.notice = Some(crate::fl!("host-failed", reason = error));
+        }
+    }
+
     pub fn interface(&self) -> Option<&Interface> {
         let name = self.settings.interface.as_deref()?;
         self.interfaces
@@ -675,6 +729,31 @@ impl Triib {
             }
             Message::External(External::OmarchyThemeChanged) => self.reload_omarchy(),
             Message::External(External::Interfaces(interfaces)) => self.interfaces = interfaces,
+            Message::External(External::Endpoints(status)) => self.endpoints = status,
+            Message::External(External::AudioDevices(inputs, outputs)) => {
+                self.audio_devices = (inputs, outputs);
+            }
+            Message::HostAdded(kind) => self.add_host(kind),
+            Message::HostRemoved(entity_id) => {
+                let done = self
+                    .interface()
+                    .map(|interface| (interface.name.clone(), interface.mac));
+                if let Some((name, mac)) = done
+                    && let Err(error) = crate::host::remove(&name, mac, entity_id)
+                {
+                    self.notice = Some(error);
+                }
+            }
+            Message::HostAudio(entity_id, audio) => {
+                let done = self
+                    .interface()
+                    .map(|interface| (interface.name.clone(), interface.mac));
+                if let Some((name, mac)) = done
+                    && let Err(error) = crate::host::set_audio(&name, mac, entity_id, audio)
+                {
+                    self.notice = Some(error);
+                }
+            }
             Message::External(External::Network(report)) => self.network_report(report),
             Message::Nothing => {}
         }
