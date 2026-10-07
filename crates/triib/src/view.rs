@@ -1968,6 +1968,8 @@ pub(crate) mod tests {
                 Size::new(1280.0, 3200.0),
             ),
             ("matrix-filtered", View::Matrix, false, desktop),
+            // Text typed in the search field.
+            ("matrix-searching", View::Matrix, false, desktop),
             (
                 "inspector-diagnostics",
                 View::Entities,
@@ -2088,6 +2090,9 @@ pub(crate) mod tests {
             };
             if suffix.contains("filtered") {
                 triib.settings.matrix_connectable_only = true;
+            }
+            if suffix.contains("searching") {
+                triib.search = "Mac mini".to_owned();
             }
             if suffix.starts_with("presets") {
                 triib.presets = vec![
