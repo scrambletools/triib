@@ -35,3 +35,7 @@ windows-sys = { version = "0.61", optional = true, features = [
 [[example]]
 name = "listen"
 required-features = ["std"]
+
+[[example]]
+name = "phc_watch"
+required-features = ["std"]

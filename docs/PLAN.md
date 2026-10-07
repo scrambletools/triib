@@ -272,7 +272,11 @@ network. This computer's is a TP-Link TX401 (Marvell AQtion AQC107, Linux
 the PTP v2 layer 2 event filter, two-step only, PHC `ptp0`. Its PTP
 depends on the card's firmware enabling it, which retail AQC107 cards do
 not all do; whether it can pace transmission (launch time, CBS) is not
-known yet. Its Realtek RTL8125 under r8169 exposes no PHC. Intel i210,
+known yet. Reading its PHC now and then gives a time 2^32 ns off, a
+torn read of its two halves (6 strays in 324,000 reads over 3 minutes),
+or about 167 us off for a tenth of a second; the media clock takes the
+median of a burst of readings and follows a move of more than 50 us
+only once three measurements in a row show it. Its Realtek RTL8125 under r8169 exposes no PHC. Intel i210,
 i225 and i226 are the known choices with launch time.
 
 ## Virtual endpoints: host talkers and listeners
@@ -652,7 +656,9 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     SYT_INTERVAL boundary, as strict listeners such as macOS want. The
     listener counts what Milan counts. Audio from and to any device
     through cpal, a test tone, or nothing; the device's drift is
-    followed by dropping or repeating a frame. The pacing and receiving
+    followed by cubic resampling at a ratio steered by the fill of the
+    buffer between them, within 20 ppm of the drift after a few seconds
+    in simulation. The pacing and receiving
     threads ask RealtimeKit for real-time scheduling, as PipeWire does,
     so a build on every core leaves the streams on time.
   - MAAP (`atdecc::maap`): the daemon claims one destination address for
@@ -690,9 +696,9 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     now.
   - Sampling rates other than 48 kHz, and a filter for this computer's
     entities in the list.
-  - Resampling with `rubato` in place of dropping or repeating a frame;
-    playing out at presentation time; launch time or CBS where the card
-    has them.
+  - Playing out at presentation time; launch time or CBS where the
+    card has them; sinc resampling (`rubato`) if cubic ever falls
+    short.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
 

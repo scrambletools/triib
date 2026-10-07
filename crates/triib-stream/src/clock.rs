@@ -11,10 +11,26 @@ use avb_net::clock::{HardwareClock, monotonic_now};
 
 /// How often the offset between the clocks is measured again.
 const REFRESH: Duration = Duration::from_millis(100);
+/// How far the offset may move between measurements before others have
+/// to confirm it, in nanoseconds: once locked gPTP only steers the
+/// clock's rate, moving it a few microseconds between measurements at
+/// most, so a bigger move is a bad reading (a card's clock was seen off
+/// by 167 us for a tenth of a second), or a step the next measurements
+/// show again.
+const MOST_MOVE: i64 = 50_000;
+/// Measurements in a row that a big move needs.
+const CONFIRMATIONS: u8 = 3;
+
+/// The hardware clock, and an offset that moved too far, waiting to be
+/// confirmed, with the measurements in a row that agreed with it.
+struct Hardware {
+    clock: HardwareClock,
+    waiting: Option<(i64, u8)>,
+}
 
 /// gPTP time, read through the monotonic clock.
 pub struct MediaClock {
-    hardware: Option<Mutex<HardwareClock>>,
+    hardware: Option<Mutex<Hardware>>,
     /// gPTP nanoseconds minus monotonic nanoseconds.
     offset: AtomicI64,
     measured: AtomicI64,
@@ -28,7 +44,10 @@ impl MediaClock {
     /// their presentation times mean nothing to other entities.
     pub fn open(index: Option<u32>) -> io::Result<Self> {
         let hardware = match index {
-            Some(index) => Some(Mutex::new(HardwareClock::open(index)?)),
+            Some(index) => Some(Mutex::new(Hardware {
+                clock: HardwareClock::open(index)?,
+                waiting: None,
+            })),
             None => None,
         };
         let clock = MediaClock {
@@ -52,12 +71,26 @@ impl MediaClock {
         let Some(hardware) = &self.hardware else {
             return;
         };
-        let hardware = hardware
+        let mut hardware = hardware
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Ok(offset) = hardware.offset_from_monotonic() {
-            self.offset.store(offset as i64, Ordering::Relaxed);
+        let Hardware { clock, waiting } = &mut *hardware;
+        let Ok(offset) = clock.offset_from_monotonic() else {
+            return;
+        };
+        let offset = offset as i64;
+        let current = self.offset.load(Ordering::Relaxed);
+        let near = |other: i64| (offset - other).abs() <= MOST_MOVE;
+        let seen = match *waiting {
+            Some((waiting, seen)) if near(waiting) => seen + 1,
+            _ => 1,
+        };
+        if !self.locked.load(Ordering::Relaxed) || near(current) || seen >= CONFIRMATIONS {
+            self.offset.store(offset, Ordering::Relaxed);
             self.locked.store(true, Ordering::Relaxed);
+            *waiting = None;
+        } else {
+            *waiting = Some((offset, seen));
         }
     }
 

@@ -2,8 +2,10 @@
 //! computer's audio devices through cpal, a test tone, or nothing.
 //!
 //! A device runs on its own clock, not gPTP's, so the samples pass
-//! through a buffer that is kept near a fill level by dropping or
-//! repeating one sample frame when it strays.
+//! through a buffer and are resampled on the stream's side of it, by a
+//! ratio a slow controller steers to keep the buffer near its fill
+//! level: the device's drift, a few hundred parts per million at most,
+//! is taken up without a sample frame dropped or played twice.
 
 use std::collections::VecDeque;
 use std::f32::consts::TAU;
@@ -49,61 +51,79 @@ pub enum Sink {
 /// Interleaved sample frames passed between an audio device's callback
 /// and a stream's thread.
 pub struct FrameBuffer {
-    samples: Mutex<VecDeque<f32>>,
+    held: Mutex<Held>,
     channels: usize,
-    /// The fill kept, in frames, and how far it may stray before a frame
-    /// is dropped or repeated.
-    target: usize,
-    slack: usize,
-    /// Frames read while it was empty, and frames dropped or repeated.
+    /// The fill kept beyond the device's own chunks, in frames.
+    margin: usize,
+    /// Frames read while it was empty, and times frames were dropped as
+    /// it held four times what it keeps.
     pub underruns: AtomicU64,
     pub adjustments: AtomicU64,
 }
 
+struct Held {
+    samples: VecDeque<f32>,
+    /// The fill right after the device's last chunk, which the controller
+    /// steers by.
+    sample: Option<DeviceSample>,
+}
+
+/// The buffer's fill right after one of the device's chunks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceSample {
+    /// Counts the device's chunks, telling a new sample from the last.
+    pub chunks: u64,
+    pub level: usize,
+    pub chunk: usize,
+}
+
 impl FrameBuffer {
-    pub fn new(channels: u16, target: usize, slack: usize) -> Self {
+    pub fn new(channels: u16, margin: usize) -> Self {
+        let channels = usize::from(channels).max(1);
         FrameBuffer {
-            samples: Mutex::new(VecDeque::with_capacity(4 * target * usize::from(channels))),
-            channels: usize::from(channels).max(1),
-            target,
-            slack,
+            held: Mutex::new(Held {
+                samples: VecDeque::with_capacity(4 * margin * channels),
+                sample: None,
+            }),
+            channels,
+            margin: margin.max(1),
             underruns: AtomicU64::new(0),
             adjustments: AtomicU64::new(0),
         }
     }
 
+    fn lock(&self) -> std::sync::MutexGuard<'_, Held> {
+        self.held.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Adds interleaved frames, keeping no more than four times the
-    /// target.
+    /// margin and the device's chunk.
     pub fn push(&self, samples: &[f32]) {
-        let mut held = self.samples.lock().unwrap_or_else(PoisonError::into_inner);
-        held.extend(samples);
-        let most = 4 * self.target.max(1) * self.channels;
-        if held.len() > most {
-            let extra = held.len() - most;
-            held.drain(..extra - extra % self.channels);
+        let mut held = self.lock();
+        self.push_into(&mut held, samples);
+    }
+
+    fn push_into(&self, held: &mut Held, samples: &[f32]) {
+        held.samples.extend(samples);
+        let chunk = held.sample.map_or(0, |sample| sample.chunk);
+        let most = 4 * (self.margin + chunk) * self.channels;
+        if held.samples.len() > most {
+            let extra = held.samples.len() - most;
+            held.samples.drain(..extra - extra % self.channels);
+            self.adjustments.fetch_add(1, Ordering::Relaxed);
         }
     }
 
-    /// Fills `out` with the oldest frames, silence where there are none,
-    /// dropping or repeating one frame when the fill strays.
+    /// Fills `out` with the oldest frames, silence where there are none.
     pub fn pull(&self, out: &mut [f32]) {
-        let mut held = self.samples.lock().unwrap_or_else(PoisonError::into_inner);
-        let frames = held.len() / self.channels;
-        let mut start = 0;
-        if frames > self.target + self.slack {
-            held.drain(..self.channels);
-            self.adjustments.fetch_add(1, Ordering::Relaxed);
-        } else if frames > 0 && frames + self.slack < self.target && out.len() >= self.channels {
-            // The oldest frame plays twice.
-            for (slot, sample) in out[..self.channels].iter_mut().zip(held.iter()) {
-                *slot = *sample;
-            }
-            start = self.channels;
-            self.adjustments.fetch_add(1, Ordering::Relaxed);
-        }
+        let mut held = self.lock();
+        self.pull_from(&mut held, out);
+    }
+
+    fn pull_from(&self, held: &mut Held, out: &mut [f32]) {
         let mut short = false;
-        for slot in &mut out[start..] {
-            *slot = held.pop_front().unwrap_or_else(|| {
+        for slot in out.iter_mut() {
+            *slot = held.samples.pop_front().unwrap_or_else(|| {
                 short = true;
                 0.0
             });
@@ -113,10 +133,167 @@ impl FrameBuffer {
         }
     }
 
+    /// The device's side: adds one chunk, and notes the fill after it.
+    pub fn device_push(&self, samples: &[f32]) {
+        let mut held = self.lock();
+        self.push_into(&mut held, samples);
+        self.note(&mut held, samples.len());
+    }
+
+    /// The device's side: takes one chunk, and notes the fill after it.
+    pub fn device_pull(&self, out: &mut [f32]) {
+        let mut held = self.lock();
+        self.pull_from(&mut held, out);
+        self.note(&mut held, out.len());
+    }
+
+    fn note(&self, held: &mut Held, samples: usize) {
+        let chunks = held.sample.map_or(1, |sample| sample.chunks + 1);
+        held.sample = Some(DeviceSample {
+            chunks,
+            level: held.samples.len() / self.channels,
+            chunk: samples / self.channels,
+        });
+    }
+
+    /// The fill right after the device's last chunk.
+    pub fn device_sample(&self) -> Option<DeviceSample> {
+        self.lock().sample
+    }
+
     /// The frames held.
     pub fn level(&self) -> usize {
-        let held = self.samples.lock().unwrap_or_else(PoisonError::into_inner);
-        held.len() / self.channels
+        self.lock().samples.len() / self.channels
+    }
+}
+
+/// The controller's gains, for each of the device's chunks: how much of
+/// each new fill its smoothed error takes, the ratio's change for an
+/// error of a whole chunk, and the integral's growth for it. Near
+/// critically damped, settling within 40 ppm in about 30 s of 1024-frame
+/// chunks, faster with smaller ones.
+const SMOOTHING: f64 = 0.02;
+const PROPORTIONAL: f64 = 0.0051;
+const INTEGRAL: f64 = 1e-5;
+/// The most the ratio strays from 1.
+const MOST_DRIFT: f64 = 0.002;
+
+/// Which side of the buffer the device is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceSide {
+    /// An input: the device pushes, the stream pulls.
+    Pushes,
+    /// An output: the stream pushes, the device pulls.
+    Pulls,
+}
+
+/// Resamples interleaved frames from one clock to another close to it, by
+/// cubic interpolation between the input frames, at a ratio steered from
+/// the buffer's fill after each of the device's chunks.
+pub struct Drift {
+    channels: usize,
+    side: DeviceSide,
+    /// Input frames: the one before the current position, then those
+    /// after.
+    held: VecDeque<f32>,
+    /// Where the next output frame lies past the second held frame, from
+    /// 0 to 1.
+    position: f64,
+    /// Input frames for each output frame.
+    ratio: f64,
+    /// The last device chunk steered by, the smoothed error and the
+    /// integral.
+    chunks: u64,
+    error: Option<f64>,
+    integral: f64,
+}
+
+impl Drift {
+    pub fn new(channels: u16, side: DeviceSide) -> Self {
+        Drift {
+            channels: usize::from(channels).max(1),
+            side,
+            held: VecDeque::new(),
+            position: 0.0,
+            ratio: 1.0,
+            chunks: 0,
+            error: None,
+            integral: 0.0,
+        }
+    }
+
+    /// Input frames for each output frame now.
+    pub fn ratio(&self) -> f64 {
+        self.ratio
+    }
+
+    /// Steers the ratio from the fill after the device's last chunk, once
+    /// for each chunk: a fuller buffer than kept takes more input frames
+    /// for each output frame, whichever side the device is on.
+    pub fn steer(&mut self, buffer: &FrameBuffer) {
+        let Some(sample) = buffer.device_sample() else {
+            return;
+        };
+        if sample.chunks == self.chunks {
+            return;
+        }
+        self.chunks = sample.chunks;
+        // After an input's chunk the buffer holds it on top of what is
+        // kept; after an output's, just what is kept.
+        let kept = match self.side {
+            DeviceSide::Pushes => buffer.margin + sample.chunk,
+            DeviceSide::Pulls => buffer.margin,
+        };
+        let error = (sample.level as f64 - kept as f64) / sample.chunk.max(1) as f64;
+        let smoothed = self.error.get_or_insert(error);
+        *smoothed += SMOOTHING * (error - *smoothed);
+        self.integral = (self.integral + INTEGRAL * *smoothed).clamp(-MOST_DRIFT, MOST_DRIFT);
+        self.ratio = (1.0 + PROPORTIONAL * *smoothed + self.integral)
+            .clamp(1.0 - MOST_DRIFT, 1.0 + MOST_DRIFT);
+    }
+
+    fn held_frames(&self) -> usize {
+        self.held.len() / self.channels
+    }
+
+    /// The input frames to add before `frames` output frames can be made.
+    pub fn wanted(&self, frames: usize) -> usize {
+        if frames == 0 {
+            return 0;
+        }
+        let last = self.position + (frames - 1) as f64 * self.ratio;
+        (last as usize + 4).saturating_sub(self.held_frames())
+    }
+
+    pub fn push(&mut self, input: &[f32]) {
+        self.held.extend(input);
+    }
+
+    /// Makes output frames while there are input frames enough, into
+    /// `out`, up to `most` of them.
+    pub fn make(&mut self, out: &mut Vec<f32>, most: usize) {
+        let channels = self.channels;
+        let mut made = 0;
+        while made < most && self.position as usize + 4 <= self.held_frames() {
+            let base = self.position as usize;
+            let t = (self.position - base as f64) as f32;
+            for channel in 0..channels {
+                let at = |frame: usize| self.held[(base + frame) * channels + channel];
+                let (before, from, to, after) = (at(0), at(1), at(2), at(3));
+                // Catmull-Rom between `from` and `to`.
+                let a = -0.5 * before + 1.5 * from - 1.5 * to + 0.5 * after;
+                let b = before - 2.5 * from + 2.0 * to - 0.5 * after;
+                let c = -0.5 * before + 0.5 * to;
+                out.push(((a * t + b) * t + c) * t + from);
+            }
+            made += 1;
+            self.position += self.ratio;
+            let passed = self.position as usize;
+            if passed > 0 {
+                self.held.drain(..passed * channels);
+                self.position -= passed as f64;
+            }
+        }
     }
 }
 
@@ -248,7 +425,7 @@ where
                         );
                     }
                 }
-                buffer.push(&frames);
+                buffer.device_push(&frames);
             },
             |_| {},
             None,
@@ -274,7 +451,7 @@ where
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                 let count = data.len() / device_channels;
                 frames.resize(count * channels, 0.0);
-                buffer.pull(&mut frames);
+                buffer.device_pull(&mut frames);
                 for (frame, samples) in data
                     .chunks_exact_mut(device_channels)
                     .zip(frames.chunks_exact(channels.max(1)))
@@ -310,6 +487,10 @@ enum InputKind {
     },
     Device {
         buffer: Arc<FrameBuffer>,
+        drift: Drift,
+        /// Input frames on their way to the resampler, and its output.
+        taken: Vec<f32>,
+        made: Vec<f32>,
         _thread: DeviceThread,
     },
 }
@@ -328,9 +509,9 @@ impl Input {
                 name,
                 first_channel,
             } => {
-                // 10 ms kept, a quarter of that either way.
-                let target = rate as usize / 100;
-                let buffer = Arc::new(FrameBuffer::new(channels, target, target / 4));
+                // 10 ms kept beyond the device's chunks.
+                let margin = rate as usize / 100;
+                let buffer = Arc::new(FrameBuffer::new(channels, margin));
                 let device = find_device(name.as_deref(), true)?;
                 let filling = buffer.clone();
                 let first = usize::from(*first_channel);
@@ -357,6 +538,9 @@ impl Input {
                 })?;
                 InputKind::Device {
                     buffer,
+                    drift: Drift::new(channels, DeviceSide::Pushes),
+                    taken: Vec::new(),
+                    made: Vec::new(),
                     _thread: thread,
                 }
             }
@@ -367,8 +551,17 @@ impl Input {
         })
     }
 
-    /// Sample frames dropped or repeated to keep up with the device, and
-    /// read while it had none.
+    /// How far the device's clock runs from the stream's, in parts per
+    /// million, as the resampler follows it.
+    pub fn drift_ppm(&self) -> i32 {
+        match &self.kind {
+            InputKind::Device { drift, .. } => ((drift.ratio() - 1.0) * 1e6).round() as i32,
+            _ => 0,
+        }
+    }
+
+    /// Times frames were dropped as the device ran too far ahead, and
+    /// reads while it had none.
     pub fn counts(&self) -> (u64, u64) {
         match &self.kind {
             InputKind::Device { buffer, .. } => (
@@ -389,7 +582,23 @@ impl Input {
                     *phase = (*phase + *step) % TAU;
                 }
             }
-            InputKind::Device { buffer, .. } => buffer.pull(out),
+            InputKind::Device {
+                buffer,
+                drift,
+                taken,
+                made,
+                ..
+            } => {
+                let frames = out.len() / self.channels.max(1);
+                drift.steer(buffer);
+                taken.resize(drift.wanted(frames) * self.channels, 0.0);
+                buffer.pull(taken);
+                drift.push(taken);
+                made.clear();
+                drift.make(made, frames);
+                out.fill(0.0);
+                out[..made.len()].copy_from_slice(made);
+            }
         }
     }
 }
@@ -397,6 +606,8 @@ impl Input {
 /// The stream's samples to their sink.
 pub struct Output {
     buffer: Option<(Arc<FrameBuffer>, DeviceThread)>,
+    /// The resampler toward the device, and its output.
+    drift: Mutex<(Drift, Vec<f32>)>,
     /// The loudest sample since the last look, as f32 bits.
     peak: AtomicU32,
 }
@@ -410,8 +621,8 @@ impl Output {
                 name,
                 first_channel,
             } => {
-                let target = rate as usize / 100;
-                let buffer = Arc::new(FrameBuffer::new(channels, target, target / 4));
+                let margin = rate as usize / 100;
+                let buffer = Arc::new(FrameBuffer::new(channels, margin));
                 let device = find_device(name.as_deref(), false)?;
                 let draining = buffer.clone();
                 let first = usize::from(*first_channel);
@@ -441,6 +652,7 @@ impl Output {
         };
         Ok(Output {
             buffer,
+            drift: Mutex::new((Drift::new(channels, DeviceSide::Pulls), Vec::new())),
             peak: AtomicU32::new(0),
         })
     }
@@ -452,8 +664,32 @@ impl Output {
             .fold(0.0f32, |most, sample| most.max(sample.abs()));
         self.peak.fetch_max(loudest.to_bits(), Ordering::Relaxed);
         if let Some((buffer, _)) = &self.buffer {
-            buffer.push(samples);
+            let mut drift = self.drift.lock().unwrap_or_else(PoisonError::into_inner);
+            let (drift, made) = &mut *drift;
+            drift.steer(buffer);
+            drift.push(samples);
+            made.clear();
+            drift.make(made, usize::MAX);
+            buffer.push(made);
         }
+    }
+
+    /// How far the device's clock runs from the stream's, in parts per
+    /// million, as the resampler follows it.
+    pub fn drift_ppm(&self) -> i32 {
+        if self.buffer.is_none() {
+            return 0;
+        }
+        let drift = self.drift.lock().unwrap_or_else(PoisonError::into_inner);
+        // The device takes fewer frames than the stream gives when slow.
+        ((1.0 / drift.0.ratio() - 1.0) * 1e6).round() as i32
+    }
+
+    /// Times the device found nothing to play.
+    pub fn underruns(&self) -> u64 {
+        self.buffer
+            .as_ref()
+            .map_or(0, |(buffer, _)| buffer.underruns.load(Ordering::Relaxed))
     }
 
     /// The loudest sample since the last call, from 0 to 1.
@@ -467,28 +703,131 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_buffer_keeps_near_its_target() {
-        let buffer = FrameBuffer::new(2, 10, 2);
-        let frame = |value: f32| [value, value];
-        for value in 0..20 {
-            buffer.push(&frame(value as f32));
-        }
-        // Over the target: the oldest frame is dropped.
-        let mut out = [0.0; 2];
-        buffer.pull(&mut out);
-        assert_eq!(out, [1.0, 1.0]);
-        assert_eq!(buffer.adjustments.load(Ordering::Relaxed), 1);
-        // Drained below the target: a frame plays twice.
-        let mut many = [0.0; 26];
-        buffer.pull(&mut many);
-        let mut out = [0.0; 4];
-        buffer.pull(&mut out);
-        assert_eq!(out[..2], out[2..]);
+    fn the_buffer_notes_its_fill_after_each_device_chunk() {
+        let buffer = FrameBuffer::new(2, 10);
+        assert_eq!(buffer.device_sample(), None);
+        buffer.device_push(&[1.0; 8]);
+        buffer.push(&[2.0; 4]);
+        assert_eq!(
+            buffer.device_sample(),
+            Some(DeviceSample {
+                chunks: 1,
+                level: 4,
+                chunk: 4
+            })
+        );
+        let mut out = [9.0; 6];
+        buffer.device_pull(&mut out);
+        assert_eq!(out, [1.0; 6]);
+        assert_eq!(buffer.device_sample().map(|sample| sample.chunks), Some(2));
+        // Past four times the margin and the chunk, the oldest go.
+        buffer.push(&[3.0; 200]);
+        assert_eq!(buffer.level(), 4 * (10 + 3));
+        assert!(buffer.adjustments.load(Ordering::Relaxed) > 0);
         // Empty: silence, counted.
-        let mut out = [9.0; 10];
+        let mut out = [9.0; 120];
         buffer.pull(&mut out);
-        assert!(buffer.underruns.load(Ordering::Relaxed) >= 1);
-        assert_eq!(out[8..], [0.0, 0.0]);
+        assert_eq!(out[104..], [0.0; 16]);
+        assert_eq!(buffer.underruns.load(Ordering::Relaxed), 1);
+    }
+
+    /// A sine at `hertz` sampled at `rate`, from sample `start` on.
+    fn sine(hertz: f64, rate: f64, start: u64, frames: usize) -> Vec<f32> {
+        (0..frames as u64)
+            .map(|index| (TAU as f64 * hertz * (start + index) as f64 / rate).sin() as f32 * 0.5)
+            .collect()
+    }
+
+    /// When the device's `index`th chunk comes, at `rate`: on time give
+    /// or take up to 2% of a chunk.
+    fn chunk_time(index: u64, chunk: usize, rate: f64) -> f64 {
+        let nominal = index as f64 * chunk as f64 / rate;
+        let wobble = ((index * 7919) % 41) as f64 / 40.0 - 0.5;
+        nominal + 0.04 * wobble * chunk as f64 / rate
+    }
+
+    /// A device 120 ppm fast feeding a talker's stream, in chunks of 1024
+    /// frames that come a little early or late, for a simulated two
+    /// minutes: the ratio settles on the drift, nothing runs short or
+    /// over once started, and the sine comes out whole.
+    #[test]
+    fn a_fast_device_is_followed_without_a_gap() {
+        let rate = 48_000.0;
+        let device_rate = rate * (1.0 + 120e-6);
+        let buffer = FrameBuffer::new(1, 480);
+        let mut drift = Drift::new(1, DeviceSide::Pushes);
+        let mut chunks = 0;
+        let mut out = Vec::new();
+        let mut steps = Vec::new();
+        let mut ratios = Vec::new();
+        for packet in 0..8000 * 120u64 {
+            let now = packet as f64 / 8000.0;
+            while chunk_time(chunks, 1024, device_rate) <= now {
+                buffer.device_push(&sine(1000.0, device_rate, chunks * 1024, 1024));
+                chunks += 1;
+            }
+            drift.steer(&buffer);
+            let mut taken = vec![0.0; drift.wanted(6)];
+            buffer.pull(&mut taken);
+            drift.push(&taken);
+            out.clear();
+            drift.make(&mut out, 6);
+            assert_eq!(out.len(), 6);
+            if packet == 8000 {
+                buffer.underruns.store(0, Ordering::Relaxed);
+            }
+            if packet > 8000 * 40 {
+                steps.extend(out.windows(2).map(|pair| (pair[1] - pair[0]).abs()));
+                ratios.push(drift.ratio());
+            }
+        }
+        for ratio in &ratios {
+            assert!((ratio - (1.0 + 120e-6)).abs() < 30e-6, "{ratio}");
+        }
+        assert_eq!(buffer.adjustments.load(Ordering::Relaxed), 0);
+        assert_eq!(buffer.underruns.load(Ordering::Relaxed), 0);
+        // No frame is missing: no step is bigger than a 1 kHz sine at
+        // half scale ever takes between two samples.
+        let most = steps.iter().fold(0.0f32, |most, step| most.max(*step));
+        assert!(most < 0.07, "{most}");
+    }
+
+    /// A slow device playing a listener's stream in chunks of 1024
+    /// frames, the other side of the buffer: it settles too, and never
+    /// finds the buffer empty once playing.
+    #[test]
+    fn a_slow_device_is_fed_without_a_gap() {
+        let rate = 48_000.0;
+        let device_rate = rate * (1.0 - 80e-6);
+        let buffer = FrameBuffer::new(1, 480);
+        let mut drift = Drift::new(1, DeviceSide::Pulls);
+        let mut chunks = 0;
+        let mut made = Vec::new();
+        let mut played = vec![0.0; 1024];
+        let mut ratios = Vec::new();
+        for packet in 0..8000 * 120u64 {
+            drift.steer(&buffer);
+            drift.push(&sine(1000.0, rate, packet * 6, 6));
+            made.clear();
+            drift.make(&mut made, usize::MAX);
+            buffer.push(&made);
+            let now = packet as f64 / 8000.0;
+            while chunk_time(chunks + 1, 1024, device_rate) <= now {
+                buffer.device_pull(&mut played);
+                chunks += 1;
+            }
+            if packet == 8000 {
+                buffer.underruns.store(0, Ordering::Relaxed);
+            }
+            if packet > 8000 * 40 {
+                ratios.push(drift.ratio());
+            }
+        }
+        for ratio in &ratios {
+            assert!((ratio - 1.0 / (1.0 - 80e-6)).abs() < 30e-6, "{ratio}");
+        }
+        assert_eq!(buffer.adjustments.load(Ordering::Relaxed), 0);
+        assert_eq!(buffer.underruns.load(Ordering::Relaxed), 0);
     }
 
     #[test]

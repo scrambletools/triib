@@ -3,7 +3,7 @@
 
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -25,6 +25,9 @@ const ETHERNET_LEN: usize = 18;
 /// nanoseconds: a frame sent later than this before its presentation time
 /// would be late.
 const CROSSING: i64 = 500_000;
+/// The longest the pacing thread sleeps at once, so that it follows a
+/// clock that moved.
+const LONGEST_SLEEP: Duration = Duration::from_millis(20);
 
 /// What a talker sends, and from where.
 #[derive(Debug, Clone, PartialEq)]
@@ -48,13 +51,17 @@ pub struct TalkerStats {
     pub frames_sent: u64,
     /// Frames that went out too late and started the media clock again.
     pub media_resets: u64,
-    /// Sample frames the input dropped or repeated, and read empty.
+    /// Times the input dropped frames as its device ran far ahead, and
+    /// reads that found it empty.
     pub adjustments: u64,
     pub underruns: u64,
     /// Frames the interface would not take.
     pub send_errors: u64,
     /// The thread pacing the frames runs real time.
     pub realtime: bool,
+    /// How far the audio device's clock runs from gPTP's, in parts per
+    /// million.
+    pub drift_ppm: i32,
 }
 
 #[derive(Default)]
@@ -65,6 +72,7 @@ struct Counters {
     underruns: AtomicU64,
     send_errors: AtomicU64,
     realtime: AtomicBool,
+    drift_ppm: AtomicI32,
 }
 
 /// A running talker. Dropping it stops the stream.
@@ -110,6 +118,7 @@ impl Talker {
             underruns: read(&self.counters.underruns),
             send_errors: read(&self.counters.send_errors),
             realtime: self.counters.realtime.load(Ordering::Relaxed),
+            drift_ppm: self.counters.drift_ppm.load(Ordering::Relaxed),
         }
     }
 }
@@ -159,12 +168,23 @@ fn run(
     let start = |now: i64| (now / interval + 1) * interval + 1_000_000;
     let mut next = start(clock.now());
     let mut media_reset = false;
-    let mut adjustments = 0;
+    let mut frames: u64 = 0;
     while !stop.load(Ordering::Relaxed) {
         let wake = clock.monotonic_at(next);
         let now = monotonic_now();
         if wake > now {
-            std::thread::sleep(wake - now);
+            let wait = wake - now;
+            std::thread::sleep(wait.min(LONGEST_SLEEP));
+            if wait > LONGEST_SLEEP {
+                // Too far ahead for the clock to have only drifted: it
+                // went back, and the stream starts again from it.
+                if next - clock.now() > 2 * LONGEST_SLEEP.as_nanos() as i64 {
+                    next = start(clock.now());
+                    media_reset = !media_reset;
+                    counters.media_resets.fetch_add(1, Ordering::Relaxed);
+                }
+                continue;
+            }
         }
         // A frame sent late still arrives in time while its presentation
         // time is far enough ahead.
@@ -189,11 +209,14 @@ fn run(
             Err(_) => counters.send_errors.fetch_add(1, Ordering::Relaxed),
         };
         next += interval;
-        adjustments += 1;
-        if adjustments % 800 == 0 {
+        frames += 1;
+        if frames.is_multiple_of(800) {
             // Each tenth of a second, the input's own counts.
             let (made, empty) = input_counts(&input);
             counters.adjustments.store(made, Ordering::Relaxed);
+            counters
+                .drift_ppm
+                .store(input.drift_ppm(), Ordering::Relaxed);
             counters.underruns.store(empty, Ordering::Relaxed);
         }
     }

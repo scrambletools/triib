@@ -25,22 +25,28 @@ impl HardwareClock {
     }
 
     /// How far the clock is ahead of this computer's monotonic clock, in
-    /// nanoseconds, read between two readings of the monotonic clock: the
-    /// closest of a few tries.
+    /// nanoseconds, read between two readings of the monotonic clock: of
+    /// a few tries, the closest-read of those near their median, as a
+    /// clock can now and then be read wrong (a 2^32 ns tear has been seen
+    /// on one card's).
     pub fn offset_from_monotonic(&self) -> io::Result<i128> {
-        let mut best: Option<(u128, i128)> = None;
-        for _ in 0..5 {
+        let mut tries = [(0u128, 0i128); 5];
+        for slot in &mut tries {
             let before = monotonic_now();
             let clock = self.now()?;
             let after = monotonic_now();
             let span = after.saturating_sub(before).as_nanos();
             let middle = before + (after - before) / 2;
-            let offset = clock.as_nanos() as i128 - middle.as_nanos() as i128;
-            if best.is_none_or(|(narrowest, _)| span < narrowest) {
-                best = Some((span, offset));
-            }
+            *slot = (span, clock.as_nanos() as i128 - middle.as_nanos() as i128);
         }
-        Ok(best.map_or(0, |(_, offset)| offset))
+        let mut offsets = tries.map(|(_, offset)| offset);
+        offsets.sort_unstable();
+        let median = offsets[offsets.len() / 2];
+        Ok(tries
+            .iter()
+            .filter(|(_, offset)| (offset - median).abs() <= 10_000)
+            .min_by_key(|(span, _)| *span)
+            .map_or(median, |(_, offset)| *offset))
     }
 }
 

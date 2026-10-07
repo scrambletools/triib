@@ -1268,24 +1268,28 @@ impl Runtime {
             if let Some(talker) = &endpoint.talker {
                 let stats = talker.stats();
                 log(format!(
-                    "{}: sent {} frames, {} media resets, {} send errors{}",
+                    "{}: sent {} frames, {} media resets, {} send errors, device {:+} ppm, {} short{}",
                     endpoint.config.name,
                     stats.frames_sent,
                     stats.media_resets,
                     stats.send_errors,
+                    stats.drift_ppm,
+                    stats.underruns,
                     if stats.realtime { ", real time" } else { "" }
                 ));
             }
             if let Some(listener) = &endpoint.listener {
                 let stats = listener.stats();
                 log(format!(
-                    "{}: received {} frames, {} out of sequence, {} late, {} early, peak {:.3}{}",
+                    "{}: received {} frames, {} out of sequence, {} late, {} early, peak {:.3}, device {:+} ppm, {} short{}",
                     endpoint.config.name,
                     stats.frames_received,
                     stats.sequence_mismatches,
                     stats.late,
                     stats.early,
                     listener.take_peak(),
+                    stats.drift_ppm,
+                    stats.device_underruns,
                     if stats.realtime { ", real time" } else { "" }
                 ));
             }

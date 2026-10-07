@@ -6,8 +6,9 @@
 //!
 //! The media clock is gPTP's: a talker sends its samples at the nominal
 //! rate of gPTP time, read from the interface's PTP hardware clock, and
-//! the audio device, on its own clock, is kept in step by dropping or
-//! repeating a sample frame now and then.
+//! the audio device, on its own clock, is kept in step by resampling
+//! between the two, the ratio steered by the fill of a buffer between
+//! them.
 
 pub mod aaf;
 pub mod am824;

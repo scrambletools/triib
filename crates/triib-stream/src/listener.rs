@@ -4,7 +4,7 @@
 
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -46,6 +46,11 @@ pub struct ListenerStats {
     pub locked: bool,
     /// The thread taking the frames runs real time.
     pub realtime: bool,
+    /// How far the audio device's clock runs from gPTP's, in parts per
+    /// million.
+    pub drift_ppm: i32,
+    /// Times the audio device found nothing to play.
+    pub device_underruns: u64,
 }
 
 #[derive(Default)]
@@ -61,6 +66,8 @@ struct Counters {
     locked: AtomicBool,
     peak: AtomicU32,
     realtime: AtomicBool,
+    drift_ppm: AtomicI32,
+    device_underruns: AtomicU64,
 }
 
 /// A running listener. Dropping it stops listening.
@@ -110,6 +117,8 @@ impl Listener {
             early: read(&counters.early),
             locked: counters.locked.load(Ordering::Relaxed),
             realtime: counters.realtime.load(Ordering::Relaxed),
+            drift_ppm: counters.drift_ppm.load(Ordering::Relaxed),
+            device_underruns: read(&counters.device_underruns),
         }
     }
 
@@ -201,5 +210,13 @@ fn run(
             .peak
             .fetch_max(loudest.to_bits(), Ordering::Relaxed);
         output.write(&samples);
+        if header.sequence == 0 {
+            counters
+                .drift_ppm
+                .store(output.drift_ppm(), Ordering::Relaxed);
+            counters
+                .device_underruns
+                .store(output.underruns(), Ordering::Relaxed);
+        }
     }
 }
