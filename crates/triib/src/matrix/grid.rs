@@ -34,6 +34,8 @@ use crate::text::{Fitted, fit, measure};
 const CELL: f32 = 40.0;
 /// Height of the slanted column headings.
 const HEADER: f32 = 176.0;
+/// The least height the grid takes: its headings and two rows.
+pub const LEAST_HEIGHT: f32 = HEADER + 2.0 * CELL;
 /// Width of the row headings.
 const ROW_HEADING: f32 = 300.0;
 /// The narrowest the row headings get, on a narrow window, which gives
@@ -395,7 +397,13 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
             self.grid.rows.len() as f32 * CELL + HEADER,
         );
         let width = content.width.min(max.width);
-        layout::Node::new(Size::new(width, content.height.min(max.height)))
+        // Never shorter than the headings and two rows, which the headings
+        // would otherwise spill out of.
+        let height = content
+            .height
+            .min(max.height)
+            .max(LEAST_HEIGHT.min(content.height));
+        layout::Node::new(Size::new(width, height))
     }
 
     fn update(
@@ -530,13 +538,16 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
         _style: &renderer::Style,
         layout: Layout<'_>,
         cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<Memory>();
         let bounds = layout.bounds();
         let parts = Parts::new(&self.grid, bounds.size());
         let offset = parts.drawn(state.offset);
         let colors = Colors::of(theme);
+        // Each part's own layer kept to what is in view, as a scrolled
+        // view would otherwise show the grid past its edge.
+        let visible = |area: Rectangle| area.intersection(viewport).unwrap_or_default();
 
         // Draw the caches again for a new grid or theme, and the header
         // when it scrolls sideways.
@@ -598,7 +609,7 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
             width: parts.headings_x() + parts.heading,
             height: HEADER,
         };
-        renderer.with_layer(header_area, |renderer| {
+        renderer.with_layer(visible(header_area), |renderer| {
             let mut bands = Frame::new(renderer, header_area.size());
             for (index, heading) in self.grid.columns.iter().enumerate() {
                 if !parts.column_in_view(index, offset) {
@@ -636,7 +647,7 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
             width: parts.view.width,
             height: parts.view.height,
         };
-        renderer.with_layer(cells_area, |renderer| {
+        renderer.with_layer(visible(cells_area), |renderer| {
             let row_area = |row: usize| Rectangle {
                 y: cells_area.y + row as f32 * CELL - offset.y,
                 height: CELL,
@@ -715,7 +726,7 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
             width: parts.heading,
             height: parts.view.height,
         };
-        renderer.with_layer(headings_area, |renderer| {
+        renderer.with_layer(visible(headings_area), |renderer| {
             for index in parts.rows_in_view(self.grid.rows.len(), offset) {
                 let area = Rectangle {
                     y: headings_area.y + index as f32 * CELL - offset.y,
@@ -740,7 +751,7 @@ impl Widget<Message, Theme, iced::Renderer> for Matrix {
         });
 
         // The scrollbars, over everything.
-        renderer.with_layer(bounds, |renderer| {
+        renderer.with_layer(visible(bounds), |renderer| {
             for vertical in [true, false] {
                 let Some((track, thumb)) = parts.scrollbar(vertical, offset) else {
                     continue;

@@ -2001,6 +2001,13 @@ pub(crate) mod tests {
             ),
             ("log-desktop", View::Entities, true, desktop),
             ("log-matrix", View::Matrix, false, desktop),
+            // A small window with the inspector and the log open.
+            (
+                "log-matrix-cramped",
+                View::Matrix,
+                true,
+                Size::new(960.0, 620.0),
+            ),
             ("log-phone", View::Network, false, phone),
             ("presets-desktop", View::Matrix, false, desktop),
             (

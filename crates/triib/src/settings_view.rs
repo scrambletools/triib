@@ -188,7 +188,7 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
             ),
         ];
         let roomy = size.width >= ROOM_FOR_LABELS;
-        component::connected_with_tips(
+        let group = component::connected_with_tips(
             choices
                 .into_iter()
                 .map(|(glyph, label, value)| {
@@ -203,7 +203,12 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
                     (choice, (!roomy).then(|| label.into()))
                 })
                 .collect(),
-        )
+        );
+        // On the side the settings start on.
+        container(group)
+            .width(Fill)
+            .align_x(scramble_ui::dir::horizontal_start())
+            .into()
     })
     .height(Length::Fixed(button::Size::Small.height()));
     let accent_note = match (settings.system_accent, &triib.omarchy, triib.system_accent) {

@@ -10,7 +10,7 @@ use atdecc::stream_format::{Fit, fit};
 use atdecc::{DescriptorType, DiscoveredEntity, EntityId, StreamFormat};
 use iced::widget::text::Wrapping;
 use iced::widget::{container, mouse_area};
-use iced::{Center, Color, Element, Fill, Theme};
+use iced::{Center, Color, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component;
 use scramble_ui::font::{Type, styled};
@@ -202,7 +202,19 @@ impl Group<'_> {
     }
 }
 
+/// The room the matrix's filters, hint, legend and padding take around the
+/// grid, with the legend on two lines.
+const AROUND_GRID: f32 = 2.0 * 16.0 + 40.0 + 16.0 + 12.0 + STATUS_HEIGHT + 12.0 + 48.0;
+
 pub fn view(triib: &Triib) -> Element<'_, Message> {
+    iced::widget::responsive(move |size| view_at(triib, size.height)).into()
+}
+
+/// The matrix in `height` pixels: the grid takes what the rest leaves, or
+/// when that is too little for its headings and two rows, the whole view
+/// scrolls with the grid at that least height.
+fn view_at(triib: &Triib, height: f32) -> Element<'_, Message> {
+    let cramped = height < grid::LEAST_HEIGHT + AROUND_GRID;
     let mut talkers = groups(triib, Side::Talker);
     let mut listeners = groups(triib, Side::Listener);
     let count = |groups: &[Group<'_>]| {
@@ -239,7 +251,11 @@ pub fn view(triib: &Triib) -> Element<'_, Message> {
             mouse_area(
                 container(grid::matrix(grid, triib.hover))
                     .center_x(Fill)
-                    .height(Fill)
+                    .height(if cramped {
+                        Length::Fixed(grid::LEAST_HEIGHT)
+                    } else {
+                        Length::Fill
+                    })
             )
             .on_press(Message::SelectionCleared),
             status,
@@ -248,12 +264,15 @@ pub fn view(triib: &Triib) -> Element<'_, Message> {
         .spacing(12)
         .into()
     };
-    column![filters(triib, hidden), body]
+    let view = column![filters(triib, hidden), body]
         .spacing(16)
         .padding([16, 24])
-        .width(Fill)
-        .height(Fill)
-        .into()
+        .width(Fill);
+    if cramped {
+        component::scroll(view).height(Fill).into()
+    } else {
+        view.height(Fill).into()
+    }
 }
 
 /// The streams shown, and whether only connectable ones are, with how
