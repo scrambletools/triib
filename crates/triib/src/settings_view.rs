@@ -56,8 +56,8 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
         selected: triib.settings_tab == which,
         on_press: Message::SettingsTab(which),
     };
-    let header = iced::widget::column![
-        iced::widget::row![
+    let header = scramble_ui::column![
+        scramble_ui::row![
             styled(fl!("settings-title"), Type::HeadlineSmall).width(Fill),
             component::tip(
                 button::icon_button(Icon::Close).on_press(Message::SettingsClosed),
@@ -89,7 +89,7 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
     )
     .padding([12, 24])
     .center_x(Fill);
-    let card = container(iced::widget::column![
+    let card = container(scramble_ui::column![
         container(header).padding(iced::Padding {
             top: 24.0,
             right: 24.0,
@@ -148,7 +148,7 @@ fn general(triib: &Triib) -> iced::widget::Column<'_, Message> {
         .find(|choice| choice.tag == triib.settings.language)
         .unwrap_or(&choices[0])
         .clone();
-    iced::widget::column![
+    scramble_ui::column![
         component::section(fl!("settings-language")),
         dropdown::pick(choices, Some(selected), |choice: Language| {
             Message::LanguageSelected(choice.tag)
@@ -220,7 +220,7 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
         .and_then(hex_to_color)
         .unwrap_or(TRIIB_SEED);
     let swatches: Element<'_, Message> = if picking {
-        iced::widget::row(
+        scramble_ui::dir::row(
             ACCENT_SWATCHES
                 .iter()
                 .map(|&swatch| accent_swatch(swatch, hex(swatch) == hex(chosen))),
@@ -236,7 +236,7 @@ fn appearance(triib: &Triib) -> iced::widget::Column<'_, Message> {
     } else {
         fl!("settings-animations-reduced")
     };
-    iced::widget::column![
+    scramble_ui::column![
         choices,
         component::section(fl!("settings-colors")),
         switch_row(
@@ -264,8 +264,8 @@ fn switch_row<'a>(
     on: bool,
     toggled: fn(bool) -> Message,
 ) -> Element<'a, Message> {
-    iced::widget::row![
-        iced::widget::column![
+    scramble_ui::row![
+        scramble_ui::column![
             styled(title, Type::BodyLarge),
             aligned(styled(note, Type::BodyMedium).style(style::on_surface_variant)),
         ]

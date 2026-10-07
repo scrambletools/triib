@@ -41,7 +41,7 @@ impl Facts {
 
 /// A count with thousands set apart, as 1,204,331.
 fn number(count: u32) -> String {
-    let separator = fl!("common-thousands-separator");
+    let separator = crate::i18n::thousands_separator();
     let digits = count.to_string();
     let mut text = String::new();
     for (position, digit) in digits.chars().enumerate() {
@@ -186,21 +186,27 @@ fn item<'a>(name: &str, facts: Facts) -> Option<Element<'a, Message>> {
     if facts.is_empty() {
         return None;
     }
-    let mut lines = iced::widget::column![styled(name.to_owned(), Type::BodyMedium)].spacing(2);
-    if !facts.fine.is_empty() {
-        lines = lines.push(
-            styled(capitalized(&crate::i18n::list(facts.fine)), Type::BodySmall)
-                .style(style::on_surface_variant),
-        );
+    let mut lines = scramble_ui::column![styled(name.to_owned(), Type::BodyMedium)].spacing(2);
+    // The facts as a sentence, or in right to left languages each on a
+    // line of its own: cosmic-text wraps a right to left line holding left
+    // to right words, such as "0 µs", wider than the room it has.
+    let paragraphs = |facts: Vec<String>| {
+        if scramble_ui::dir::mirrored() {
+            facts.iter().map(|fact| capitalized(fact)).collect()
+        } else {
+            vec![capitalized(&crate::i18n::list(facts))]
+        }
+    };
+    let line = |text: String| {
+        styled(text, Type::BodySmall)
+            .width(iced::Fill)
+            .align_x(scramble_ui::dir::text_start())
+    };
+    for text in paragraphs(facts.fine) {
+        lines = lines.push(line(text).style(style::on_surface_variant));
     }
-    if !facts.wrong.is_empty() {
-        lines = lines.push(
-            styled(
-                capitalized(&crate::i18n::list(facts.wrong)),
-                Type::BodySmall,
-            )
-            .style(style::error_text),
-        );
+    for text in paragraphs(facts.wrong) {
+        lines = lines.push(line(text).style(style::error_text));
     }
     Some(lines.into())
 }

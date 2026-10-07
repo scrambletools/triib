@@ -10,13 +10,14 @@ use std::collections::HashMap;
 use atdecc::descriptor::DescriptorType;
 use atdecc::model::EntityModel;
 use atdecc::{ClockIdentity, DiscoveredEntity, EntityId};
-use iced::widget::{button as plain_button, column, container, mouse_area, row, scrollable, space};
+use iced::widget::{button as plain_button, container, mouse_area, scrollable, space};
 use iced::{Center, Element, Fill, Length, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component;
 use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
 use scramble_ui::{Scheme, shape, style};
+use scramble_ui::{column, dir, line, row};
 
 use crate::app::{Message, NetworkState, Triib};
 use crate::describe;
@@ -299,7 +300,7 @@ fn header<'a>(
         .size(Size::ExtraSmall)
         .on_press(Message::NetworkFocused(None))
     });
-    let mut header = row![].spacing(12).align_y(Center);
+    let mut header = line![].spacing(12).align_y(Center);
     if width >= TITLED {
         header = header.push(styled(fl!("toolbar-network"), Type::TitleLarge));
     }
@@ -511,11 +512,11 @@ fn streams(triib: &Triib, topology: &Topology) -> Vec<Stream> {
             streams.push(Stream {
                 input: (listener_id, input.index),
                 talker: talker_id,
-                name: format!(
-                    "{} → {}",
-                    stream_name(talker_model, DescriptorType::STREAM_OUTPUT, output),
-                    stream_name(Some(model), DescriptorType::STREAM_INPUT, input.index)
-                ),
+                name: {
+                    let output = stream_name(talker_model, DescriptorType::STREAM_OUTPUT, output);
+                    let input = stream_name(Some(model), DescriptorType::STREAM_INPUT, input.index);
+                    format!("{output} {} {input}", crate::i18n::arrow(&output))
+                },
                 talker_name: triib.entity_name_of(talker_id),
                 listener_name,
                 media_clock: input.current_format.is_clock(),
@@ -1050,7 +1051,8 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
             at = topology.nodes[parent].parent;
         }
         path.reverse();
-        facts.push((fl!("netmap-clock-path"), path.join(" → ")));
+        let arrow = format!(" {} ", crate::i18n::arrow(&path[0]));
+        facts.push((fl!("netmap-clock-path"), path.join(&arrow)));
         facts.push((fl!("netmap-hops"), (path.len() - 1).to_string()));
     }
     if let Some(delay) = entry.link.delay {
@@ -1214,7 +1216,7 @@ fn stream_details(topology: &Topology, shows: NetworkShows, stream: &Stream, pai
                 } else {
                     fl!("netmap-reaches")
                 },
-                names.join(" → "),
+                names.join(&format!(" {} ", crate::i18n::arrow(&names[0]))),
             ),
         ],
         sections: Vec::new(),
@@ -1332,13 +1334,15 @@ impl Page {
             row![
                 swatch(self.swatch),
                 column![
-                    styled(self.title, Type::TitleMedium),
+                    styled(self.title, Type::TitleMedium).align_x(dir::text_start()),
                     row![
                         container(state_icon.style(tinted)).padding(iced::Padding {
                             top: 2.0,
                             ..iced::Padding::ZERO
                         }),
-                        styled(self.state, Type::BodyMedium).style(tinted),
+                        styled(self.state, Type::BodyMedium)
+                            .style(tinted)
+                            .align_x(dir::text_start()),
                     ]
                     .spacing(4),
                 ]
@@ -1351,12 +1355,15 @@ impl Page {
         .spacing(14);
         if !self.facts.is_empty() {
             body = body.push(
-                column(self.facts.into_iter().map(|(label, value)| {
+                dir::column(self.facts.into_iter().map(|(label, value)| {
                     row![
                         styled(label, Type::BodyMedium)
                             .style(style::on_surface_variant)
-                            .width(Length::Fixed(112.0)),
-                        styled(value, Type::BodyMedium).width(Fill),
+                            .width(Length::Fixed(112.0))
+                            .align_x(dir::text_start()),
+                        styled(value, Type::BodyMedium)
+                            .width(Fill)
+                            .align_x(dir::text_start()),
                     ]
                     .spacing(12)
                     .into()
@@ -1370,12 +1377,12 @@ impl Page {
                 let content = row![
                     swatch(Some(item.swatch)),
                     column![
-                        styled(item.name, Type::LabelLarge),
-                        styled(item.detail, Type::BodySmall).style(move |theme: &Theme| {
-                            iced::widget::text::Style {
+                        styled(item.name, Type::LabelLarge).align_x(dir::text_start()),
+                        styled(item.detail, Type::BodySmall)
+                            .align_x(dir::text_start())
+                            .style(move |theme: &Theme| iced::widget::text::Style {
                                 color: Some(map::text_color(&Scheme::of(theme), detail_paint)),
-                            }
-                        }),
+                            }),
                     ]
                     .spacing(2)
                     .width(Fill),
@@ -1412,11 +1419,15 @@ impl Page {
             });
             body = body.push(
                 column![styled(title, Type::LabelLarge).style(style::on_surface_variant)]
-                    .push(column(items).spacing(6))
+                    .push(dir::column(items).spacing(6))
                     .spacing(6),
             );
         }
-        body = body.push(styled(self.help, Type::BodySmall).style(style::on_surface_variant));
+        body = body.push(
+            styled(self.help, Type::BodySmall)
+                .style(style::on_surface_variant)
+                .align_x(dir::text_start()),
+        );
         container(
             scrollable(body.padding(16))
                 .direction(scrollable::Direction::Vertical(component::thin_scrollbar()))

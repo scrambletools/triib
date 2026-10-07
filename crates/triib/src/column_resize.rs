@@ -18,8 +18,11 @@ pub const MIN_WIDTH: f32 = 48.0;
 pub struct Resizable<'a, Message> {
     content: Element<'a, Message>,
     width: Length,
-    /// How far right of the heading its column's divider is.
+    /// How far right of the heading its column's divider is, or left of
+    /// it when mirrored.
     divider: f32,
+    /// The divider is on the heading's left, as in right to left tables.
+    mirrored: bool,
     on_resize: Box<dyn Fn(f32) -> Message + 'a>,
     on_end: Message,
     on_reset: Message,
@@ -38,6 +41,7 @@ pub fn resizable<'a, Message>(
         content: content.into(),
         width: Length::Fill,
         divider: 0.0,
+        mirrored: false,
         on_resize: Box::new(on_resize),
         on_end,
         on_reset,
@@ -58,6 +62,13 @@ impl<Message> Resizable<'_, Message> {
         self.divider = divider;
         self
     }
+
+    /// Puts the divider on the heading's left, for a table whose columns
+    /// run from the right; dragging it left widens the column.
+    pub fn mirrored(mut self, mirrored: bool) -> Self {
+        self.mirrored = mirrored;
+        self
+    }
 }
 
 #[derive(Default)]
@@ -68,9 +79,14 @@ struct State {
 }
 
 /// Where the divider right of `bounds`, `divider` away, is grabbed.
-fn edge(bounds: Rectangle, divider: f32) -> Rectangle {
+fn edge(bounds: Rectangle, divider: f32, mirrored: bool) -> Rectangle {
+    let x = if mirrored {
+        bounds.x - divider
+    } else {
+        bounds.x + bounds.width + divider
+    };
     Rectangle {
-        x: bounds.x + bounds.width + divider - GRAB,
+        x: x - GRAB,
         width: 2.0 * GRAB,
         ..bounds
     }
@@ -140,7 +156,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
     ) {
         let bounds = layout.bounds();
         let state = tree.state.downcast_mut::<State>();
-        let hovered = cursor.is_over(edge(bounds, self.divider));
+        let hovered = cursor.is_over(edge(bounds, self.divider, self.mirrored));
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if hovered => {
                 if let Some(position) = cursor.position() {
@@ -163,7 +179,9 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
                 if let Some((origin, start)) = state.drag
                     && let Some(position) = cursor.land().position()
                 {
-                    let width = (start + position.x - origin).max(MIN_WIDTH);
+                    let moved = position.x - origin;
+                    let moved = if self.mirrored { -moved } else { moved };
+                    let width = (start + moved).max(MIN_WIDTH);
                     shell.publish((self.on_resize)(width));
                     shell.capture_event();
                     return;
@@ -226,7 +244,9 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer> for Resizab
         renderer: &iced::Renderer,
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.drag.is_some() || cursor.is_over(edge(layout.bounds(), self.divider)) {
+        if state.drag.is_some()
+            || cursor.is_over(edge(layout.bounds(), self.divider, self.mirrored))
+        {
             return mouse::Interaction::ResizingHorizontally;
         }
         layout

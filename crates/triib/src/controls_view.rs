@@ -94,7 +94,7 @@ fn editor<'a>(
     match (control.value_type.shape(), control.value_type.scalar()) {
         (Shape::Linear, Some(scalar)) => {
             let values: Vec<Linear> = control.linear().collect();
-            let mut lines = iced::widget::column![].spacing(4);
+            let mut lines = scramble_ui::column![].spacing(4);
             for (place, value) in values.iter().enumerate() {
                 let now = current.get(place).copied().unwrap_or(value.current);
                 let label = model

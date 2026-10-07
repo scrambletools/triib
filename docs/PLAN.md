@@ -541,9 +541,18 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   (Turkish İ, Greek without accents). Tests check every translation
   loads, keeps English's keys and variables, keeps the standards' names
   and units, and picks its plural forms.
-- To do: mirror triib's own views in right to left languages (the entity
-  list, the inspector's rows, the log's lines), which now mirror only
-  where scramble-ui's components do; and review by native speakers.
+- Right to left languages mirror the insides of the views and panels:
+  the entity list runs from the right with its dividers dragged from
+  their left, the inspector's labels sit on the right, the log's lines
+  start with their time on the right, arrows and chevrons point the way
+  the line reads, and the matrix's and the network's controls and
+  details mirror. The window's bars and the inspector's place stay as
+  in left to right languages, and so do the matrix grid and the network
+  map, which are drawings, and sliders, which iced draws left to right.
+  Translated text reads from the right even when it opens with a Latin
+  word; data such as entity names keeps its own direction, and text cut
+  short ends in an ellipsis on the side it reads towards.
+- To do: review by native speakers.
 
 ### P2: macOS and Windows, everything but virtual endpoints
 

@@ -10,11 +10,12 @@ use atdecc::EntityId;
 use atdecc::control::{ControlDescriptor, ControlType, Shape, encode_values};
 use atdecc::descriptor::{DescriptorType, SamplingRate, StreamFormat};
 use atdecc::model::{EntityModel, EnumerationState};
-use iced::widget::{column, container, mouse_area, opaque, row, text_input};
+use iced::widget::{container, mouse_area, opaque, text_input};
 use iced::{Center, Element, Fill};
 use scramble_ui::button::{self, Kind};
 use scramble_ui::font::{Type, aligned, styled};
 use scramble_ui::icon::Icon;
+use scramble_ui::{column, row};
 use scramble_ui::{component, enter, style};
 use serde::{Deserialize, Serialize};
 

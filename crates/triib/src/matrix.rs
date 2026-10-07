@@ -9,13 +9,14 @@ use atdecc::model::EntityModel;
 use atdecc::stream_format::{Fit, fit};
 use atdecc::{DescriptorType, DiscoveredEntity, EntityId, StreamFormat};
 use iced::widget::text::Wrapping;
-use iced::widget::{column, container, mouse_area, row};
+use iced::widget::{container, mouse_area};
 use iced::{Center, Color, Element, Fill, Theme};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component;
 use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
 use scramble_ui::{Scheme, faded, shape, style};
+use scramble_ui::{column, dir, row};
 
 use crate::app::{self, Message, Triib};
 use crate::fl;
@@ -265,7 +266,7 @@ fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
             .selected(streams == value)
             .on_press(Message::MatrixStreams(value))
     };
-    let mut filters = row![
+    let mut filters: Vec<Element<'_, Message>> = vec![
         component::connected(vec![
             choice(fl!("matrix-all-streams"), Streams::All),
             choice(fl!("netmap-audio"), Streams::Audio),
@@ -284,10 +285,11 @@ fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
             .selected(false)
         }
         .size(Size::ExtraSmall)
-        .on_press(Message::MatrixConnectableOnlyToggled),
+        .on_press(Message::MatrixConnectableOnlyToggled)
+        .into(),
     ];
     if let Some(hidden) = hidden {
-        filters = filters.push(
+        filters.push(
             styled(
                 match hidden {
                     0 => fl!("matrix-none-hidden"),
@@ -295,10 +297,11 @@ fn filters(triib: &Triib, hidden: Option<usize>) -> Element<'_, Message> {
                 },
                 Type::BodyMedium,
             )
-            .style(style::on_surface_variant),
+            .style(style::on_surface_variant)
+            .into(),
         );
     }
-    filters
+    dir::row(filters)
         .spacing(12)
         .align_y(Center)
         .wrap()
@@ -622,6 +625,7 @@ fn status<'a>(
     .height(STATUS_HEIGHT)
     .width(Fill)
     .clip(true)
+    .align_x(dir::horizontal_start())
     .align_y(Center)
     .style(|theme: &Theme| container::Style {
         background: Some(Scheme::of(theme).surface_container.into()),
@@ -650,9 +654,10 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
     match (column, row, cell) {
         (Some(Found::Stream(talker, output)), Some(Found::Stream(listener, input)), _) => {
             let route = format!(
-                "{}, {}  →  {}, {}",
+                "{}, {}  {}  {}, {}",
                 talker.label(),
                 output.name,
+                crate::i18n::arrow(&talker.label()),
                 listener.label(),
                 input.name
             );
@@ -690,11 +695,21 @@ fn say(triib: &Triib, grid: &Grid, talkers: &[Group<'_>], listeners: &[Group<'_>
             }
         }
         (Some(column), Some(row), Some(Cell::Own)) => info(
-            format!("{}  →  {}", column.label(), row.label()),
+            format!(
+                "{}  {}  {}",
+                column.label(),
+                crate::i18n::arrow(&column.label()),
+                row.label()
+            ),
             fl!("matrix-own"),
         ),
         (Some(column), Some(row), Some(Cell::Count(count))) => info(
-            format!("{}  →  {}", column.label(), row.label()),
+            format!(
+                "{}  {}  {}",
+                column.label(),
+                crate::i18n::arrow(&column.label()),
+                row.label()
+            ),
             if count == 0 {
                 fl!("matrix-group-none")
             } else {

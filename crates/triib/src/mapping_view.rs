@@ -133,10 +133,11 @@ fn joining(input: bool, row: (u16, u16), other: (u16, u16)) -> AudioMapping {
 
 /// A channel's number, counted from 1, beside its picker.
 fn numbered<'a>(channel: u16, picker: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    iced::widget::row![
+    scramble_ui::row![
         styled((channel + 1).to_string(), Type::BodyMedium)
             .style(style::on_surface_variant)
-            .width(Length::Fixed(CHANNEL_WIDTH)),
+            .width(Length::Fixed(CHANNEL_WIDTH))
+            .align_x(scramble_ui::dir::text_start()),
         container(picker).width(Fill),
     ]
     .spacing(8)
@@ -391,11 +392,12 @@ fn fixed_mappings<'a>(
                 count: counts(&clusters, first.cluster_offset),
             }
             .range(first.cluster_channel, last.cluster_channel);
-            let line = if input {
-                format!("{stream} → {cluster}")
+            let (from, to) = if input {
+                (stream, cluster)
             } else {
-                format!("{cluster} → {stream}")
+                (cluster, stream)
             };
+            let line = format!("{from} {} {to}", crate::i18n::arrow(&from));
             styled(line, Type::BodyMedium).into()
         })
         .collect()

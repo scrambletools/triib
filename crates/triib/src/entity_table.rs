@@ -12,7 +12,7 @@ use scramble_ui::button::{self, Kind};
 use scramble_ui::dropdown::{self, Entry};
 use scramble_ui::font::{TEXT, Type, styled};
 use scramble_ui::icon::{self, Icon};
-use scramble_ui::{component, style};
+use scramble_ui::{component, dir, style};
 
 use crate::app::{Message, Triib};
 use crate::column_resize::{MIN_WIDTH, resizable};
@@ -116,6 +116,7 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
 fn cell<'a>(text: &str, width: f32) -> Element<'a, Message> {
     container(styled(fit(text, TEXT, 14.0, width).name, Type::BodyMedium).wrapping(Wrapping::None))
         .width(Length::Fixed(width))
+        .align_x(dir::horizontal_start())
         .clip(true)
         .into()
 }
@@ -269,17 +270,22 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         )
         .width(Length::Fixed(width))
         .divider(DIVIDER)
+        .mirrored(dir::mirrored())
     };
     let name_width = widths[0];
     let mut table_columns = vec![
         table::column(
             heading(
-                styled(
-                    fit(&fl!("entity-name"), MEDIUM, 14.0, name_width).name,
-                    Type::LabelLarge,
+                container(
+                    styled(
+                        fit(&fl!("entity-name"), MEDIUM, 14.0, name_width).name,
+                        Type::LabelLarge,
+                    )
+                    .style(style::on_surface_variant)
+                    .wrapping(Wrapping::None),
                 )
-                .style(style::on_surface_variant)
-                .wrapping(Wrapping::None)
+                .width(Fill)
+                .align_x(dir::horizontal_start())
                 .into(),
                 Column::Name,
                 name_width,
@@ -290,7 +296,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 container(
                     button::custom(
                         Kind::Row,
-                        iced::widget::row![
+                        scramble_ui::row![
                             icon::icon(describe::glyph(&row.entity.adp), 20),
                             styled(name, Type::BodyMedium).wrapping(Wrapping::None),
                         ]
@@ -301,6 +307,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                     .on_press(Message::EntitySelected(entity_id)),
                 )
                 .width(Length::Fixed(name_width))
+                .align_x(dir::horizontal_start())
                 .clip(true)
             },
         )
@@ -314,23 +321,27 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         let mut entries = vec![
             Entry::item(fl!("column-remove"), Message::EntityColumn(index, None)).icon(Icon::Close),
         ];
+        // Earlier columns are on the left, or on the right when the table
+        // runs from the right.
+        let (earlier, later) = if dir::mirrored() {
+            (
+                (fl!("column-move-right"), Icon::ArrowForward),
+                (fl!("column-move-left"), Icon::ArrowBack),
+            )
+        } else {
+            (
+                (fl!("column-move-left"), Icon::ArrowBack),
+                (fl!("column-move-right"), Icon::ArrowForward),
+            )
+        };
         if index > 0 {
             entries.push(
-                Entry::item(
-                    fl!("column-move-left"),
-                    Message::EntityColumnMoved(index, false),
-                )
-                .icon(Icon::ArrowBack),
+                Entry::item(earlier.0, Message::EntityColumnMoved(index, false)).icon(earlier.1),
             );
         }
         if index < last {
-            entries.push(
-                Entry::item(
-                    fl!("column-move-right"),
-                    Message::EntityColumnMoved(index, true),
-                )
-                .icon(Icon::ArrowForward),
-            );
+            entries
+                .push(Entry::item(later.0, Message::EntityColumnMoved(index, true)).icon(later.1));
         }
         if can_add {
             entries.push(Entry::divider());
@@ -371,6 +382,11 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
                 .align_y(Center),
         );
     }
+    // The name on the right and the rest leftwards, in right to left
+    // languages.
+    if dir::mirrored() {
+        table_columns.reverse();
+    }
     let column_count = table_columns.len();
     let table = table(table_columns, rows)
         .padding_x(TABLE_PADDING)
@@ -382,15 +398,20 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let view: Element<'_, Message> = if fits {
         component::scroll(content).height(Fill).into()
     } else {
-        scrollable(content)
+        let scrolled = scrollable(content)
             .direction(scrollable::Direction::Both {
                 vertical: component::thin_scrollbar(),
                 horizontal: component::thin_scrollbar(),
             })
             .style(style::scrollbar)
             .width(Fill)
-            .height(Fill)
-            .into()
+            .height(Fill);
+        // A table running from the right starts scrolled to its right.
+        if dir::mirrored() {
+            scrolled.anchor_right().into()
+        } else {
+            scrolled.into()
+        }
     };
     mouse_area(view).on_press(Message::SelectionCleared).into()
 }

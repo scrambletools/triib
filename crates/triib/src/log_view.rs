@@ -17,12 +17,12 @@ use atdecc::lite::{CvuMessage, LiteFlags, LiteMessage, LiteStatus};
 use atdecc::mvu::MvuMessage;
 use atdecc::pdu::{self, Pdu};
 use avb_mrp::msrp;
-use iced::widget::{column, container, mouse_area, row, space};
-use iced::{Center, Element, Fill, Font, Length, Padding};
+use iced::widget::{container, mouse_area, space};
+use iced::{Center, Element, Fill, Font, Length};
 use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
-use scramble_ui::{component, resize, style};
+use scramble_ui::{column, component, dir, line, resize, row, style};
 
 use crate::app::{Message, Triib};
 use crate::describe;
@@ -542,12 +542,7 @@ pub fn panel(triib: &Triib, width: f32, height: f32, most: f32) -> Element<'_, M
     container(column![
         handle,
         container(column![header, body].spacing(4))
-            .padding(Padding {
-                top: 0.0,
-                right: 12.0,
-                bottom: 8.0,
-                left: 24.0,
-            })
+            .padding(dir::padding(0.0, 12.0, 8.0, 24.0))
             .height(Fill),
     ])
     .width(Fill)
@@ -567,10 +562,16 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, M
     let line = entry.line.clone();
     let log = &triib.log;
     let opened = log.open == Some(entry.number);
-    let (glyph, way) = if entry.frame.sent {
-        (Icon::ArrowForward, fl!("log-sent"))
+    // Out from triib, or in to it, pointing the way the line reads.
+    let glyph = if entry.frame.sent != dir::mirrored() {
+        Icon::ArrowForward
     } else {
-        (Icon::ArrowBack, fl!("log-heard"))
+        Icon::ArrowBack
+    };
+    let way = if entry.frame.sent {
+        fl!("log-sent")
+    } else {
+        fl!("log-heard")
     };
     // The entity's name with the tag the matrix gives it, telling apart
     // entities of the same name.
@@ -591,17 +592,20 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, M
         },
         None => space().into(),
     };
-    let mut summary = row![styled(line.summary, Type::BodyMedium)].spacing(8);
+    let mut summary = line![styled(line.summary, Type::BodyMedium)].spacing(8);
     if let Some(refusal) = line.refusal {
         summary = summary.push(styled(refusal, Type::BodyMedium).style(style::error_text));
     }
+    // What it says starts on the line's start side.
+    let summary = summary.push(space::horizontal());
     let time = styled(
         format!("{:.3}", log.seconds(entry.frame.at)),
         Type::BodySmall,
     )
     .font(Font::MONOSPACE)
     .style(style::on_surface_variant)
-    .width(Length::Fixed(TIME_WIDTH));
+    .width(Length::Fixed(TIME_WIDTH))
+    .align_x(dir::text_start());
     let way = component::tip(icon::icon(glyph, 16).style(style::on_surface_variant), way);
     // Under the time, or beside the entity.
     let indent = if one_row {
@@ -616,6 +620,7 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, M
                 way,
                 container(entity)
                     .width(Length::Fixed(ENTITY_WIDTH))
+                    .align_x(dir::horizontal_start())
                     .clip(true),
                 summary.width(Fill),
             ]
@@ -624,9 +629,16 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, M
         ]
     } else {
         column![
-            row![time, way, container(entity).width(Fill).clip(true)]
-                .spacing(12)
-                .align_y(Center),
+            row![
+                time,
+                way,
+                container(entity)
+                    .width(Fill)
+                    .align_x(dir::horizontal_start())
+                    .clip(true)
+            ]
+            .spacing(12)
+            .align_y(Center),
             row![space().width(Length::Fixed(indent)), summary.width(Fill)],
         ]
     }
@@ -649,10 +661,12 @@ fn log_line<'a>(triib: &'a Triib, entry: &Entry, one_row: bool) -> Element<'a, M
                     .font(Font::MONOSPACE)
                     .style(style::on_surface_variant),
             )
-            .padding(iced::Padding {
-                left: if one_row { TIME_WIDTH + 12.0 } else { 0.0 },
-                ..iced::Padding::ZERO
-            }),
+            .padding(dir::padding(
+                0.0,
+                0.0,
+                0.0,
+                if one_row { TIME_WIDTH + 12.0 } else { 0.0 },
+            )),
         );
     }
     let toggle = Message::Log(LogMessage::Opened((!opened).then_some(entry.number)));

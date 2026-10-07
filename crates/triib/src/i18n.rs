@@ -142,6 +142,28 @@ pub fn lasting(text: String) -> &'static str {
     text
 }
 
+/// Interface text in its language's direction: in a right to left
+/// language it starts with a right to left mark, so a message that opens
+/// with a Latin word, such as "ID ישות", still reads from the right.
+pub fn directed(text: String) -> String {
+    if scramble_ui::dir::rtl() && !text.is_empty() {
+        format!("\u{200F}{text}")
+    } else {
+        text
+    }
+}
+
+/// What sets thousands apart in the language's numbers.
+pub fn thousands_separator() -> String {
+    mark("common-thousands-separator")
+}
+
+/// A mark the language writes numbers and lists with, unmarked by
+/// [`directed`]: `common-list-separator` and the like.
+fn mark(key: &str) -> String {
+    LOADER.get(key)
+}
+
 /// `text` in capitals as the interface's language writes them.
 pub fn uppercase(text: &str) -> String {
     uppercase_in(LOADER.current_language().language.as_str(), text)
@@ -189,21 +211,23 @@ fn uppercase_in(language: &str, text: &str) -> String {
 /// A number formatted with a point, written with the language's decimal
 /// mark: "44.1" as "44,1" in German.
 pub fn decimal(text: String) -> String {
-    let mark = crate::fl!("common-decimal-separator");
-    if mark == "." {
+    let separator = mark("common-decimal-separator");
+    if separator == "." {
         text
     } else {
-        text.replace('.', &mark)
+        text.replace('.', &separator)
     }
 }
 
 /// Parts of a description joined as the language lists them, such as
 /// "enp6s0, up, hardware clock ptp0".
 pub fn list(parts: impl IntoIterator<Item = String>) -> String {
-    parts
-        .into_iter()
-        .collect::<Vec<_>>()
-        .join(&crate::fl!("common-list-separator"))
+    directed(
+        parts
+            .into_iter()
+            .collect::<Vec<_>>()
+            .join(&mark("common-list-separator")),
+    )
 }
 
 fn direction_of(language: &LanguageIdentifier) -> CharacterDirection {
@@ -218,16 +242,26 @@ pub fn available() -> Vec<LanguageIdentifier> {
 }
 
 /// Text for `key` from `i18n/<language>/triib.ftl`, with Fluent arguments:
-/// `fl!("entity-count", count = entities)`. Checked against the English
-/// file at compile time.
+/// `fl!("entity-count", count = entities)`, in the language's direction.
+/// Checked against the English file at compile time.
 #[macro_export]
 macro_rules! fl {
     ($key:literal) => {{
-        i18n_embed_fl::fl!($crate::i18n::LOADER, $key)
+        $crate::i18n::directed(i18n_embed_fl::fl!($crate::i18n::LOADER, $key))
     }};
     ($key:literal, $($args:tt)*) => {{
-        i18n_embed_fl::fl!($crate::i18n::LOADER, $key, $($args)*)
+        $crate::i18n::directed(i18n_embed_fl::fl!($crate::i18n::LOADER, $key, $($args)*))
     }};
+}
+
+/// An arrow from one thing to the next in `text`'s own direction: → in
+/// left to right text, ← in right to left.
+pub fn arrow(text: &str) -> &'static str {
+    if scramble_ui::dir::text_is_rtl(text) {
+        "←"
+    } else {
+        "→"
+    }
 }
 
 #[cfg(test)]

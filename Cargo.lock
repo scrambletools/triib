@@ -1545,7 +1545,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=f52d76456127324637be1220b512711e459ecb7a#f52d76456127324637be1220b512711e459ecb7a"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=4c7888b0ed7946e7ee68cc27a7028b7e3f9941f4#4c7888b0ed7946e7ee68cc27a7028b7e3f9941f4"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -1666,7 +1666,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.2"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=f52d76456127324637be1220b512711e459ecb7a#f52d76456127324637be1220b512711e459ecb7a"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=4c7888b0ed7946e7ee68cc27a7028b7e3f9941f4#4c7888b0ed7946e7ee68cc27a7028b7e3f9941f4"
 dependencies = [
  "iced_renderer",
  "log",
@@ -3044,7 +3044,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "scramble-ui"
 version = "0.1.0"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=f52d76456127324637be1220b512711e459ecb7a#f52d76456127324637be1220b512711e459ecb7a"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=4c7888b0ed7946e7ee68cc27a7028b7e3f9941f4#4c7888b0ed7946e7ee68cc27a7028b7e3f9941f4"
 dependencies = [
  "ashpd",
  "iced",

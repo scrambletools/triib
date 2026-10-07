@@ -8,10 +8,11 @@ use atdecc::aem::StreamInfoFlags;
 use atdecc::descriptor::DescriptorType;
 use atdecc::lite::{FallbackReason, LiteFlags, LiteStatus, PtpProfile};
 use atdecc::model::EntityModel;
-use iced::widget::{column, container, row};
+use iced::widget::container;
 use iced::{Element, Fill, Length, Theme};
 use scramble_ui::font::{Type, styled};
 use scramble_ui::{Scheme, component, shape, style};
+use scramble_ui::{column, dir, row};
 
 use crate::app::{Message, Triib};
 use crate::fl;
@@ -218,11 +219,14 @@ pub fn entity_section<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
 }
 
 fn property<'a>(label: &str, value: String, alarm: bool) -> Element<'a, Message> {
-    let value = styled(value, Type::BodyMedium).width(Fill);
+    let value = styled(value, Type::BodyMedium)
+        .width(Fill)
+        .align_x(dir::text_start());
     row![
         styled(label.to_owned(), Type::BodyMedium)
             .style(style::on_surface_variant)
-            .width(Length::Fixed(132.0)),
+            .width(Length::Fixed(132.0))
+            .align_x(dir::text_start()),
         if alarm {
             value.style(style::error_text)
         } else {

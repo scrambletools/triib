@@ -20,7 +20,7 @@ use scramble_ui::button::{self, Kind, Size};
 use scramble_ui::component::{self, TOOLBAR_HEIGHT};
 use scramble_ui::font::{Type, styled};
 use scramble_ui::icon::{self, Icon};
-use scramble_ui::{Scheme, dropdown, style};
+use scramble_ui::{Scheme, dir, dropdown, style};
 
 use crate::app::{Message, NetworkState, Triib};
 use crate::describe;
@@ -150,6 +150,9 @@ fn toolbar(triib: &Triib) -> Element<'_, Message> {
 }
 
 fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
+    // The bar keeps its layout in every language; its text reads in the
+    // language's direction.
+    let _fixed = dir::fixed();
     use component::{DIVIDER_WIDTH, TOOL_WIDTH, TOOLBAR_GAP};
     let tools = |count: f32| count * TOOL_WIDTH + (count - 1.0) * 4.0;
     // The space between the bar's two ends takes a gap of its own.
@@ -460,11 +463,14 @@ fn labelled<'a>(
     value: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     let label: String = label.into();
-    iced::widget::row![
+    scramble_ui::row![
         styled(label, Type::BodyMedium)
             .style(style::on_surface_variant)
-            .width(Length::Fixed(132.0)),
-        container(value).width(Fill),
+            .width(Length::Fixed(132.0))
+            .align_x(dir::text_start()),
+        container(value)
+            .width(Fill)
+            .align_x(dir::horizontal_start()),
     ]
     .spacing(8)
     .align_y(Center)
@@ -478,9 +484,13 @@ pub(crate) fn stacked<'a>(
     value: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     let label: String = label.into();
-    iced::widget::column![
-        styled(label, Type::BodyMedium).style(style::on_surface_variant),
-        container(value).width(Fill),
+    scramble_ui::column![
+        styled(label, Type::BodyMedium)
+            .style(style::on_surface_variant)
+            .align_x(dir::text_start()),
+        container(value)
+            .width(Fill)
+            .align_x(dir::horizontal_start()),
     ]
     .spacing(4)
     .into()
@@ -492,8 +502,10 @@ fn name_property<'a>(triib: &'a Triib, label: String, target: NameTarget) -> Ele
     if let Some((editing, text)) = &triib.editing
         && *editing == target
     {
-        return iced::widget::column![
-            styled(label, Type::BodyMedium).style(style::on_surface_variant),
+        return scramble_ui::column![
+            styled(label, Type::BodyMedium)
+                .style(style::on_surface_variant)
+                .align_x(dir::text_start()),
             name_field(text),
         ]
         .spacing(4)
@@ -512,8 +524,10 @@ fn name_line<'a>(triib: &'a Triib, target: NameTarget, unset: String) -> Element
     }
     let name = triib.current_name(target);
     let shown = if name.is_empty() { unset } else { name };
-    iced::widget::row![
-        styled(shown, Type::BodyMedium).width(Fill),
+    scramble_ui::row![
+        styled(shown, Type::BodyMedium)
+            .width(Fill)
+            .align_x(dir::text_start()),
         component::tip(
             button::icon_button(Icon::Edit)
                 .size(Size::ExtraSmall)
@@ -537,7 +551,7 @@ fn name_field<'a>(text: &str) -> Element<'a, Message> {
             label,
         )
     };
-    iced::widget::row![
+    scramble_ui::row![
         text_input(&fl!("inspector-name"), text)
             .id(iced::widget::Id::new(NAME_FIELD))
             .on_input(Message::EditChanged)
@@ -736,11 +750,14 @@ pub(crate) fn source_picker<'a>(
 
 fn property<'a>(label: impl Into<String>, value: String) -> Element<'a, Message> {
     let label: String = label.into();
-    iced::widget::row![
+    scramble_ui::row![
         styled(label, Type::BodyMedium)
             .style(style::on_surface_variant)
-            .width(Length::Fixed(132.0)),
-        styled(value, Type::BodyMedium).width(Fill),
+            .width(Length::Fixed(132.0))
+            .align_x(dir::text_start()),
+        styled(value, Type::BodyMedium)
+            .width(Fill)
+            .align_x(dir::text_start()),
     ]
     .spacing(8)
     .into()
@@ -769,7 +786,7 @@ fn entity_details<'a>(
     tab: InspectorTab,
 ) -> Element<'a, Message> {
     let entity_id = entity.entity_id();
-    let mut column = iced::widget::column![].spacing(6);
+    let mut column = scramble_ui::column![].spacing(6);
     if tab == InspectorTab::Entity
         && entity
             .adp
@@ -953,7 +970,7 @@ fn stream_sections<'a>(
                 index: stream.index,
                 name_index: 0,
             };
-            let mut lines = iced::widget::column![
+            let mut lines = scramble_ui::column![
                 name_line(triib, target, fl!("common-unnamed")),
                 format_picker(triib, entity_id, &stream),
             ]
@@ -1117,16 +1134,18 @@ fn descriptor_tree<'a>(
         let label = descriptor_type
             .name()
             .map_or_else(|| format!("{descriptor_type:?}"), describe::flag_name);
-        let heading = iced::widget::row![
+        let heading = scramble_ui::row![
             icon::icon(
-                if open {
-                    Icon::ExpandMore
-                } else {
-                    Icon::ChevronRight
+                match (open, dir::mirrored()) {
+                    (true, _) => Icon::ExpandMore,
+                    (false, false) => Icon::ChevronRight,
+                    (false, true) => Icon::ChevronLeft,
                 },
                 20
             ),
-            styled(label, Type::BodyMedium).width(Fill),
+            styled(label, Type::BodyMedium)
+                .width(Fill)
+                .align_x(dir::text_start()),
             styled(descriptors.len().to_string(), Type::BodySmall).style(style::on_surface_variant),
         ]
         .spacing(8)
@@ -1152,23 +1171,20 @@ fn descriptor_tree<'a>(
                 (None, Some(detail)) if !descriptor_type.has_object_name() => (detail, None),
                 (None, detail) => (fl!("common-unnamed"), detail),
             };
-            let mut lines = iced::widget::column![styled(title, Type::BodyMedium)];
+            let mut lines = scramble_ui::column![styled(title, Type::BodyMedium)];
             if let Some(detail) = detail {
                 lines =
                     lines.push(styled(detail, Type::BodySmall).style(style::on_surface_variant));
             }
             items.push(
-                iced::widget::row![
+                scramble_ui::row![
                     styled(index.to_string(), Type::BodySmall)
                         .style(style::on_surface_variant)
                         .width(Length::Fixed(28.0)),
                     lines,
                 ]
                 .spacing(8)
-                .padding(iced::Padding {
-                    left: 28.0,
-                    ..iced::Padding::ZERO
-                })
+                .padding(dir::padding(0.0, 0.0, 0.0, 28.0))
                 .into(),
             );
         }
@@ -1357,6 +1373,7 @@ fn status_bar(triib: &Triib) -> Element<'_, Message> {
 /// The status bar for `width` pixels, leaving out the interface and the
 /// controller's ID when narrow.
 fn status_bar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
+    let _fixed = dir::fixed();
     let full = width >= STATUS_FULL;
     let link = match triib.interface() {
         Some(interface) => {
@@ -2127,7 +2144,9 @@ pub(crate) mod tests {
                 iced_test::Simulator::with_size(iced_settings, size, window(&triib));
             if suffix.contains("menu") {
                 // The Group column's menu, open.
-                simulator.click("Group").expect("the Group heading");
+                simulator
+                    .click(crate::fl!("entity-group").as_str())
+                    .expect("the Group heading");
             }
             let snapshot = simulator.snapshot(&theme).expect("draws");
             assert!(snapshot.matches_image(&file).expect("writes"));

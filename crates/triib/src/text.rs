@@ -63,3 +63,54 @@ pub fn fit(content: &str, font: Font, size: f32, max: f32) -> Fitted {
         name,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::advanced::graphics::text::Paragraph;
+
+    /// Where the cursor before each character of `content` falls, as it
+    /// is drawn.
+    fn positions(content: &str) -> Vec<f32> {
+        let paragraph = Paragraph::with_text(iced::advanced::text::Text {
+            content,
+            bounds: Size::INFINITE,
+            size: Pixels(14.0),
+            line_height: LineHeight::Absolute(Pixels(18.0)),
+            font: Font::DEFAULT,
+            align_x: Alignment::Default,
+            align_y: Vertical::Top,
+            shaping: Shaping::Advanced,
+            wrapping: Wrapping::None,
+        });
+        (0..content.chars().count())
+            .map(|index| paragraph.grapheme_position(0, index).unwrap().x)
+            .collect()
+    }
+
+    /// Text cut short ends in an ellipsis on the side it reads towards: the
+    /// right for left to right text, the left for right to left text.
+    #[test]
+    fn text_is_cut_on_the_side_it_ends() {
+        for (content, right_to_left) in [
+            ("AVB Example Entity on the stage", false),
+            ("ישות לדוגמה על הבמה הראשית", true),
+            ("كيان تجريبي على المسرح الرئيسي", true),
+        ] {
+            let fitted = fit(content, Font::DEFAULT, 14.0, 90.0);
+            assert!(fitted.name.ends_with('…'), "{content}: {}", fitted.name);
+            assert!(
+                fitted.name_width <= 90.0,
+                "{content}: {}",
+                fitted.name_width
+            );
+            let places = positions(&fitted.name);
+            let (first, ellipsis) = (places[0], places[places.len() - 1]);
+            assert_eq!(
+                ellipsis < first,
+                right_to_left,
+                "{content}: the ellipsis at {ellipsis}, the first letter at {first}"
+            );
+        }
+    }
+}
