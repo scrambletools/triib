@@ -259,6 +259,20 @@ pub fn moved_to(preset: &Preset, mac: MacAddress) -> Preset {
             }
         }
     }
+    if let Some(host) = &mut moved.host {
+        for endpoint in &mut host.endpoints {
+            if let Some((talker, output)) = endpoint.bound_to() {
+                let mut id = hex(talker.0);
+                rename(&mut id);
+                if let Some(talker) = number(&id) {
+                    endpoint.bound = Some(triib_endpointd::config::binding_text(
+                        EntityId(talker),
+                        output,
+                    ));
+                }
+            }
+        }
+    }
     moved
 }
 
@@ -727,6 +741,7 @@ mod tests {
                 sink: None,
                 first_channel: 0,
                 format: None,
+                bound: None,
             },
             EndpointConfig {
                 kind: Kind::Listener,
@@ -737,6 +752,8 @@ mod tests {
                 sink: Some("Speakers".to_owned()),
                 first_channel: 2,
                 format: Some("0x00a0020840000800".to_owned()),
+                // Bound to the talker above, on the computer it was saved on.
+                bound: Some("0xf0a731ff00f40f14:0".to_owned()),
             },
         ]
     }
@@ -794,6 +811,11 @@ mod tests {
         assert_eq!(
             moved.entities[1].bindings[0].talker,
             Some(hex(talker_here.0))
+        );
+        // So is the listener's own record of its binding.
+        assert_eq!(
+            moved.host.as_ref().unwrap().endpoints[1].bound_to(),
+            Some((talker_here, 0))
         );
         // On the computer it was saved on, nothing changes.
         assert_eq!(moved_to(&preset, saved_on), preset);

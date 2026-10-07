@@ -2369,12 +2369,14 @@ pub(crate) mod tests {
                 kind: EndpointKind::Listener,
                 state: "listening".into(),
                 audio: "discard".into(),
+                channels: 8,
             }],
         });
         triib.inspector_tab = InspectorTab::Entity;
         let mut simulator = simulate(&triib, size);
         assert!(simulator.find("Listening").is_ok());
         assert!(simulator.find("Nowhere").is_ok());
+        assert!(simulator.find("Channels").is_ok());
         simulator
             .click("Remove from this computer")
             .expect("the button");

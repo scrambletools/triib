@@ -66,6 +66,7 @@ pub fn add(interface: &str, kind: Kind, name: String) -> Result<(), String> {
         sink,
         first_channel: 0,
         format: None,
+        bound: None,
     });
     save(&path, &config)
 }
@@ -141,6 +142,19 @@ pub fn restore(interface: &str, endpoints: &[EndpointConfig]) -> Result<bool, St
     }
     ensure_running()?;
     Ok(!same || !running)
+}
+
+/// Gives the endpoint whose entity is `entity_id` `channels` channels.
+pub fn set_channels(
+    interface: &str,
+    mac: MacAddress,
+    entity_id: EntityId,
+    channels: u16,
+) -> Result<(), String> {
+    let (path, mut config) = load(interface)?;
+    let place = place_of(&config, mac, entity_id).ok_or("not one of this computer's")?;
+    config.endpoints[place].channels = channels;
+    save(&path, &config)
 }
 
 /// Starts triib-endpointd, from beside triib, unless it runs already.

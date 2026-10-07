@@ -670,6 +670,7 @@ host-bound = Sidottu, odottaa talkeria
 host-unbound = Ei sidottu
 host-audio-from = Ääni lähteestä
 host-audio-to = Ääni kohteeseen
+host-channels = Kanavat
 host-silence = Hiljaisuus
 host-tone = Testiääni
 host-nowhere = Ei minnekään

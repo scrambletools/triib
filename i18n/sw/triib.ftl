@@ -648,6 +648,7 @@ host-bound = Imefungwa, inasubiri talker
 host-unbound = Haijafungwa
 host-audio-from = Sauti kutoka
 host-audio-to = Sauti kwenda
+host-channels = Chaneli
 host-silence = Ukimya
 host-tone = Toni ya majaribio
 host-nowhere = Popote

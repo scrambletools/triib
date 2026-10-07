@@ -643,6 +643,7 @@ host-bound = Kötve, a talkerre vár
 host-unbound = Nincs kötve
 host-audio-from = Hang forrása
 host-audio-to = Hang célja
+host-channels = Csatornák
 host-silence = Csend
 host-tone = Teszthang
 host-nowhere = Sehová

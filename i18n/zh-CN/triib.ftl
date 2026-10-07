@@ -557,6 +557,7 @@ host-bound = 已绑定，正在等待发送端
 host-unbound = 未绑定
 host-audio-from = 音频来自
 host-audio-to = 音频送往
+host-channels = 声道数
 host-silence = 静音
 host-tone = 测试音
 host-nowhere = 不输出

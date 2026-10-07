@@ -1,6 +1,6 @@
 //! This computer's own talkers and listeners in the views: the Entities
 //! view's bar that adds them, and their section in the inspector, with
-//! their audio and a button that removes them.
+//! their audio, channels and a button that removes them.
 
 use std::fmt;
 
@@ -62,6 +62,10 @@ pub fn bar(triib: &Triib) -> Option<Element<'_, Message>> {
         .into(),
     )
 }
+
+/// The channel counts the inspector offers; six samples of each fit in a
+/// frame up to 60.
+const CHANNEL_COUNTS: [u16; 11] = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 56];
 
 /// One choice for an endpoint's audio: what endpoints.toml says, and the
 /// words for it.
@@ -135,10 +139,25 @@ pub fn sections(triib: &Triib, entity_id: EntityId) -> Vec<Element<'_, Message>>
         .width(Fill)
         .into()
     };
+    let channels: Element<'_, Message> = {
+        let mut counts = CHANNEL_COUNTS.to_vec();
+        if !counts.contains(&endpoint.channels) {
+            counts.push(endpoint.channels);
+            counts.sort_unstable();
+        }
+        let _reading = dir::reading();
+        dropdown::pick(counts, Some(endpoint.channels), move |count| {
+            Message::HostChannels(entity_id, count)
+        })
+        .size(button::Size::ExtraSmall)
+        .width(Fill)
+        .into()
+    };
     vec![
         component::section(fl!("netmap-this-computer")),
         property(fl!("host-state"), state),
         stacked(label, picker),
+        stacked(fl!("host-channels"), channels),
         button::with_icon(Kind::Outlined, Icon::Delete, fl!("host-remove"))
             .size(Size::ExtraSmall)
             .on_press(Message::HostRemoved(entity_id))

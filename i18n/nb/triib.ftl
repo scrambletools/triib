@@ -651,6 +651,7 @@ host-bound = Bundet, venter på talkeren
 host-unbound = Ikke bundet
 host-audio-from = Lyd fra
 host-audio-to = Lyd til
+host-channels = Kanaler
 host-silence = Stillhet
 host-tone = Testtone
 host-nowhere = Ingen steder

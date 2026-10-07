@@ -641,6 +641,7 @@ host-bound = বাঁধা, Talker-এর অপেক্ষায়
 host-unbound = বাঁধা নয়
 host-audio-from = অডিওর উৎস
 host-audio-to = অডিওর গন্তব্য
+host-channels = চ্যানেল
 host-silence = নীরবতা
 host-tone = পরীক্ষামূলক টোন
 host-nowhere = কোথাও নয়

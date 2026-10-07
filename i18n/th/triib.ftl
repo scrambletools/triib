@@ -554,6 +554,7 @@ host-bound = ผูกแล้ว รอ Talker
 host-unbound = ไม่ได้ผูก
 host-audio-from = เสียงจาก
 host-audio-to = เสียงไปยัง
+host-channels = จำนวนช่องสัญญาณ
 host-silence = เงียบ
 host-tone = เสียงทดสอบ
 host-nowhere = ไม่ส่งไปไหน

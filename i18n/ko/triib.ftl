@@ -557,6 +557,7 @@ host-bound = 바인딩됨, 토커 대기 중
 host-unbound = 바인딩 안 됨
 host-audio-from = 오디오 입력
 host-audio-to = 오디오 출력
+host-channels = 채널 수
 host-silence = 무음
 host-tone = 테스트 톤
 host-nowhere = 출력 안 함

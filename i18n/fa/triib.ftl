@@ -641,6 +641,7 @@ host-bound = پیوند خورده، در انتظار Talker
 host-unbound = بدون پیوند
 host-audio-from = صدا از
 host-audio-to = صدا به
+host-channels = کانال‌ها
 host-silence = سکوت
 host-tone = صدای آزمایشی
 host-nowhere = هیچ‌جا

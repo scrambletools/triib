@@ -643,6 +643,7 @@ host-bound = Bağlı, talker bekleniyor
 host-unbound = Bağlı değil
 host-audio-from = Ses kaynağı
 host-audio-to = Ses hedefi
+host-channels = Kanallar
 host-silence = Sessizlik
 host-tone = Test tonu
 host-nowhere = Hiçbir yere

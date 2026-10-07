@@ -720,6 +720,7 @@ host-bound = Powiązany, czeka na talker
 host-unbound = Niepowiązany
 host-audio-from = Dźwięk z
 host-audio-to = Dźwięk do
+host-channels = Kanały
 host-silence = Cisza
 host-tone = Ton testowy
 host-nowhere = Donikąd

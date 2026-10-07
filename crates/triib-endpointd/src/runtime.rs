@@ -11,10 +11,12 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::SystemTime;
 use std::time::{Duration, Instant as Clock};
 
+use atdecc::acmp::AcmpFlags;
 use atdecc::entity::{
-    EndpointModel, Entity, EntityEvent, InputReservation, OutputReservation, StreamModel,
+    EndpointModel, Entity, EntityEvent, InputBinding, InputReservation, OutputReservation,
+    StreamModel,
 };
-use atdecc::stream_format::StreamFormat;
+use atdecc::stream_format::{FormatKind, StreamFormat};
 use atdecc::{
     ADP_ACMP_MULTICAST, ClockIdentity, EntityId, EntityModelId, Instant, MacAddress, StreamId,
 };
@@ -24,7 +26,7 @@ use avb_net::Socket;
 use triib_stream::audio::{Sink, Source};
 use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 
-use crate::config::{Config, EndpointConfig, Kind};
+use crate::config::{Config, EndpointConfig, Kind, binding_text};
 use crate::gptp;
 use crate::status::{DaemonStatus, EndpointStatus, status_path};
 
@@ -69,6 +71,20 @@ fn aaf_48k(channels: u16, bits: u8) -> StreamFormat {
 fn am824_48k(channels: u16) -> StreamFormat {
     let quadlets = u64::from(channels.min(255));
     StreamFormat((0xa0 << 48) | (0x02 << 40) | (quadlets << 32) | (0x40 << 24) | (quadlets << 8))
+}
+
+/// Whether two formats pack samples alike, whatever their channels.
+fn same_packing(one: StreamFormat, other: StreamFormat) -> bool {
+    match (one.kind(), other.kind()) {
+        (FormatKind::Aaf(one), FormatKind::Aaf(other)) => {
+            (one.nsr, one.sample_format, one.bit_depth)
+                == (other.nsr, other.sample_format, other.bit_depth)
+        }
+        (FormatKind::Iec61883_6(one), FormatKind::Iec61883_6(other)) => {
+            (one.packing, one.sfc) == (other.packing, other.sfc)
+        }
+        _ => false,
+    }
 }
 
 /// An entity ID from the interface's address and the endpoint's instance,
@@ -121,9 +137,15 @@ impl Endpoint {
             aaf_48k(channels, 24),
             am824_48k(channels),
         ];
+        // The format chosen last, with the channels there are now.
         let current_format = config
             .stream_format()
-            .filter(|format| formats.contains(format))
+            .and_then(|wanted| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|offered| same_packing(*offered, wanted))
+            })
             .unwrap_or(formats[0]);
         let stream = StreamModel {
             name: config.name.clone(),
@@ -373,6 +395,19 @@ impl Runtime {
         let since = self.elapsed();
         for endpoint in &mut self.endpoints {
             endpoint.entity.start(now);
+            // A listener binds again to what it was bound to.
+            if let Some((talker, output)) = endpoint.config.bound_to() {
+                endpoint.entity.restore_binding(
+                    now,
+                    0,
+                    InputBinding {
+                        talker,
+                        talker_unique_id: output,
+                        controller: EntityId(0),
+                        flags: AcmpFlags::empty(),
+                    },
+                );
+            }
             log(format!(
                 "{} {} as {}",
                 match endpoint.config.kind {
@@ -438,8 +473,8 @@ impl Runtime {
         }
     }
 
-    /// Keeps the name and stream format a controller gave in the
-    /// configuration.
+    /// Keeps the name, stream format and binding a controller gave in
+    /// the configuration.
     fn keep_settings(&mut self, index: usize) {
         let endpoint = &self.endpoints[index];
         let model = endpoint.entity.model();
@@ -450,11 +485,19 @@ impl Runtime {
             .chain(&model.inputs)
             .next()
             .map(|stream| format!("{:#018x}", stream.current_format.0));
+        let bound = endpoint
+            .entity
+            .input_binding(0)
+            .map(|binding| binding_text(binding.talker, binding.talker_unique_id));
         let Some(entry) = self.config.endpoints.get_mut(endpoint.place) else {
             return;
         };
+        if (&entry.name, &entry.format, &entry.bound) == (&name, &format, &bound) {
+            return;
+        }
         entry.name = name;
         entry.format = format;
+        entry.bound = bound;
         if let Some(path) = &self.path {
             if let Err(error) = triib_store::save(path, &self.config) {
                 log(format!("endpoints.toml: {error}"));
@@ -486,6 +529,14 @@ impl Runtime {
                         .clone()
                         .unwrap_or_else(|| "discard".into()),
                 },
+                channels: endpoint
+                    .entity
+                    .model()
+                    .outputs
+                    .iter()
+                    .chain(&endpoint.entity.model().inputs)
+                    .next()
+                    .map_or(0, |stream| stream.channels),
                 state: match endpoint.config.kind {
                     Kind::Talker if endpoint.talker.is_some() => "streaming",
                     Kind::Talker => "waiting",
@@ -1026,6 +1077,7 @@ impl Runtime {
                     "{name}: bound to {} output {}",
                     binding.talker, binding.talker_unique_id
                 ));
+                self.keep_settings(index);
             }
             EntityEvent::InputSettled { stream, .. } => {
                 log(format!(
@@ -1038,6 +1090,7 @@ impl Runtime {
             EntityEvent::InputUnbound { .. } => {
                 log(format!("{name}: unbound"));
                 self.stop_listener(index);
+                self.keep_settings(index);
             }
             EntityEvent::StreamFormatChanged { format, .. } => {
                 log(format!("{name}: format {format}"));
@@ -1115,20 +1168,25 @@ impl Runtime {
             if let Some(talker) = &endpoint.talker {
                 let stats = talker.stats();
                 log(format!(
-                    "{}: sent {} frames, {} media resets, {} send errors",
-                    endpoint.config.name, stats.frames_sent, stats.media_resets, stats.send_errors
+                    "{}: sent {} frames, {} media resets, {} send errors{}",
+                    endpoint.config.name,
+                    stats.frames_sent,
+                    stats.media_resets,
+                    stats.send_errors,
+                    if stats.realtime { ", real time" } else { "" }
                 ));
             }
             if let Some(listener) = &endpoint.listener {
                 let stats = listener.stats();
                 log(format!(
-                    "{}: received {} frames, {} out of sequence, {} late, {} early, peak {:.3}",
+                    "{}: received {} frames, {} out of sequence, {} late, {} early, peak {:.3}{}",
                     endpoint.config.name,
                     stats.frames_received,
                     stats.sequence_mismatches,
                     stats.late,
                     stats.early,
-                    listener.take_peak()
+                    listener.take_peak(),
+                    if stats.realtime { ", real time" } else { "" }
                 ));
             }
         }
@@ -1194,6 +1252,11 @@ mod tests {
         assert_eq!(aaf_48k(8, 32), StreamFormat(0x0205_0220_0200_6000));
         assert_eq!(aaf_48k(8, 24), StreamFormat(0x0205_0218_0200_6000));
         assert_eq!(am824_48k(8), StreamFormat(0x00a0_0208_4000_0800));
+        // A format chosen for eight channels carries over to two.
+        assert!(same_packing(am824_48k(2), am824_48k(8)));
+        assert!(same_packing(aaf_48k(2, 24), aaf_48k(8, 24)));
+        assert!(!same_packing(aaf_48k(2, 32), aaf_48k(2, 24)));
+        assert!(!same_packing(aaf_48k(8, 32), am824_48k(8)));
     }
 
     #[test]

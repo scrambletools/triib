@@ -769,6 +769,7 @@ host-bound = مرتبط، في انتظار Talker
 host-unbound = غير مرتبط
 host-audio-from = الصوت من
 host-audio-to = الصوت إلى
+host-channels = القنوات
 host-silence = صمت
 host-tone = نغمة اختبار
 host-nowhere = لا مكان

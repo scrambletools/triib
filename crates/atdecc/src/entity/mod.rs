@@ -293,6 +293,19 @@ impl Entity {
     }
 
     /// The stream a bound input's probe found.
+    /// Binds stream input `index` as it was bound before the entity last
+    /// stopped, as a Milan listener keeps its binding across a restart,
+    /// and probes the talker at once.
+    pub fn restore_binding(&mut self, now: Instant, index: u16, binding: InputBinding) {
+        let Some(input) = self.inputs.get_mut(usize::from(index)) else {
+            return;
+        };
+        input.binding = Some(binding);
+        input.probe = Some(Probe::Due(now));
+        self.events
+            .push_back(EntityEvent::InputBound { index, binding });
+    }
+
     pub fn input_stream(&self, index: u16) -> Option<ProbedStream> {
         match self.inputs.get(usize::from(index))?.probe {
             Some(Probe::Settled(stream)) => Some(stream),

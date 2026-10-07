@@ -220,3 +220,36 @@ fn binding_probes_the_talker_and_unbinding_undoes_it() {
     );
     assert_eq!(network.listener.input_binding(0), None);
 }
+
+#[test]
+fn a_restored_binding_probes_the_talker_again() {
+    let mut network = Network::new();
+    network.controller.discover(None);
+    network.run(3000);
+    // The listener starts again bound as it was, without a controller.
+    let mut listener = Entity::new(model(LISTENER, "Listener", false), &[]);
+    listener.start(network.now);
+    let binding = atdecc::entity::InputBinding {
+        talker: TALKER,
+        talker_unique_id: 0,
+        controller: EntityId(0),
+        flags: atdecc::AcmpFlags::empty(),
+    };
+    listener.restore_binding(network.now, 0, binding);
+    network.listener = listener;
+    network.run(1000);
+    assert!(
+        network
+            .entity_events
+            .contains(&EntityEvent::InputBound { index: 0, binding })
+    );
+    let settled = network.entity_events.iter().find_map(|event| match event {
+        EntityEvent::InputSettled { index: 0, stream } => Some(*stream),
+        _ => None,
+    });
+    assert_eq!(
+        settled.map(|stream| (stream.stream_id, stream.destination)),
+        Some((STREAM, DESTINATION))
+    );
+    assert_eq!(network.listener.input_binding(0), Some(binding));
+}

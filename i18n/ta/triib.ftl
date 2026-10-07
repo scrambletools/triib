@@ -641,6 +641,7 @@ host-bound = பிணைக்கப்பட்டது, Talker-க்கா�
 host-unbound = பிணைக்கப்படவில்லை
 host-audio-from = ஒலி எங்கிருந்து
 host-audio-to = ஒலி எங்கே
+host-channels = சேனல்கள்
 host-silence = அமைதி
 host-tone = சோதனை ஒலி
 host-nowhere = எங்கும் இல்லை

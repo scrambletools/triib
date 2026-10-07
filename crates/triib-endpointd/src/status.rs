@@ -32,6 +32,13 @@ pub struct EndpointStatus {
     /// Where its audio comes from or goes, as endpoints.toml says it.
     #[serde(default)]
     pub audio: String,
+    /// Its stream's channels.
+    #[serde(default = "eight")]
+    pub channels: u16,
+}
+
+fn eight() -> u16 {
+    8
 }
 
 /// Where the daemon says what it is doing.

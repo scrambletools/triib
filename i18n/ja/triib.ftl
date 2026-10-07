@@ -557,6 +557,7 @@ host-bound = バインド済み、トーカーを待機中
 host-unbound = バインドなし
 host-audio-from = オーディオの入力元
 host-audio-to = オーディオの出力先
+host-channels = チャンネル数
 host-silence = 無音
 host-tone = テストトーン
 host-nowhere = 出力しない

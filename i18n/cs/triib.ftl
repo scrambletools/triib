@@ -721,6 +721,7 @@ host-bound = Svázáno, čeká na talker
 host-unbound = Nesvázáno
 host-audio-from = Zvuk z
 host-audio-to = Zvuk do
+host-channels = Kanály
 host-silence = Ticho
 host-tone = Testovací tón
 host-nowhere = Nikam

@@ -719,6 +719,7 @@ host-bound = Прив'язано, очікування Talker
 host-unbound = Не прив'язано
 host-audio-from = Звук із
 host-audio-to = Звук до
+host-channels = Канали
 host-silence = Тиша
 host-tone = Тестовий тон
 host-nowhere = Нікуди

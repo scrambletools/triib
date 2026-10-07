@@ -562,6 +562,7 @@ host-bound = Terikat, menunggu talker
 host-unbound = Tidak terikat
 host-audio-from = Audio dari
 host-audio-to = Audio ke
+host-channels = Kanal
 host-silence = Senyap
 host-tone = Nada uji
 host-nowhere = Tidak ke mana pun

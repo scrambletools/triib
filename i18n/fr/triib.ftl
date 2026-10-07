@@ -701,6 +701,7 @@ host-bound = Lié, en attente du talker
 host-unbound = Non lié
 host-audio-from = Audio depuis
 host-audio-to = Audio vers
+host-channels = Canaux
 host-silence = Silence
 host-tone = Tonalité de test
 host-nowhere = Nulle part

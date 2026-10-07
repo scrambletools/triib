@@ -557,6 +557,7 @@ host-bound = Đã gắn, đang chờ Talker
 host-unbound = Chưa gắn
 host-audio-from = Âm thanh từ
 host-audio-to = Âm thanh tới
+host-channels = Số kênh
 host-silence = Im lặng
 host-tone = Âm thử
 host-nowhere = Không đi đâu

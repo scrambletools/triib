@@ -651,6 +651,7 @@ host-bound = Gebonden, wacht op de talker
 host-unbound = Niet gebonden
 host-audio-from = Audio van
 host-audio-to = Audio naar
+host-channels = Kanalen
 host-silence = Stilte
 host-tone = Testtoon
 host-nowhere = Nergens heen

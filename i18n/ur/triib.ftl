@@ -641,6 +641,7 @@ host-bound = بندھا ہوا، Talker کا انتظار
 host-unbound = بندھا نہیں
 host-audio-from = آواز کہاں سے
 host-audio-to = آواز کہاں تک
+host-channels = چینلز
 host-silence = خاموشی
 host-tone = آزمائشی ٹون
 host-nowhere = کہیں نہیں

@@ -689,6 +689,7 @@ host-bound = Associado, à espera do talker
 host-unbound = Não associado
 host-audio-from = Áudio de
 host-audio-to = Áudio para
+host-channels = Canais
 host-silence = Silêncio
 host-tone = Tom de teste
 host-nowhere = Nenhum sítio

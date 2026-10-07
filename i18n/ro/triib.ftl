@@ -713,6 +713,7 @@ host-bound = Legat, așteaptă talkerul
 host-unbound = Nelegat
 host-audio-from = Audio de la
 host-audio-to = Audio către
+host-channels = Canale
 host-silence = Liniște
 host-tone = Ton de test
 host-nowhere = Nicăieri

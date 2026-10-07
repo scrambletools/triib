@@ -163,6 +163,8 @@ pub enum Message {
     /// Takes one of this computer's endpoints' audio from or to a device,
     /// a tone, silence or nowhere.
     HostAudio(EntityId, String),
+    /// One of this computer's endpoints is to have this many channels.
+    HostChannels(EntityId, u16),
     Act(Action),
     /// Several actions, sent in order, such as removing a channel's mapping
     /// before mapping it anew.
@@ -814,6 +816,16 @@ impl Triib {
                     .map(|interface| (interface.name.clone(), interface.mac));
                 if let Some((name, mac)) = done
                     && let Err(error) = crate::host::set_audio(&name, mac, entity_id, audio)
+                {
+                    self.notice = Some(error);
+                }
+            }
+            Message::HostChannels(entity_id, channels) => {
+                let done = self
+                    .interface()
+                    .map(|interface| (interface.name.clone(), interface.mac));
+                if let Some((name, mac)) = done
+                    && let Err(error) = crate::host::set_channels(&name, mac, entity_id, channels)
                 {
                     self.notice = Some(error);
                 }

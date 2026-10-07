@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use atdecc::EntityId;
 use atdecc::stream_format::StreamFormat;
 use serde::{Deserialize, Serialize};
 use triib_stream::audio::{Sink, Source};
@@ -52,6 +53,15 @@ pub struct EndpointConfig {
     /// offered when left out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    /// The talker's stream output a listener is bound to, as
+    /// `<entity ID>:<output>`, bound again when it starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bound: Option<String>,
+}
+
+/// A binding as `bound` keeps it.
+pub fn binding_text(talker: EntityId, output: u16) -> String {
+    format!("{talker}:{output}")
 }
 
 fn eight() -> u16 {
@@ -59,6 +69,12 @@ fn eight() -> u16 {
 }
 
 impl EndpointConfig {
+    /// The talker and stream output a listener is bound to.
+    pub fn bound_to(&self) -> Option<(EntityId, u16)> {
+        let (talker, output) = self.bound.as_deref()?.rsplit_once(':')?;
+        Some((talker.parse().ok()?, output.parse().ok()?))
+    }
+
     /// The stream format a controller last chose.
     pub fn stream_format(&self) -> Option<StreamFormat> {
         let text = self.format.as_deref()?;

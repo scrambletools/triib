@@ -675,6 +675,7 @@ host-bound = מקושר, ממתין ל-Talker
 host-unbound = לא מקושר
 host-audio-from = שמע מ
 host-audio-to = שמע אל
+host-channels = ערוצים
 host-silence = שקט
 host-tone = צליל בדיקה
 host-nowhere = לשום מקום

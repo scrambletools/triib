@@ -701,6 +701,7 @@ host-bound = Vinculat, esperant el talker
 host-unbound = Sense vincular
 host-audio-from = Àudio des de
 host-audio-to = Àudio cap a
+host-channels = Canals
 host-silence = Silenci
 host-tone = To de prova
 host-nowhere = Enlloc

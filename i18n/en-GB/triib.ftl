@@ -651,6 +651,7 @@ host-bound = Bound, waiting for the talker
 host-unbound = Not bound
 host-audio-from = Audio from
 host-audio-to = Audio to
+host-channels = Channels
 host-silence = Silence
 host-tone = Test tone
 host-nowhere = Nowhere

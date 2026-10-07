@@ -664,6 +664,7 @@ host-bound = Δεσμευμένο, αναμονή για τον Talker
 host-unbound = Μη δεσμευμένο
 host-audio-from = Ήχος από
 host-audio-to = Ήχος προς
+host-channels = Κανάλια
 host-silence = Σιωπή
 host-tone = Ήχος δοκιμής
 host-nowhere = Πουθενά
