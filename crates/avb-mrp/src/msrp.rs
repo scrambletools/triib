@@ -1,7 +1,12 @@
-//! MSRP messages (IEEE 802.1Q-2022, 35.2.2): the talker declarations in
-//! them, as an MRPDU or a CVU SRP message carries them.
+//! MSRP (IEEE 802.1Q-2022, 35): its attributes as an MRP participant
+//! declares and registers them, and the talker declarations in a message,
+//! as an MRPDU or a CVU SRP message carries them.
+
+use alloc::vec::Vec;
 
 use avb_net::MacAddress;
+
+use crate::mrpdu::{Format, add};
 
 /// MSRP attribute types (35.2.2.4).
 pub mod attribute {
@@ -11,35 +16,146 @@ pub mod attribute {
     pub const DOMAIN: u8 = 4;
 }
 
-/// An MRP attribute event (10.8.2.10).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Event {
-    New,
-    JoinIn,
-    In,
-    JoinMt,
-    Mt,
-    /// The declaration is withdrawn.
-    Lv,
+pub use crate::mrpdu::Event;
+
+/// The format of MSRP's MRPDUs, for a [`crate::Participant`].
+pub const FORMAT: Format = Format {
+    list_length: true,
+    first_value_length,
+    key_length,
+    four_packed: |attribute_type| attribute_type == attribute::LISTENER,
+    nth_value,
+};
+
+fn first_value_length(attribute_type: u8) -> Option<usize> {
+    match attribute_type {
+        attribute::TALKER_ADVERTISE => Some(25),
+        attribute::TALKER_FAILED => Some(34),
+        attribute::LISTENER => Some(8),
+        attribute::DOMAIN => Some(4),
+        _ => None,
+    }
 }
 
-impl Event {
-    fn from_number(number: u8) -> Option<Self> {
-        Some(match number {
-            0 => Event::New,
-            1 => Event::JoinIn,
-            2 => Event::In,
-            3 => Event::JoinMt,
-            4 => Event::Mt,
-            5 => Event::Lv,
-            _ => return None,
-        })
+/// Talkers and listeners are named by their stream ID, domains by their
+/// SR class.
+fn key_length(attribute_type: u8) -> usize {
+    match attribute_type {
+        attribute::DOMAIN => 1,
+        _ => 8,
+    }
+}
+
+/// Values after the first count on its stream ID, and a talker's
+/// destination too (35.2.2.8.x); a domain's class, priority and VLAN.
+fn nth_value(attribute_type: u8, first: &[u8], index: u16) -> Vec<u8> {
+    let mut value = Vec::from(first);
+    match attribute_type {
+        attribute::DOMAIN if value.len() >= 4 => {
+            value[0] = value[0].wrapping_add(index as u8);
+            value[1] = value[1].wrapping_add(index as u8);
+            add(&mut value[2..4], index);
+        }
+        attribute::TALKER_ADVERTISE | attribute::TALKER_FAILED if value.len() >= 14 => {
+            add(&mut value[..8], index);
+            add(&mut value[8..14], index);
+        }
+        _ if value.len() >= 8 => add(&mut value[..8], index),
+        _ => {}
+    }
+    value
+}
+
+/// A Listener declaration's four-packed event (35.2.2.8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListenerState {
+    Ignore,
+    AskingFailed,
+    Ready,
+    ReadyFailed,
+}
+
+impl ListenerState {
+    pub fn from_number(number: u8) -> Self {
+        match number & 0x3 {
+            0 => ListenerState::Ignore,
+            1 => ListenerState::AskingFailed,
+            2 => ListenerState::Ready,
+            _ => ListenerState::ReadyFailed,
+        }
     }
 
-    /// Whether the sender declares the attribute with this event.
-    pub fn declares(self) -> bool {
-        matches!(self, Event::New | Event::JoinIn | Event::JoinMt)
+    pub fn number(self) -> u8 {
+        match self {
+            ListenerState::Ignore => 0,
+            ListenerState::AskingFailed => 1,
+            ListenerState::Ready => 2,
+            ListenerState::ReadyFailed => 3,
+        }
     }
+
+    /// Whether at least one listener behind it can receive the stream.
+    pub fn ready(self) -> bool {
+        matches!(self, ListenerState::Ready | ListenerState::ReadyFailed)
+    }
+}
+
+/// An SR class's domain: its class ID, priority and VLAN (35.2.2.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Domain {
+    /// 6 for class A, 5 for class B.
+    pub class_id: u8,
+    pub priority: u8,
+    pub vlan_id: u16,
+}
+
+impl Domain {
+    /// Class A on its default priority and VLAN.
+    pub const CLASS_A: Domain = Domain {
+        class_id: 6,
+        priority: 3,
+        vlan_id: 2,
+    };
+
+    pub fn value(&self) -> Vec<u8> {
+        let vlan = self.vlan_id.to_be_bytes();
+        Vec::from([self.class_id, self.priority, vlan[0], vlan[1]])
+    }
+
+    pub fn decode(value: &[u8]) -> Option<Self> {
+        let [class_id, priority, high, low, ..] = *value else {
+            return None;
+        };
+        Some(Domain {
+            class_id,
+            priority,
+            vlan_id: u16::from_be_bytes([high, low]) & 0x0fff,
+        })
+    }
+}
+
+/// The value of a Talker Advertise for `declaration`, or of a Talker
+/// Failed when it says why.
+pub fn talker_value(declaration: &TalkerDeclaration) -> Vec<u8> {
+    let mut value = Vec::with_capacity(34);
+    value.extend_from_slice(&declaration.stream_id.to_be_bytes());
+    value.extend_from_slice(&declaration.destination.0);
+    value.extend_from_slice(&declaration.vlan_id.to_be_bytes());
+    value.extend_from_slice(&declaration.max_frame_size.to_be_bytes());
+    value.extend_from_slice(&declaration.max_interval_frames.to_be_bytes());
+    value.push((declaration.priority << 5) | if declaration.rank { 0x10 } else { 0 });
+    value.extend_from_slice(&declaration.accumulated_latency.to_be_bytes());
+    if let Some(failure) = declaration.failure {
+        value.extend_from_slice(&failure.bridge_id.to_be_bytes());
+        value.push(failure.code);
+    }
+    value
+}
+
+/// The talker declaration a Talker Advertise or Talker Failed value
+/// holds.
+pub fn decode_talker(attribute_type: u8, value: &[u8], event: Event) -> Option<TalkerDeclaration> {
+    declaration(value, attribute_type == attribute::TALKER_FAILED, 0, event)
 }
 
 /// Why a talker's reservation failed, and where (35.2.2.8.7).

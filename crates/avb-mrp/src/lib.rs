@@ -14,6 +14,8 @@
 
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
+extern crate alloc;
+
 pub use avb_net::MacAddress;
 
 /// Ethertype of MSRP.
@@ -28,4 +30,10 @@ pub const MSRP_DESTINATION: MacAddress = MacAddress([0x01, 0x80, 0xc2, 0x00, 0x0
 /// Destination of MVRP: the customer bridge MVRP address.
 pub const MVRP_DESTINATION: MacAddress = MacAddress([0x01, 0x80, 0xc2, 0x00, 0x00, 0x21]);
 
+pub mod mrpdu;
 pub mod msrp;
+pub mod mvrp;
+pub mod participant;
+
+pub use mrpdu::Event;
+pub use participant::{Participant, Registration};
