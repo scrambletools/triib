@@ -20,7 +20,7 @@ listeners, routed to the computer's audio. Built in Rust with
 > marking those that break the rules, and shows how entities run AVB
 > Lite, what their streams take of each link and the alarms the AVB Lite
 > profile calls for. On Linux it runs talkers and listeners of its own,
-> Milan entities streaming 8 channels of 48 kHz AAF to and from the
+> Milan entities streaming 48 kHz AAF or AM824 to and from the
 > computer's audio devices. It speaks 38 languages, following the system's or the
 > one picked in Settings. See the [plan](docs/PLAN.md).
 
@@ -49,13 +49,18 @@ hardware clock (`ethtool -T <interface>` shows one). They need
 interface, as with its `configs/gPTP.cfg`, so the clock keeps the
 network's time; triib reads ptp4l's state through its read-only socket,
 `/var/run/ptp4lro`, and says when ptp4l isn't there. Each endpoint is a
-Milan entity with one stream of 8 channels of 48 kHz AAF, which
-controllers, triib among them, bind like any other; the inspector picks
-the audio device a talker sends from or a listener plays to.
+Milan entity with one stream of 48 kHz AAF or AM824, 8 channels unless
+the inspector picks another count, which controllers, triib among them,
+bind like any other; the inspector picks the audio device a talker
+sends from or a listener plays to. Talkers take their stream addresses
+with MAAP, and the stream threads ask RealtimeKit for real-time
+scheduling, as PipeWire does.
 
 The endpoints are listed in `endpoints.toml` in triib's data folder
 (`~/.local/share/triib` on Linux), which the app writes and the daemon
-reads again whenever it changes:
+reads again whenever it changes; the names, formats and bindings
+controllers give are kept in it, so a listener binds again after a
+restart, and presets keep it too:
 
 ```toml
 interface = "enp2s0"

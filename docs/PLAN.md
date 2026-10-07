@@ -645,33 +645,51 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     the wire as remote ones do. Within the daemon, its entities' frames
     for each other go to them directly too, as a socket never hears its
     own.
-  - `triib-stream`: AAF at 48 kHz, 8 channels of 32-bit (or 24 in 32),
-    6 samples every 125 us, paced in user space on gPTP time read from
-    the PHC, presentation time the max transit time ahead; the listener
-    counts what Milan counts. Audio from and to any device through cpal,
-    a test tone, or nothing; the device's drift is followed by dropping
-    or repeating a frame.
+  - `triib-stream`: AAF at 48 kHz (32-bit, or 24 in 32) and IEC
+    61883-6 AM824, 1 to 60 channels, 6 samples every 125 us, paced in
+    user space on gPTP time read from the PHC, presentation time the max
+    transit time ahead; AM824's timestamp falls on each frame's
+    SYT_INTERVAL boundary, as strict listeners such as macOS want. The
+    listener counts what Milan counts. Audio from and to any device
+    through cpal, a test tone, or nothing; the device's drift is
+    followed by dropping or repeating a frame. The pacing and receiving
+    threads ask RealtimeKit for real-time scheduling, as PipeWire does,
+    so a build on every core leaves the streams on time.
+  - MAAP (`atdecc::maap`): the daemon claims one destination address for
+    each talker, declares the streams once it has them, defends them,
+    and moves when a lower address holds them; the first block tried
+    comes from the interface's address, the same each start.
   - `triib-endpointd`: endpoints from `endpoints.toml`, read again when
-    it changes, names controllers give kept in it, and what each
-    endpoint is doing written to `endpointd.toml` in the runtime folder.
-    A talker streams while a listener is ready for it, on the network or
-    in the same daemon. Release build 1.3 MB, about 10 MB resident; an
-    8 channel stream takes 4% of a core to send and 3% to receive.
+    it changes; the names, formats and bindings controllers give kept
+    in it, so a listener binds again after a restart; what each endpoint
+    is doing written to `endpointd.toml` in the runtime folder. A
+    talker streams while a listener is ready for it, on the network or
+    in the same daemon. A talker whose format changes withdraws its
+    declaration and declares again 2 s later, as the bridge kept the old
+    frame size for a declaration changed in place. A missing audio
+    device leaves the stream running silent. Release build 1.3 MB,
+    about 10 MB resident; an 8 channel stream takes 4% of a core to send
+    and 3% to receive.
   - The app adds and removes them in the Entities view on interfaces
     with a PTP hardware clock and a wired link, starts the daemon when
     it isn't running, and says when ptp4l is missing; they show as this
     computer's in the list, the matrix and the network view, and the
-    inspector picks their audio device. Other controllers see and bind
-    them like any entity.
+    inspector picks their audio device and channels. Other controllers
+    see and bind them like any entity.
+  - Presets keep this computer's endpoints; recalling one starts them
+    again and waits for them before binding, and on another computer
+    their entity IDs become its own.
   - The Linux packages carry `triib-endpointd` with `CAP_NET_RAW`.
+  - Checked with AM824 both ways against a Milan endpoint and into
+    macOS's AVB listener, which counted no sequence mismatches.
 - To do:
-  - AM824, for the MOTU 8D and others.
   - AVB Lite: its PTP profile (ptp4l with another configuration, and
-    fallback between the two), CVU SRP, answering GET_LITE_STATUS, and
-    MAAP for destination addresses, which now come from the MAC.
-  - Presets that keep this computer's endpoints, and their audio.
-  - Channels, format and sampling rate set in the inspector; a filter
-    for this computer's entities in the list.
+    fallback between the two), CVU SRP in place of MSRP, unicast
+    streams, and answering GET_LITE_STATUS. Checking it needs a path to
+    the endpoints without an AVB bridge, which the bench does not have
+    now.
+  - Sampling rates other than 48 kHz, and a filter for this computer's
+    entities in the list.
   - Resampling with `rubato` in place of dropping or repeating a frame;
     playing out at presentation time; launch time or CBS where the card
     has them.
