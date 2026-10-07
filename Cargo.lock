@@ -1546,7 +1546,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c#8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=61122ac54558318ff4d8b3a81807461c8c57c4e3#61122ac54558318ff4d8b3a81807461c8c57c4e3"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -1667,7 +1667,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.2"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c#8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=61122ac54558318ff4d8b3a81807461c8c57c4e3#61122ac54558318ff4d8b3a81807461c8c57c4e3"
 dependencies = [
  "iced_renderer",
  "log",
@@ -3045,7 +3045,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "scramble-ui"
 version = "0.1.0"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c#8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=61122ac54558318ff4d8b3a81807461c8c57c4e3#61122ac54558318ff4d8b3a81807461c8c57c4e3"
 dependencies = [
  "ashpd",
  "iced",
@@ -4462,7 +4462,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/scrambletools/scramble-ui?rev=8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c#8f7a1a84eb140b017a29ea8b3d73b8e8fc310b6c"
+source = "git+https://github.com/scrambletools/scramble-ui?rev=61122ac54558318ff4d8b3a81807461c8c57c4e3#61122ac54558318ff4d8b3a81807461c8c57c4e3"
 dependencies = [
  "ahash",
  "android-activity",
