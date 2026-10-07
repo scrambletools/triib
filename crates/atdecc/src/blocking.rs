@@ -51,6 +51,8 @@ impl Driver {
     pub fn open_with(interface: &str, configure: impl FnOnce(&mut Config)) -> io::Result<Self> {
         let socket = Socket::open(interface, crate::ETHERTYPE_AVTP)?;
         socket.join_multicast(crate::ADP_ACMP_MULTICAST)?;
+        // Streams share the ethertype; only ATDECC's subtypes are wanted.
+        let _ = socket.keep_payloads_starting(crate::avtp::subtype::ADP..=crate::avtp::subtype::ACMP);
         let mut config = Config::new(EntityId::from_mac(socket.mac()));
         // The system's own AVB entity never sees what is written to BPF.
         if cfg!(target_os = "macos") {

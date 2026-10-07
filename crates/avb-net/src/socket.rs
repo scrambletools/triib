@@ -52,10 +52,20 @@ impl Socket {
         self.inner.send(destination, payload)
     }
 
+    /// Keeps only frames whose payload starts with an octet in `first`,
+    /// such as the AVTP subtypes of ATDECC, dropped before they reach the
+    /// program.
+    pub fn keep_payloads_starting(&self, first: std::ops::RangeInclusive<u8>) -> io::Result<()> {
+        self.inner
+            .keep_payloads_starting(*first.start(), *first.end())
+    }
+
     /// Waits up to `timeout` (forever when `None`) for a frame and writes
     /// its payload to `buffer`, cut short if the buffer is. `None` when the
-    /// time ran out or a signal interrupted the wait. Frames this computer
-    /// sent are left out.
+    /// time ran out or a signal interrupted the wait. Frames this socket
+    /// sent are left out; those other programs on this computer send are
+    /// not, so entities and controllers on the same computer hear each
+    /// other.
     pub fn receive(
         &self,
         buffer: &mut [u8],
@@ -130,6 +140,12 @@ impl std::fmt::Display for Blocked {
 
 impl std::error::Error for Blocked {}
 
+/// The error for a raw socket Linux will not open without `CAP_NET_RAW`.
+#[cfg(target_os = "linux")]
+pub(crate) fn raw_capability() -> io::Error {
+    Blocked::RawCapability.error()
+}
+
 /// Whether this program may send and receive raw Ethernet at all, before
 /// any interface is picked: an error carrying [`Blocked`] when it may not.
 pub fn check_access() -> io::Result<()> {
@@ -144,13 +160,14 @@ mod platform {
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
     use std::time::Duration;
 
-    use super::Received;
+    use super::{Received, Sent};
     use crate::MacAddress;
 
     pub struct Socket {
         fd: OwnedFd,
         index: i32,
         ethertype: u16,
+        sent: Sent,
     }
 
     /// Opens a packet socket that hears nothing, which takes the same
@@ -179,14 +196,13 @@ mod platform {
                     format!("no interface named {interface}"),
                 )
             })?;
+            // Opened for no protocol, so nothing arrives before the filter
+            // is on: bound to one ethertype the socket would never hear what
+            // other programs here send, which Linux hands only to sockets
+            // bound to every protocol.
             // SAFETY: plain system call with integer arguments.
-            let raw = unsafe {
-                libc::socket(
-                    libc::AF_PACKET,
-                    libc::SOCK_DGRAM | libc::SOCK_CLOEXEC,
-                    i32::from(ethertype.to_be()),
-                )
-            };
+            let raw =
+                unsafe { libc::socket(libc::AF_PACKET, libc::SOCK_DGRAM | libc::SOCK_CLOEXEC, 0) };
             if raw < 0 {
                 let error = io::Error::last_os_error();
                 return Err(match error.raw_os_error() {
@@ -200,8 +216,11 @@ mod platform {
                 fd,
                 index,
                 ethertype,
+                sent: Sent::default(),
             };
-            let address = socket.address(None);
+            socket.attach(&socket.program(None))?;
+            let mut address = socket.address(None);
+            address.sll_protocol = (libc::ETH_P_ALL as u16).to_be();
             // SAFETY: `address` is a valid sockaddr_ll that lives through the
             // call, and the length passed is its size.
             let bound = unsafe {
@@ -256,7 +275,60 @@ mod platform {
             Ok(())
         }
 
+        /// A classic BPF program keeping this socket's ethertype, and of it
+        /// only payloads whose first octet is in `first`, when given. A
+        /// packet socket's program sees the payload from its start, and the
+        /// ethertype as the kernel's protocol (`SKF_AD_PROTOCOL`).
+        fn program(&self, first: Option<(u8, u8)>) -> Vec<libc::sock_filter> {
+            let step = |code: u16, jt: u8, jf: u8, k: u32| libc::sock_filter { code, jt, jf, k };
+            let protocol = 0xffff_f000; // SKF_AD_OFF + SKF_AD_PROTOCOL
+            match first {
+                None => vec![
+                    step(0x20, 0, 0, protocol),                  // ld protocol
+                    step(0x15, 0, 1, u32::from(self.ethertype)), // jeq #ethertype
+                    step(0x06, 0, 0, u32::MAX),                  // ret #-1
+                    step(0x06, 0, 0, 0),                         // ret #0
+                ],
+                Some((first, last)) => vec![
+                    step(0x20, 0, 0, protocol),                  // ld protocol
+                    step(0x15, 0, 4, u32::from(self.ethertype)), // jeq #ethertype
+                    step(0x30, 0, 0, 0),                         // ldb [0]
+                    step(0x35, 0, 2, u32::from(first)),          // jge #first
+                    step(0x25, 1, 0, u32::from(last)),           // jgt #last
+                    step(0x06, 0, 0, u32::MAX),                  // ret #-1
+                    step(0x06, 0, 0, 0),                         // ret #0
+                ],
+            }
+        }
+
+        fn attach(&self, program: &[libc::sock_filter]) -> io::Result<()> {
+            let filter = libc::sock_fprog {
+                len: program.len() as u16,
+                filter: program.as_ptr().cast_mut(),
+            };
+            // SAFETY: `filter` points at `program`, which both live through
+            // the call; the kernel copies the program and does not write it.
+            let attached = unsafe {
+                libc::setsockopt(
+                    self.fd.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    libc::SO_ATTACH_FILTER,
+                    (&raw const filter).cast(),
+                    size_of::<libc::sock_fprog>() as libc::socklen_t,
+                )
+            };
+            if attached < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        }
+
+        pub fn keep_payloads_starting(&self, first: u8, last: u8) -> io::Result<()> {
+            self.attach(&self.program(Some((first, last))))
+        }
+
         pub fn send(&self, destination: MacAddress, payload: &[u8]) -> io::Result<()> {
+            self.sent.note(payload);
             let address = self.address(Some(destination));
             // SAFETY: `payload` and `address` are valid for the lengths
             // passed and live through the call.
@@ -328,7 +400,10 @@ mod platform {
                         _ => Err(error),
                     };
                 }
-                if address.sll_pkttype == libc::PACKET_OUTGOING {
+                // What this computer sends comes back as outgoing: this
+                // socket's own frames are left out, other programs' kept.
+                let outgoing = address.sll_pkttype == libc::PACKET_OUTGOING;
+                if outgoing && self.sent.heard_back(&buffer[..received as usize]) {
                     continue;
                 }
                 let mut source = [0; 6];
@@ -347,16 +422,17 @@ mod platform {
 }
 
 /// The frames a socket sent lately, to tell them from the same frames
-/// heard back: macOS and Windows hand a capture every frame the computer
-/// sends, the socket's own and those of the system's own AVB entity alike,
-/// and only the socket's own are left out.
-#[cfg(any(target_os = "macos", windows))]
+/// heard back: every system hands a socket the frames the computer sends,
+/// the socket's own and those of other programs alike, and only the
+/// socket's own are left out. Linux hands back the payload, the others
+/// the whole frame.
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[derive(Default)]
 struct Sent {
     recent: std::sync::Mutex<std::collections::VecDeque<(u64, std::time::Instant)>>,
 }
 
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 impl Sent {
     /// How long a sent frame is looked for, and how many are kept.
     const KEPT_FOR: Duration = Duration::from_secs(2);
@@ -488,6 +564,27 @@ fn filter(ethertype: Option<u16>) -> Vec<Instruction> {
             value: u32::MAX,
         },
         reject,
+    ]
+}
+
+/// A filter that passes whole frames of `ethertype` whose payload starts
+/// with an octet from `first` to `last`.
+#[cfg(any(target_os = "macos", windows))]
+fn payload_filter(ethertype: u16, first: u8, last: u8) -> Vec<Instruction> {
+    let step = |code: u16, jump_true: u8, jump_false: u8, value: u32| Instruction {
+        code,
+        jump_true,
+        jump_false,
+        value,
+    };
+    vec![
+        step(0x28, 0, 0, 12),                   // ldh [12]
+        step(0x15, 0, 4, u32::from(ethertype)), // jeq #ethertype
+        step(0x30, 0, 0, 14),                   // ldb [14]
+        step(0x35, 0, 2, u32::from(first)),     // jge #first
+        step(0x25, 1, 0, u32::from(last)),      // jgt #last
+        step(0x06, 0, 0, u32::MAX),             // ret #-1
+        step(0x06, 0, 0, 0),                    // ret #0
     ]
 }
 
@@ -657,6 +754,20 @@ mod platform {
             let query = unsafe { OwnedFd::from_raw_fd(raw) };
             // SAFETY: `changed` is a valid ifreq that lives through the call.
             if unsafe { libc::ioctl(query.as_raw_fd(), code, &raw mut changed) } < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        }
+
+        pub fn keep_payloads_starting(&self, first: u8, last: u8) -> io::Result<()> {
+            let mut instructions = super::payload_filter(self.ethertype, first, last);
+            let mut program = Program {
+                length: instructions.len() as u32,
+                instructions: instructions.as_mut_ptr(),
+            };
+            // SAFETY: `program` points at `instructions`, which both live
+            // through the call.
+            if unsafe { libc::ioctl(self.fd.as_raw_fd(), libc::BIOCSETF, &raw mut program) } < 0 {
                 return Err(io::Error::last_os_error());
             }
             Ok(())
@@ -1086,6 +1197,22 @@ mod platform {
             Ok(())
         }
 
+        pub fn keep_payloads_starting(&self, first: u8, last: u8) -> io::Result<()> {
+            let npcap = npcap()?;
+            let receiver = self.receiver.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut instructions = super::payload_filter(self.ethertype, first, last);
+            let mut program = Program {
+                length: instructions.len() as u32,
+                instructions: instructions.as_mut_ptr(),
+            };
+            // SAFETY: `program` points at `instructions`, which both live
+            // through the call; libpcap copies the program.
+            if unsafe { (npcap.setfilter)(receiver.0, &raw mut program) } != 0 {
+                return Err(last_error(npcap, &receiver));
+            }
+            Ok(())
+        }
+
         pub fn send(&self, destination: MacAddress, payload: &[u8]) -> io::Result<()> {
             let npcap = npcap()?;
             let frame = super::frame(self.mac, destination, self.ethertype, payload);
@@ -1191,6 +1318,10 @@ mod platform {
         }
 
         pub fn send(&self, _destination: MacAddress, _payload: &[u8]) -> io::Result<()> {
+            Err(unsupported())
+        }
+
+        pub fn keep_payloads_starting(&self, _first: u8, _last: u8) -> io::Result<()> {
             Err(unsupported())
         }
 

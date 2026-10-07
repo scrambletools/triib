@@ -19,6 +19,12 @@ pub mod interfaces;
 pub mod socket;
 
 #[cfg(feature = "std")]
+pub mod clock;
+
+#[cfg(feature = "std")]
+pub mod stream;
+
+#[cfg(feature = "std")]
 pub use interfaces::{Interface, interfaces};
 #[cfg(feature = "std")]
 pub use socket::{Blocked, Received, Socket, check_access};

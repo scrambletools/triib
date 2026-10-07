@@ -1,0 +1,328 @@
+//! Whole frames for media streams: sending frames a talker builds itself,
+//! VLAN tag included, and receiving the frames of one AVTP stream whole,
+//! tagged or with the tag already taken off by the interface. Linux only
+//! so far; elsewhere opening fails as unsupported.
+
+use std::io;
+use std::time::Duration;
+
+use crate::MacAddress;
+
+/// The AVTP ethertype, and the VLAN tag's.
+const ETHERTYPE_AVTP: u16 = 0x22f0;
+const ETHERTYPE_VLAN: u16 = 0x8100;
+
+/// Sends whole Ethernet frames on one interface.
+pub struct FrameSender {
+    inner: platform::FrameSender,
+}
+
+impl FrameSender {
+    /// Opens `interface`. On Linux this needs `CAP_NET_RAW`.
+    pub fn open(interface: &str) -> io::Result<Self> {
+        Ok(Self {
+            inner: platform::FrameSender::open(interface)?,
+        })
+    }
+
+    /// Sends `frame`, from its destination address on.
+    pub fn send(&self, frame: &[u8]) -> io::Result<()> {
+        self.inner.send(frame)
+    }
+}
+
+/// Receives the whole frames of one AVTP stream: frames of an AVTP subtype
+/// sent to one destination.
+pub struct FrameReceiver {
+    inner: platform::FrameReceiver,
+}
+
+impl FrameReceiver {
+    /// Opens `interface` for frames of AVTP `subtype` sent to
+    /// `destination`, and joins it when it is a group address.
+    pub fn open(interface: &str, subtype: u8, destination: MacAddress) -> io::Result<Self> {
+        Ok(Self {
+            inner: platform::FrameReceiver::open(interface, subtype, destination)?,
+        })
+    }
+
+    /// Waits up to `timeout` (forever when `None`) for a frame and writes
+    /// it to `buffer` whole, returning its length.
+    pub fn receive(
+        &self,
+        buffer: &mut [u8],
+        timeout: Option<Duration>,
+    ) -> io::Result<Option<usize>> {
+        self.inner.receive(buffer, timeout)
+    }
+}
+
+/// Where an AVTP frame's payload starts: after the header, and the VLAN
+/// tag when it still has one. `None` for another kind of frame.
+pub fn avtp_payload(frame: &[u8]) -> Option<&[u8]> {
+    let ethertype = |at: usize| Some(u16::from_be_bytes([*frame.get(at)?, *frame.get(at + 1)?]));
+    match ethertype(12)? {
+        ETHERTYPE_AVTP => frame.get(14..),
+        ETHERTYPE_VLAN if ethertype(16)? == ETHERTYPE_AVTP => frame.get(18..),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
+mod platform {
+    use std::io;
+    use std::mem::{size_of, zeroed};
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::time::Duration;
+
+    use super::{ETHERTYPE_AVTP, ETHERTYPE_VLAN};
+    use crate::MacAddress;
+
+    fn open_raw(interface: &str) -> io::Result<(OwnedFd, i32)> {
+        let index = crate::interfaces::index_of(interface).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("no interface named {interface}"),
+            )
+        })?;
+        // SAFETY: plain system call with integer arguments.
+        let raw = unsafe { libc::socket(libc::AF_PACKET, libc::SOCK_RAW | libc::SOCK_CLOEXEC, 0) };
+        if raw < 0 {
+            let error = io::Error::last_os_error();
+            return Err(match error.raw_os_error() {
+                Some(libc::EPERM | libc::EACCES) => crate::socket::raw_capability(),
+                _ => error,
+            });
+        }
+        // SAFETY: `raw` is a socket this function just opened and owns.
+        let fd = unsafe { OwnedFd::from_raw_fd(raw) };
+        Ok((fd, index))
+    }
+
+    fn bind(fd: &OwnedFd, index: i32, protocol: u16) -> io::Result<()> {
+        // SAFETY: sockaddr_ll is plain data, valid when zeroed.
+        let mut address: libc::sockaddr_ll = unsafe { zeroed() };
+        address.sll_family = libc::AF_PACKET as u16;
+        address.sll_protocol = protocol.to_be();
+        address.sll_ifindex = index;
+        // SAFETY: `address` is a valid sockaddr_ll that lives through the
+        // call, and the length passed is its size.
+        let bound = unsafe {
+            libc::bind(
+                fd.as_raw_fd(),
+                (&raw const address).cast(),
+                size_of::<libc::sockaddr_ll>() as libc::socklen_t,
+            )
+        };
+        if bound < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    pub struct FrameSender {
+        fd: OwnedFd,
+    }
+
+    impl FrameSender {
+        pub fn open(interface: &str) -> io::Result<Self> {
+            let (fd, index) = open_raw(interface)?;
+            // Bound for no protocol: it sends, and hears nothing.
+            bind(&fd, index, 0)?;
+            Ok(Self { fd })
+        }
+
+        pub fn send(&self, frame: &[u8]) -> io::Result<()> {
+            // SAFETY: `frame` is valid for its length through the call.
+            let sent =
+                unsafe { libc::send(self.fd.as_raw_fd(), frame.as_ptr().cast(), frame.len(), 0) };
+            if sent < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        }
+    }
+
+    pub struct FrameReceiver {
+        fd: OwnedFd,
+    }
+
+    impl FrameReceiver {
+        pub fn open(interface: &str, subtype: u8, destination: MacAddress) -> io::Result<Self> {
+            let (fd, index) = open_raw(interface)?;
+            // The filter goes on before the socket hears anything: the
+            // destination, then the AVTP subtype, after a VLAN tag or not.
+            let step = |code: u16, jt: u8, jf: u8, k: u32| libc::sock_filter { code, jt, jf, k };
+            let mac = destination.0;
+            let high = u32::from_be_bytes([mac[0], mac[1], mac[2], mac[3]]);
+            let low = u32::from(u16::from_be_bytes([mac[4], mac[5]]));
+            let program = [
+                step(0x20, 0, 0, 0),                         // 0: ld [0]
+                step(0x15, 0, 12, high),                     // 1: jeq #mac[0..4]
+                step(0x28, 0, 0, 4),                         // 2: ldh [4]
+                step(0x15, 0, 10, low),                      // 3: jeq #mac[4..6]
+                step(0x28, 0, 0, 12),                        // 4: ldh [12]
+                step(0x15, 0, 2, u32::from(ETHERTYPE_AVTP)), // 5: jeq #avtp
+                step(0x30, 0, 0, 14),                        // 6: ldb [14]
+                step(0x05, 0, 0, 4),                         // 7: ja 12
+                step(0x15, 0, 5, u32::from(ETHERTYPE_VLAN)), // 8: jeq #vlan
+                step(0x28, 0, 0, 16),                        // 9: ldh [16]
+                step(0x15, 0, 3, u32::from(ETHERTYPE_AVTP)), // 10: jeq #avtp
+                step(0x30, 0, 0, 18),                        // 11: ldb [18]
+                step(0x15, 0, 1, u32::from(subtype)),        // 12: jeq #subtype
+                step(0x06, 0, 0, u32::MAX),                  // 13: ret #-1
+                step(0x06, 0, 0, 0),                         // 14: ret #0
+            ];
+            let filter = libc::sock_fprog {
+                len: program.len() as u16,
+                filter: program.as_ptr().cast_mut(),
+            };
+            // SAFETY: `filter` points at `program`, which both live through
+            // the call; the kernel copies the program and does not write it.
+            let attached = unsafe {
+                libc::setsockopt(
+                    fd.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    libc::SO_ATTACH_FILTER,
+                    (&raw const filter).cast(),
+                    size_of::<libc::sock_fprog>() as libc::socklen_t,
+                )
+            };
+            if attached < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            bind(&fd, index, libc::ETH_P_ALL as u16)?;
+            if mac[0] & 1 == 1 {
+                // SAFETY: packet_mreq is plain data, valid when zeroed.
+                let mut request: libc::packet_mreq = unsafe { zeroed() };
+                request.mr_ifindex = index;
+                request.mr_type = libc::PACKET_MR_MULTICAST as u16;
+                request.mr_alen = 6;
+                request.mr_address[..6].copy_from_slice(&mac);
+                // SAFETY: `request` is a valid packet_mreq that lives
+                // through the call, and the length passed is its size.
+                let joined = unsafe {
+                    libc::setsockopt(
+                        fd.as_raw_fd(),
+                        libc::SOL_PACKET,
+                        libc::PACKET_ADD_MEMBERSHIP,
+                        (&raw const request).cast(),
+                        size_of::<libc::packet_mreq>() as libc::socklen_t,
+                    )
+                };
+                if joined < 0 {
+                    return Err(io::Error::last_os_error());
+                }
+            }
+            Ok(Self { fd })
+        }
+
+        pub fn receive(
+            &self,
+            buffer: &mut [u8],
+            timeout: Option<Duration>,
+        ) -> io::Result<Option<usize>> {
+            let milliseconds = match timeout {
+                Some(timeout) => {
+                    timeout.as_nanos().div_ceil(1_000_000).min(i32::MAX as u128) as i32
+                }
+                None => -1,
+            };
+            let mut poll = libc::pollfd {
+                fd: self.fd.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // SAFETY: one valid pollfd, which lives through the call.
+            let ready = unsafe { libc::poll(&raw mut poll, 1, milliseconds) };
+            if ready <= 0 {
+                let error = io::Error::last_os_error();
+                return match error.kind() {
+                    _ if ready == 0 => Ok(None),
+                    io::ErrorKind::Interrupted => Ok(None),
+                    _ => Err(error),
+                };
+            }
+            // SAFETY: `buffer` is valid for its length through the call.
+            let received = unsafe {
+                libc::recv(
+                    self.fd.as_raw_fd(),
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                    libc::MSG_DONTWAIT,
+                )
+            };
+            if received < 0 {
+                let error = io::Error::last_os_error();
+                return match error.kind() {
+                    io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted => Ok(None),
+                    _ => Err(error),
+                };
+            }
+            Ok(Some(received as usize))
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+mod platform {
+    use std::io;
+    use std::time::Duration;
+
+    use crate::MacAddress;
+
+    fn unsupported() -> io::Error {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            "media streams are not supported on this system yet",
+        )
+    }
+
+    pub struct FrameSender;
+
+    impl FrameSender {
+        pub fn open(_interface: &str) -> io::Result<Self> {
+            Err(unsupported())
+        }
+
+        pub fn send(&self, _frame: &[u8]) -> io::Result<()> {
+            Err(unsupported())
+        }
+    }
+
+    pub struct FrameReceiver;
+
+    impl FrameReceiver {
+        pub fn open(_interface: &str, _subtype: u8, _destination: MacAddress) -> io::Result<Self> {
+            Err(unsupported())
+        }
+
+        pub fn receive(
+            &self,
+            _buffer: &mut [u8],
+            _timeout: Option<Duration>,
+        ) -> io::Result<Option<usize>> {
+            Err(unsupported())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn payloads_start_after_the_tag_if_there_is_one() {
+        let mut frame = vec![0u8; 12];
+        frame.extend_from_slice(&[0x22, 0xf0, 0x02, 0x81]);
+        assert_eq!(avtp_payload(&frame), Some(&[0x02, 0x81][..]));
+        let mut tagged = vec![0u8; 12];
+        tagged.extend_from_slice(&[0x81, 0x00, 0x60, 0x02, 0x22, 0xf0, 0x02]);
+        assert_eq!(avtp_payload(&tagged), Some(&[0x02][..]));
+        let mut other = vec![0u8; 12];
+        other.extend_from_slice(&[0x08, 0x00, 0x45]);
+        assert_eq!(avtp_payload(&other), None);
+        assert_eq!(avtp_payload(&[0; 5]), None);
+    }
+}
