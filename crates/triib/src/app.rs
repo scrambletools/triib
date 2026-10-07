@@ -43,6 +43,9 @@ pub struct Triib {
     system_mode: iced::theme::Mode,
     /// The desktop allows animations.
     pub system_animations: bool,
+    /// Whether the keyboard layout in use types right to left, when the
+    /// system says.
+    keyboard_rtl: Option<bool>,
     pub interfaces: Vec<Interface>,
     pub search: String,
     network: Option<Network>,
@@ -186,6 +189,9 @@ pub enum Message {
     AccentPicked(String),
     AnimationsToggled(bool),
     SystemTheme(iced::theme::Mode),
+    /// The keyboard layout's direction changed, or the system stopped
+    /// saying.
+    KeyboardDirection(Option<bool>),
     SystemAccent(Option<(u8, u8, u8)>),
     AnimationsEnabled(Option<bool>),
     External(External),
@@ -210,6 +216,7 @@ impl Triib {
             system_accent: None,
             system_mode: iced::theme::Mode::Dark,
             system_animations: true,
+            keyboard_rtl: None,
             interfaces: vec![interface],
             search: String::new(),
             network: None,
@@ -255,6 +262,7 @@ impl Triib {
             system_accent: None,
             system_mode: iced::theme::Mode::Dark,
             system_animations: true,
+            keyboard_rtl: None,
             interfaces: avb_net::interfaces(),
             search: String::new(),
             network: None,
@@ -287,6 +295,7 @@ impl Triib {
         };
         triib.reload_omarchy();
         triib.apply_motion();
+        triib.apply_input_direction();
         triib.start_network();
         let system = iced::system::theme().map(Message::SystemTheme);
         // The portal's own answer, in case it came after iced stopped
@@ -603,7 +612,12 @@ impl Triib {
             Message::LanguageSelected(tag) => {
                 self.settings.language = tag;
                 crate::i18n::set_language(self.settings.chosen_language());
+                self.apply_input_direction();
                 self.save_settings();
+            }
+            Message::KeyboardDirection(right_to_left) => {
+                self.keyboard_rtl = right_to_left;
+                self.apply_input_direction();
             }
             Message::AppearanceSelected(appearance) => {
                 self.settings.appearance = appearance;
@@ -662,6 +676,7 @@ impl Triib {
             iced::system::theme_changes().map(Message::SystemTheme),
             Subscription::run(desktop::accent_changes).map(Message::SystemAccent),
             Subscription::run(crate::external_events).map(Message::External),
+            Subscription::run(scramble_ui::input::keyboard_changes).map(Message::KeyboardDirection),
         ])
     }
 
@@ -842,6 +857,14 @@ impl Triib {
     }
 
     /// Saves the settings, keeping why when that fails.
+    /// Sets the side empty text fields start on: the keyboard layout's,
+    /// else the interface's.
+    fn apply_input_direction(&self) {
+        scramble_ui::dir::set_input_right_to_left(
+            self.keyboard_rtl.unwrap_or_else(scramble_ui::dir::rtl),
+        );
+    }
+
     fn save_settings(&mut self) {
         self.settings_error = self.settings.save().err();
     }

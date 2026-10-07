@@ -59,6 +59,7 @@ fn main() -> iced::Result {
         return Ok(());
     }
 
+    scramble_ui::input::remember_interface_thread();
     let (sender, receiver) = mpsc::unbounded();
     let _ = EXTERNAL_SENDER.set(sender);
     *EXTERNAL_EVENTS

@@ -552,6 +552,10 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   Translated text reads from the right even when it opens with a Latin
   word; data such as entity names keeps its own direction, and text cut
   short ends in an ellipsis on the side it reads towards.
+- Text fields start on the side the keyboard layout in use types from,
+  read through scramble-ui (the active XKB layout on Linux, the input
+  language on Windows, the input source on macOS), and once they hold
+  text follow its direction; placeholders sit on the interface's side.
 - To do: review by native speakers.
 
 ### P2: macOS and Windows, everything but virtual endpoints

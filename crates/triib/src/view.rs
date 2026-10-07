@@ -567,6 +567,8 @@ fn name_field<'a>(text: &str) -> Element<'a, Message> {
     scramble_ui::row![
         text_input(&fl!("inspector-name"), text)
             .id(iced::widget::Id::new(NAME_FIELD))
+            .align_x(dir::input_align(text))
+            .placeholder_align(dir::horizontal_start())
             .on_input(Message::EditChanged)
             .on_submit(Message::EditSubmitted)
             .padding([6, 10])

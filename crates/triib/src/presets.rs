@@ -419,6 +419,8 @@ pub fn dialog<'a>(triib: &'a Triib, base: Element<'a, Message>) -> Element<'a, M
         aligned(styled(fl!("presets-note"), Type::BodyMedium).style(style::on_surface_variant),),
         row![
             text_input(&fl!("inspector-name"), &triib.preset_name)
+                .align_x(scramble_ui::dir::input_align(&triib.preset_name))
+                .placeholder_align(scramble_ui::dir::horizontal_start())
                 .on_input(Message::PresetNameChanged)
                 .on_submit_maybe(save.clone())
                 .padding([8, 12])
