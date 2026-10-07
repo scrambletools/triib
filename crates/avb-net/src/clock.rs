@@ -50,6 +50,14 @@ pub fn monotonic_now() -> Duration {
     platform::monotonic_now()
 }
 
+/// Has the calling thread's sleeps end as close to when they were asked
+/// for as the system can, for a thread that paces frames: on Linux a
+/// timer slack of a nanosecond in place of 50 microseconds. Elsewhere it
+/// does nothing.
+pub fn precise_sleeps() {
+    platform::precise_sleeps();
+}
+
 #[cfg(target_os = "linux")]
 #[allow(unsafe_code)]
 mod platform {
@@ -98,6 +106,14 @@ mod platform {
     pub fn monotonic_now() -> Duration {
         read(libc::CLOCK_MONOTONIC).unwrap_or_default()
     }
+
+    pub fn precise_sleeps() {
+        // SAFETY: prctl with PR_SET_TIMERSLACK takes plain integers and
+        // changes only the calling thread.
+        unsafe {
+            libc::prctl(libc::PR_SET_TIMERSLACK, 1 as libc::c_ulong);
+        }
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -125,6 +141,8 @@ mod platform {
         static START: OnceLock<std::time::Instant> = OnceLock::new();
         START.get_or_init(std::time::Instant::now).elapsed()
     }
+
+    pub fn precise_sleeps() {}
 }
 
 #[cfg(all(test, target_os = "linux"))]

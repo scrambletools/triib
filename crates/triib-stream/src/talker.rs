@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use atdecc::stream_format::StreamFormat;
 use avb_net::MacAddress;
-use avb_net::clock::monotonic_now;
+use avb_net::clock::{monotonic_now, precise_sleeps};
 use avb_net::stream::FrameSender;
 
 use crate::MediaClock;
@@ -21,6 +21,10 @@ const ETHERTYPE_VLAN: u16 = 0x8100;
 const ETHERTYPE_AVTP: u16 = 0x22f0;
 /// The Ethernet header with its VLAN tag.
 const ETHERNET_LEN: usize = 18;
+/// How long a frame may take to cross the network to its listeners, in
+/// nanoseconds: a frame sent later than this before its presentation time
+/// would be late.
+const CROSSING: i64 = 500_000;
 
 /// What a talker sends, and from where.
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +53,8 @@ pub struct TalkerStats {
     pub underruns: u64,
     /// Frames the interface would not take.
     pub send_errors: u64,
+    /// The thread pacing the frames runs real time.
+    pub realtime: bool,
 }
 
 #[derive(Default)]
@@ -58,6 +64,7 @@ struct Counters {
     adjustments: AtomicU64,
     underruns: AtomicU64,
     send_errors: AtomicU64,
+    realtime: AtomicBool,
 }
 
 /// A running talker. Dropping it stops the stream.
@@ -102,6 +109,7 @@ impl Talker {
             adjustments: read(&self.counters.adjustments),
             underruns: read(&self.counters.underruns),
             send_errors: read(&self.counters.send_errors),
+            realtime: self.counters.realtime.load(Ordering::Relaxed),
         }
     }
 }
@@ -136,6 +144,10 @@ fn run(
     stop: &AtomicBool,
     counters: &Counters,
 ) {
+    precise_sleeps();
+    counters
+        .realtime
+        .store(crate::realtime::raise(), Ordering::Relaxed);
     let interval = media.interval_nanos() as i64;
     let transit = config.max_transit_time.as_nanos() as i64;
     let mut frame = vec![0u8; ETHERNET_LEN + media.pdu_length()];
@@ -154,8 +166,10 @@ fn run(
         if wake > now {
             std::thread::sleep(wake - now);
         }
+        // A frame sent late still arrives in time while its presentation
+        // time is far enough ahead.
         let late = clock.now() - next;
-        if late > transit / 2 {
+        if late > (transit - CROSSING).max(transit / 2) {
             // Too late for the presentation time to mean anything: the
             // media clock starts again, which the mr bit tells.
             next = start(clock.now());

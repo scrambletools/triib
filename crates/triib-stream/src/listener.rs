@@ -44,6 +44,8 @@ pub struct ListenerStats {
     pub early: u64,
     /// Frames are arriving.
     pub locked: bool,
+    /// The thread taking the frames runs real time.
+    pub realtime: bool,
 }
 
 #[derive(Default)]
@@ -58,6 +60,7 @@ struct Counters {
     early: AtomicU64,
     locked: AtomicBool,
     peak: AtomicU32,
+    realtime: AtomicBool,
 }
 
 /// A running listener. Dropping it stops listening.
@@ -106,6 +109,7 @@ impl Listener {
             late: read(&counters.late),
             early: read(&counters.early),
             locked: counters.locked.load(Ordering::Relaxed),
+            realtime: counters.realtime.load(Ordering::Relaxed),
         }
     }
 
@@ -133,6 +137,9 @@ fn run(
     stop: &AtomicBool,
     counters: &Counters,
 ) {
+    counters
+        .realtime
+        .store(crate::realtime::raise(), Ordering::Relaxed);
     let mut frame = vec![0u8; 1522];
     let mut samples = Vec::new();
     let mut expected: Option<u8> = None;

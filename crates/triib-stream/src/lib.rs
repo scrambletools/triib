@@ -15,6 +15,7 @@ pub mod audio;
 pub mod clock;
 pub mod listener;
 pub mod media;
+pub mod realtime;
 pub mod talker;
 
 pub use clock::MediaClock;
