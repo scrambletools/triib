@@ -5,7 +5,7 @@
 #   VERSION=0.1.0 ARCH=amd64 nfpm package -f packaging/nfpm.yaml -p deb
 #   VERSION=0.1.0 ARCH=amd64 nfpm package -f packaging/nfpm.yaml -p rpm
 #
-# Installing grants both programs CAP_NET_RAW (packaging/linux).
+# Installing grants the programs CAP_NET_RAW (packaging/linux).
 name: triib
 arch: ${ARCH}
 platform: linux
@@ -22,7 +22,8 @@ description: |-
   triib is a lightweight ATDECC (IEEE 1722.1) controller with Milan and
   AVB Lite support: a connection matrix, the network as gPTP shows it,
   device settings, presets and a frame log, with triib-cli for the
-  command line.
+  command line and triib-endpointd for talkers and listeners on this
+  computer.
 
 contents:
   - src: ./stage/usr/
@@ -35,6 +36,7 @@ scripts:
 overrides:
   deb:
     depends:
+      - libasound2
       - libc6
       - libgcc-s1
       - libcap2-bin
@@ -43,14 +45,17 @@ overrides:
       - libvulkan1
     recommends:
       - mesa-vulkan-drivers
+      - linuxptp
   rpm:
     depends:
+      - alsa-lib
       - libcap
       - libwayland-client
       - libxkbcommon
       - vulkan-loader
     recommends:
       - mesa-vulkan-drivers
+      - linuxptp
 
 rpm:
   group: Applications/Multimedia

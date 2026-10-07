@@ -8,8 +8,8 @@ Everything a release ships is built from this repository:
 | `data/io.github.scrambletools.triib.metainfo.xml` | AppStream metadata, with the release history |
 | `data/icons/hicolor/` | App icon, once one is chosen: every package picks it up when it is there |
 | `packaging/licenses/` | The licenses of the fonts triib carries, from scramble-ui |
-| `scripts/dist-install.sh` | Installs a build of triib and triib-cli and the files above into a system layout; the Linux packages use it |
-| `packaging/nfpm.yaml`, `packaging/linux/postinstall.sh` | Debian and RPM packages, made with nfpm, which grant both programs `CAP_NET_RAW` as they install |
+| `scripts/dist-install.sh` | Installs a build of triib, triib-cli and triib-endpointd and the files above into a system layout; the Linux packages use it |
+| `packaging/nfpm.yaml`, `packaging/linux/postinstall.sh` | Debian and RPM packages, made with nfpm, which grant the programs `CAP_NET_RAW` as they install |
 | `packaging/arch/triib/` | AUR package, whose install script grants the same |
 | `packaging/windows/` | Windows MSI (WiX 5) and zip, made by `build.ps1` |
 | `packaging/macos/` | triib.app and its installer package, made by `bundle.sh --pkg`, with the capture access helper |
@@ -29,10 +29,14 @@ development builds, which keep their own.
 triib sends and receives raw Ethernet, which each system guards:
 
 - **Linux:** the `CAP_NET_RAW` capability. The .deb, .rpm and AUR
-  packages set it on `/usr/bin/triib` and `/usr/bin/triib-cli` when they
-  install (`setcap`, from libcap). The tarball cannot; after unpacking,
-  run `sudo setcap cap_net_raw+ep` on both programs. There is no AppImage
-  or Flatpak, as neither can carry the capability.
+  packages set it on `/usr/bin/triib`, `/usr/bin/triib-cli` and
+  `/usr/bin/triib-endpointd` when they install (`setcap`, from libcap).
+  The tarball cannot; after unpacking, run `sudo setcap cap_net_raw+ep`
+  on the three programs. There is no AppImage or Flatpak, as neither can
+  carry the capability. The packages depend on ALSA's library for
+  audio and recommend linuxptp, whose ptp4l this computer's talkers and
+  listeners need; triib-endpointd reads the PTP hardware clock, which
+  systemd's rules let everyone read.
 - **macOS:** read and write access to the BPF devices, `/dev/bpf*`,
   which are root's alone at every start. The installer package puts
   `triib.app` in /Applications, links `triib-cli` into /usr/local/bin,

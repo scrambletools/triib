@@ -21,7 +21,7 @@ env:
 jobs:
   linux:
     # Built on an older system so the packages run on newer ones too. The
-    # Debian and RPM packages grant both programs CAP_NET_RAW as they
+    # Debian and RPM packages grant the programs CAP_NET_RAW as they
     # install; a plain archive cannot, so it says how in the README. No
     # AppImage or Flatpak, which cannot carry the capability.
     if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'linux' }}
@@ -51,19 +51,20 @@ jobs:
             exit 1
           fi
           echo "version=$version" >>"$GITHUB_OUTPUT"
-      - name: Check the desktop entry
+      - name: Check the desktop entry, and ALSA's headers for audio
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils
+          sudo apt-get install -y --no-install-recommends desktop-file-utils libasound2-dev
           desktop-file-validate data/*.desktop
       - name: Build
-        run: cargo build --release --locked -p triib -p triib-cli
+        run: cargo build --release --locked -p triib -p triib-cli -p triib-endpointd
         env:
           TRIIB_PRODUCTION: '1'
       - name: Check that they run
         run: |
           target/release/triib --version
           target/release/triib-cli --version
+          target/release/triib-endpointd --version
       - name: Stage
         run: scripts/dist-install.sh target/release stage /usr
       - name: Debian and RPM packages

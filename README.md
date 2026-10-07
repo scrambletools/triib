@@ -19,7 +19,9 @@ listeners, routed to the computer's audio. Built in Rust with
 > that and the connections, logs every ATDECC frame sent and heard,
 > marking those that break the rules, and shows how entities run AVB
 > Lite, what their streams take of each link and the alarms the AVB Lite
-> profile calls for. It speaks 38 languages, following the system's or the
+> profile calls for. On Linux it runs talkers and listeners of its own,
+> Milan entities streaming 8 channels of 48 kHz AAF to and from the
+> computer's audio devices. It speaks 38 languages, following the system's or the
 > one picked in Settings. See the [plan](docs/PLAN.md).
 
 ## Installing
@@ -29,14 +31,48 @@ to send and receive raw Ethernet:
 
 | System | Package | What it sets up |
 |---|---|---|
-| Linux | .deb, .rpm, AUR | `CAP_NET_RAW` for `triib` and `triib-cli` |
-| Linux | .tar.gz | nothing: run `sudo setcap cap_net_raw+ep` on both programs |
+| Linux | .deb, .rpm, AUR | `CAP_NET_RAW` for `triib`, `triib-cli` and `triib-endpointd` |
+| Linux | .tar.gz | nothing: run `sudo setcap cap_net_raw+ep` on the three programs |
 | macOS (Apple Silicon) | .pkg | access to `/dev/bpf*` for the user installing it, at every start, as Wireshark's ChmodBPF does; `triib-cli` in /usr/local/bin |
 | Windows | .msi, .zip | nothing itself: install [Npcap](https://npcap.com) first, which the installer and triib point to when it is missing |
 
 On macOS the Mac's own AVB entity cannot be read from the same Mac, as
 the system never hands it the commands triib writes; triib says so.
 [docs/RELEASING.md](docs/RELEASING.md) has the details.
+
+## This computer's talkers and listeners
+
+On Linux, the Entities view adds talkers and listeners of the computer's
+own, which `triib-endpointd` runs, on a wired interface with a PTP
+hardware clock (`ethtool -T <interface>` shows one). They need
+[linuxptp](https://linuxptp.nwtime.org)'s `ptp4l` running gPTP on that
+interface, as with its `configs/gPTP.cfg`, so the clock keeps the
+network's time; triib reads ptp4l's state through its read-only socket,
+`/var/run/ptp4lro`, and says when ptp4l isn't there. Each endpoint is a
+Milan entity with one stream of 8 channels of 48 kHz AAF, which
+controllers, triib among them, bind like any other; the inspector picks
+the audio device a talker sends from or a listener plays to.
+
+The endpoints are listed in `endpoints.toml` in triib's data folder
+(`~/.local/share/triib` on Linux), which the app writes and the daemon
+reads again whenever it changes:
+
+```toml
+interface = "enp2s0"
+ptp4l_socket = "/var/run/ptp4lro"
+
+[[endpoint]]
+kind = "talker"
+instance = 0
+name = "Host talker 1"
+source = "default"   # or "silence", "tone", or an input's name
+
+[[endpoint]]
+kind = "listener"
+instance = 1
+name = "Host listener 1"
+sink = "default"     # or "discard", or an output's name
+```
 
 ## Building
 
@@ -65,6 +101,7 @@ cargo run -p triib-cli -- streams <interface> <entity-id>
 cargo run -p triib-cli -- transit <interface> <entity-id> <output> [nanoseconds]
 cargo run -p triib-cli -- descriptor <interface> <entity-id> <type:index>
 cargo run -p triib-cli -- harvest <interface> <entity-id> [repeat]
+cargo run -p triib-endpointd -- [--config <endpoints.toml>] [--interface <interface>]
 ```
 
 triib uses [scramble-ui](https://github.com/scrambletools/scramble-ui)
@@ -90,7 +127,11 @@ On Linux, sending and receiving ATDECC frames needs `CAP_NET_RAW`:
 
 ```
 sudo setcap cap_net_raw+ep target/debug/triib
+sudo setcap cap_net_raw+ep target/debug/triib-endpointd
 ```
+
+Building on Linux needs ALSA's headers for audio (`libasound2-dev` on
+Debian and Ubuntu, `alsa-lib-devel` on Fedora, `alsa-lib` on Arch).
 
 On macOS it needs access to `/dev/bpf*`, as Wireshark's ChmodBPF or
 triib's package gives (or, until the next restart,
@@ -104,6 +145,8 @@ whether raw Ethernet is ready.
 |---|---|
 | `triib` | The app |
 | `triib-cli` | Headless controller |
+| `triib-endpointd` | Runs this computer's talkers and listeners |
+| `triib-stream` | AAF streams, the media clock and audio devices |
 | `triib-store` | Settings and cache files |
 | `atdecc` | IEEE 1722.1 ATDECC with Milan: frames and state machines, no I/O |
 | `avb-mrp` | IEEE 802.1Q MRP, MSRP and MVRP: frames and state machines, no I/O |

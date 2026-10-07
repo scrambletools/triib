@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Installs a built triib and triib-cli and their data files into a system
-# layout, for packages: the binaries, desktop entry, icons when there are
-# any, AppStream metadata and licenses.
+# Installs a built triib, triib-cli and triib-endpointd and their data
+# files into a system layout, for packages: the binaries, desktop entry,
+# icons when there are any, AppStream metadata and licenses.
 #
 #   scripts/dist-install.sh BINARY_DIR [DESTDIR] [PREFIX]
 #
-# BINARY_DIR holds triib and triib-cli from a release build made with
+# BINARY_DIR holds the three programs from a release build made with
 # TRIIB_PRODUCTION=1. DESTDIR is the staging root (empty for a direct
 # install) and PREFIX defaults to /usr. Packages then grant the binaries
 # CAP_NET_RAW when installed.
@@ -20,6 +20,7 @@ share="$destdir$prefix/share"
 
 install -Dm755 "$binaries/triib" "$destdir$prefix/bin/triib"
 install -Dm755 "$binaries/triib-cli" "$destdir$prefix/bin/triib-cli"
+install -Dm755 "$binaries/triib-endpointd" "$destdir$prefix/bin/triib-endpointd"
 install -Dm644 "$root/data/$id.desktop" "$share/applications/$id.desktop"
 install -Dm644 "$root/data/$id.metainfo.xml" "$share/metainfo/$id.metainfo.xml"
 if [ -d "$root/data/icons" ]; then

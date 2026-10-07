@@ -296,9 +296,9 @@ i225 and i226 are the known choices with launch time.
   supports it (i210, i225, i226), else CBS, else user space pacing.
 - Reservations through MSRP and MVRP on an AVB network; AVB Lite on a plain
   network (standard PTP, CVU SRP, unicast by default, MAAP on escalation).
-- Local frames between the controller and local entities go through an
-  in-process router as well as the wire, so behaviour matches remote
-  entities exactly.
+- Local frames between the controller and local entities go over the
+  wire, which Linux sockets hear when bound to every protocol, so
+  behaviour matches remote entities exactly.
 
 ## AVB Lite
 
@@ -624,6 +624,57 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 - `triib-endpointd` with gPTP and AVB Lite PTP, MSRP, MVRP, CVU SRP.
 - Spawn talkers and listeners, AAF and AM824, audio routing via cpal.
 - Show them in the matrix and inspector; save them in presets.
+- Done (checked 2026-10-07 from this computer's TX401 through the
+  bridge, against a Milan endpoint both ways):
+  - gPTP from linuxptp: ptp4l disciplines the PHC and the daemon asks
+    its read-only socket through `pmc` every 2 s for each entity's
+    GET_AVB_INFO, GET_AS_PATH and counters. No PTP engine of our own
+    yet. The PHC runs on the BTC's timescale, not TAI.
+  - `avb-mrp`: an MRP participant (applicant, registrar, join, leave,
+    LeaveAll and periodic timers) with MSRP's and MVRP's encodings; the
+    daemon declares class A's domain, VLAN 2 and each talker's stream,
+    and registers listeners and talkers. The bridge reserves and
+    forwards.
+  - `atdecc`'s entity side: ADP, an AEM responder for what Milan
+    controllers read and set (descriptors, names, formats, sampling
+    rate, clock source, identify, AVB info, AS path, counters, max
+    transit time, Milan info), Milan's ACMP with the listener probing
+    its talker, and unsolicited notifications.
+  - No in-process router: Linux sockets now hear what other programs on
+    the computer send, so the app and the daemon's entities talk over
+    the wire as remote ones do. Within the daemon, its entities' frames
+    for each other go to them directly too, as a socket never hears its
+    own.
+  - `triib-stream`: AAF at 48 kHz, 8 channels of 32-bit (or 24 in 32),
+    6 samples every 125 us, paced in user space on gPTP time read from
+    the PHC, presentation time the max transit time ahead; the listener
+    counts what Milan counts. Audio from and to any device through cpal,
+    a test tone, or nothing; the device's drift is followed by dropping
+    or repeating a frame.
+  - `triib-endpointd`: endpoints from `endpoints.toml`, read again when
+    it changes, names controllers give kept in it, and what each
+    endpoint is doing written to `endpointd.toml` in the runtime folder.
+    A talker streams while a listener is ready for it, on the network or
+    in the same daemon. Release build 1.3 MB, about 10 MB resident; an
+    8 channel stream takes 4% of a core to send and 3% to receive.
+  - The app adds and removes them in the Entities view on interfaces
+    with a PTP hardware clock and a wired link, starts the daemon when
+    it isn't running, and says when ptp4l is missing; they show as this
+    computer's in the list, the matrix and the network view, and the
+    inspector picks their audio device. Other controllers see and bind
+    them like any entity.
+  - The Linux packages carry `triib-endpointd` with `CAP_NET_RAW`.
+- To do:
+  - AM824, for the MOTU 8D and others.
+  - AVB Lite: its PTP profile (ptp4l with another configuration, and
+    fallback between the two), CVU SRP, answering GET_LITE_STATUS, and
+    MAAP for destination addresses, which now come from the MAC.
+  - Presets that keep this computer's endpoints, and their audio.
+  - Channels, format and sampling rate set in the inspector; a filter
+    for this computer's entities in the list.
+  - Resampling with `rubato` in place of dropping or repeating a frame;
+    playing out at presentation time; launch time or CBS where the card
+    has them.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
 
