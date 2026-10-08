@@ -630,6 +630,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Talker ekle
 host-add-listener = Listener ekle
+host-show-mine = Yalnızca bu bilgisayarın kendi talker ve listener'larını göster
+host-show-all = Tüm varlıkları göster
 host-new-talker = Ana bilgisayar talker { $number }
 host-new-listener = Ana bilgisayar listener { $number }
 host-failed = Bu bilgisayara eklenemedi: { $reason }

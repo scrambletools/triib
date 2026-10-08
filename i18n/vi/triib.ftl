@@ -544,6 +544,8 @@ matrix-stream-format-state = { $format }. { $state }.
 
 host-add-talker = Thêm Talker
 host-add-listener = Thêm Listener
+host-show-mine = Chỉ hiện Talker và Listener của chính máy tính này
+host-show-all = Hiện mọi thực thể
 host-new-talker = Talker máy chủ { $number }
 host-new-listener = Listener máy chủ { $number }
 host-failed = Không thể thêm vào máy tính này: { $reason }

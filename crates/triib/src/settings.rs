@@ -25,6 +25,9 @@ pub struct Settings {
     /// Leave bridges, tunnels and other virtual interfaces out of the
     /// interface picker.
     pub hide_virtual_interfaces: bool,
+    /// The Entities view lists only this computer's own talkers and
+    /// listeners.
+    pub host_entities_only: bool,
     pub view: View,
     pub inspector: bool,
     /// The log shows in a panel under the view.
@@ -56,6 +59,7 @@ impl Default for Settings {
             animations: true,
             interface: None,
             hide_virtual_interfaces: true,
+            host_entities_only: false,
             view: View::Matrix,
             inspector: false,
             log: false,

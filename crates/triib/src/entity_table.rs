@@ -175,9 +175,11 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         values: Vec<String>,
     }
     let columns: &[EntityField] = &triib.settings.entity_columns;
+    let only_host = triib.settings.host_entities_only && triib.hosts_endpoints();
     let rows: Vec<Row<'_>> = triib
         .shown_entities()
         .into_iter()
+        .filter(|entity| !only_host || triib.is_host(entity.entity_id()))
         .map(|entity| {
             let model = triib.models.get(&entity.entity_id());
             Row {

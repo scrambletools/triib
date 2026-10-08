@@ -662,6 +662,8 @@ common-decimal-separator = {"."}
 
 host-add-talker = הוספת Talker
 host-add-listener = הוספת Listener
+host-show-mine = הצגת ה-Talker וה-Listener של המחשב הזה בלבד
+host-show-all = הצגת כל הישויות
 host-new-talker = Talker מארח { $number }
 host-new-listener = Listener מארח { $number }
 host-failed = לא ניתן היה להוסיף למחשב הזה: { $reason }

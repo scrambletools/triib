@@ -630,6 +630,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Talker hozzáadása
 host-add-listener = Listener hozzáadása
+host-show-mine = Csak a számítógép saját talkereinek és listenereinek megjelenítése
+host-show-all = Az összes entitás megjelenítése
 host-new-talker = Gazda talker { $number }
 host-new-listener = Gazda listener { $number }
 host-failed = Nem sikerült hozzáadni ehhez a számítógéphez: { $reason }

@@ -708,6 +708,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Přidat talker
 host-add-listener = Přidat listener
+host-show-mine = Zobrazit jen vlastní talkery a listenery tohoto počítače
+host-show-all = Zobrazit všechny entity
 host-new-talker = Talker hostitele { $number }
 host-new-listener = Listener hostitele { $number }
 host-failed = Nepodařilo se přidat do tohoto počítače: { $reason }

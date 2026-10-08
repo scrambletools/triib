@@ -544,6 +544,8 @@ matrix-stream-format-state = { $format }。{ $state }。
 
 host-add-talker = トーカーを追加
 host-add-listener = リスナーを追加
+host-show-mine = このコンピューター自身のトーカーとリスナーだけを表示
+host-show-all = すべてのエンティティを表示
 host-new-talker = ホストのトーカー { $number }
 host-new-listener = ホストのリスナー { $number }
 host-failed = このコンピューターに追加できませんでした：{ $reason }

@@ -657,6 +657,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Lisää talker
 host-add-listener = Lisää listener
+host-show-mine = Näytä vain tämän tietokoneen omat talkerit ja listenerit
+host-show-all = Näytä kaikki entiteetit
 host-new-talker = Isännän talker { $number }
 host-new-listener = Isännän listener { $number }
 host-failed = Lisääminen tähän tietokoneeseen ei onnistunut: { $reason }

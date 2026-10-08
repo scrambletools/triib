@@ -803,6 +803,8 @@ common-decimal-separator = {"."}
 
 host-add-talker = Add talker
 host-add-listener = Add listener
+host-show-mine = Show only this computer's own talkers and listeners
+host-show-all = Show every entity
 host-new-talker = Host talker { $number }
 host-new-listener = Host listener { $number }
 host-failed = Could not add it to this computer: { $reason }

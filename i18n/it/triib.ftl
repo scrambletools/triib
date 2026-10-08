@@ -696,6 +696,8 @@ matrix-stream-format-state = { $format }. { $state }.
 
 host-add-talker = Aggiungi talker
 host-add-listener = Aggiungi listener
+host-show-mine = Mostra solo i talker e i listener di questo computer
+host-show-all = Mostra tutte le entità
 host-new-talker = Talker dell’host { $number }
 host-new-listener = Listener dell’host { $number }
 host-failed = Impossibile aggiungerlo a questo computer: { $reason }

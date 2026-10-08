@@ -138,6 +138,8 @@ pub enum Message {
     /// it may take as shown.
     LogResized(resize::Drag, f32, f32),
     VirtualInterfacesToggled,
+    /// The Entities view lists only this computer's endpoints, or all.
+    HostEntitiesOnlyToggled,
     SearchChanged(String),
     EntitySelected(EntityId),
     /// A press on a view's empty space: nothing selected.
@@ -469,6 +471,10 @@ impl Triib {
             }
             Message::ViewPicked(view) => {
                 self.settings.view = view;
+                self.save_settings();
+            }
+            Message::HostEntitiesOnlyToggled => {
+                self.settings.host_entities_only = !self.settings.host_entities_only;
                 self.save_settings();
             }
             Message::VirtualInterfacesToggled => {

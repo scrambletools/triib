@@ -707,6 +707,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Dodaj talker
 host-add-listener = Dodaj listener
+host-show-mine = Pokaż tylko własne talkery i listenery tego komputera
+host-show-all = Pokaż wszystkie encje
 host-new-talker = Talker hosta { $number }
 host-new-listener = Listener hosta { $number }
 host-failed = Nie można dodać do tego komputera: { $reason }

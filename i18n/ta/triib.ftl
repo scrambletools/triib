@@ -628,6 +628,8 @@ common-decimal-separator = {"."}
 
 host-add-talker = Talker-ஐச் சேர்
 host-add-listener = Listener-ஐச் சேர்
+host-show-mine = இந்தக் கணினியின் சொந்த Talker, Listener-களை மட்டும் காட்டு
+host-show-all = எல்லா entity-களையும் காட்டு
 host-new-talker = ஹோஸ்ட் Talker { $number }
 host-new-listener = ஹோஸ்ட் Listener { $number }
 host-failed = இந்தக் கணினியில் சேர்க்க முடியவில்லை: { $reason }

@@ -2387,6 +2387,13 @@ pub(crate) mod tests {
                 .any(|message| matches!(message, Message::HostRemoved(id) if *id == WIRED_ESP)),
             "{messages:?}"
         );
+        // The list can show only this computer's: the wired ESP stays,
+        // the Mac mini goes.
+        assert!(simulate(&triib, size).find("Mac mini").is_ok());
+        triib.settings.host_entities_only = true;
+        assert!(simulate(&triib, size).find("Mac mini").is_err());
+        let _ = triib.update(Message::HostEntitiesOnlyToggled);
+        assert!(!triib.settings.host_entities_only);
         // Without a hardware clock, the bar says why instead.
         triib.interfaces[0].hardware_clock = None;
         let mut simulator = simulate(&triib, size);

@@ -628,6 +628,8 @@ common-decimal-separator = {"."}
 
 host-add-talker = Talker شامل کریں
 host-add-listener = Listener شامل کریں
+host-show-mine = صرف اس کمپیوٹر کے اپنے Talker اور Listener دکھائیں
+host-show-all = تمام اینٹیٹیز دکھائیں
 host-new-talker = میزبان Talker { $number }
 host-new-listener = میزبان Listener { $number }
 host-failed = اسے اس کمپیوٹر میں شامل نہیں کیا جا سکا: { $reason }

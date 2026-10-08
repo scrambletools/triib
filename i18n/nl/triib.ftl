@@ -638,6 +638,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Talker toevoegen
 host-add-listener = Listener toevoegen
+host-show-mine = Alleen de eigen talkers en listeners van deze computer tonen
+host-show-all = Alle entiteiten tonen
 host-new-talker = Host-talker { $number }
 host-new-listener = Host-listener { $number }
 host-failed = Kon niet aan deze computer worden toegevoegd: { $reason }

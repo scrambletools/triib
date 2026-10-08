@@ -635,6 +635,8 @@ matrix-stream-format-state = { $format }. { $state }.
 
 host-add-talker = Ongeza talker
 host-add-listener = Ongeza listener
+host-show-mine = Onyesha talker na listener za kompyuta hii pekee
+host-show-all = Onyesha huluki zote
 host-new-talker = Talker ya mwenyeji { $number }
 host-new-listener = Listener ya mwenyeji { $number }
 host-failed = Haikuweza kuongezwa kwenye kompyuta hii: { $reason }

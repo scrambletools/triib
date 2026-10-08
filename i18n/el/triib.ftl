@@ -651,6 +651,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Προσθήκη Talker
 host-add-listener = Προσθήκη Listener
+host-show-mine = Εμφάνιση μόνο των Talker και Listener αυτού του υπολογιστή
+host-show-all = Εμφάνιση όλων των οντοτήτων
 host-new-talker = Talker κεντρικού υπολογιστή { $number }
 host-new-listener = Listener κεντρικού υπολογιστή { $number }
 host-failed = Δεν ήταν δυνατή η προσθήκη σε αυτόν τον υπολογιστή: { $reason }

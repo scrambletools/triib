@@ -544,6 +544,8 @@ matrix-stream-format-state = { $format }。{ $state }。
 
 host-add-talker = 添加发送端
 host-add-listener = 添加接收端
+host-show-mine = 只显示本机自己的发送端和接收端
+host-show-all = 显示所有实体
 host-new-talker = 主机发送端 { $number }
 host-new-listener = 主机接收端 { $number }
 host-failed = 无法添加到本机：{ $reason }

@@ -52,6 +52,16 @@ pub fn bar(triib: &Triib) -> Option<Element<'_, Message>> {
         container(
             scramble_ui::row![
                 text,
+                component::toggle_tool(
+                    Icon::Computer,
+                    if triib.settings.host_entities_only {
+                        fl!("host-show-all")
+                    } else {
+                        fl!("host-show-mine")
+                    },
+                    triib.settings.host_entities_only,
+                    Message::HostEntitiesOnlyToggled,
+                ),
                 add(EndpointKind::Talker, fl!("host-add-talker")),
                 add(EndpointKind::Listener, fl!("host-add-listener")),
             ]

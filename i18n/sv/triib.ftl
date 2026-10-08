@@ -647,6 +647,8 @@ common-decimal-separator = {","}
 
 host-add-talker = Lägg till talker
 host-add-listener = Lägg till listener
+host-show-mine = Visa bara den här datorns egna talkers och listeners
+host-show-all = Visa alla entiteter
 host-new-talker = Värd-talker { $number }
 host-new-listener = Värd-listener { $number }
 host-failed = Kunde inte lägga till den på den här datorn: { $reason }
