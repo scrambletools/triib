@@ -419,9 +419,9 @@ netmap-gptp-not-reported = gPTP not reported
 # Also a label over the devices off the tree, in capitals where the script
 # has them.
 netmap-off-tree = Not on the gPTP tree
-# In step with the grandmaster's clock.
-netmap-synced = Synced
-netmap-not-synced = Not synced
+# In step with the grandmaster's clock: short for in sync.
+netmap-synced = Sync
+netmap-not-synced = No sync
 netmap-triib-on = triib on { $interface }
 # Streams passing through a bridge.
 netmap-through-count = { $count } through
@@ -451,9 +451,9 @@ netmap-link-delay = Link delay
 netmap-bridge-port = Bridge port
 # How often the link went down.
 netmap-link-drops = Link drops
-netmap-synced-to-grandmaster = Synced to the grandmaster
-netmap-host-no-gptp = Not synced: this computer does not run gPTP
-netmap-link-no-gptp = Not synced: gPTP does not run on its link
+netmap-synced-to-grandmaster = In sync with the grandmaster
+netmap-host-no-gptp = No sync: this computer does not run gPTP
+netmap-link-no-gptp = No sync: gPTP does not run on its link
 netmap-audio = Audio
 netmap-media-clock-streams = Media clock streams
 netmap-audio-streams = Audio streams
