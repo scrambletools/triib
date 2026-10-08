@@ -6,6 +6,11 @@
 //! ratio a slow controller steers to keep the buffer near its fill
 //! level: the device's drift, a few hundred parts per million at most,
 //! is taken up without a sample frame dropped or played twice.
+//!
+//! A listener's output steers by time instead, once it knows when the
+//! device plays: each sample then plays at its presentation time, or a
+//! fixed delay after it where the device's own latency is longer than
+//! the stream allows.
 
 use std::collections::VecDeque;
 use std::f32::consts::TAU;
@@ -63,6 +68,11 @@ pub struct FrameBuffer {
 
 struct Held {
     samples: VecDeque<f32>,
+    /// Frames ever pushed on the stream's side: the oldest held is frame
+    /// `pushed` less those held.
+    pushed: u64,
+    /// Frames held beyond the usual most, for a listener's delay.
+    more: usize,
     /// The fill right after the device's last chunk, which the controller
     /// steers by.
     sample: Option<DeviceSample>,
@@ -75,6 +85,12 @@ pub struct DeviceSample {
     pub chunks: u64,
     pub level: usize,
     pub chunk: usize,
+    /// Frames pushed by then, so the oldest held is frame `pushed -
+    /// level`.
+    pub pushed: u64,
+    /// When the oldest frame held plays, in monotonic nanoseconds, where
+    /// the device says.
+    pub plays_at: Option<i64>,
 }
 
 impl FrameBuffer {
@@ -83,6 +99,8 @@ impl FrameBuffer {
         FrameBuffer {
             held: Mutex::new(Held {
                 samples: VecDeque::with_capacity(4 * margin * channels),
+                pushed: 0,
+                more: 0,
                 sample: None,
             }),
             channels,
@@ -105,8 +123,9 @@ impl FrameBuffer {
 
     fn push_into(&self, held: &mut Held, samples: &[f32]) {
         held.samples.extend(samples);
+        held.pushed += (samples.len() / self.channels) as u64;
         let chunk = held.sample.map_or(0, |sample| sample.chunk);
-        let most = 4 * (self.margin + chunk) * self.channels;
+        let most = (4 * (self.margin + chunk) + held.more) * self.channels;
         if held.samples.len() > most {
             let extra = held.samples.len() - most;
             held.samples.drain(..extra - extra % self.channels);
@@ -133,26 +152,47 @@ impl FrameBuffer {
         }
     }
 
+    /// Frames ever pushed on the stream's side.
+    pub fn pushed(&self) -> u64 {
+        self.lock().pushed
+    }
+
+    /// Holds as many as `frames` more before dropping the oldest.
+    pub fn hold_more(&self, frames: usize) {
+        let mut held = self.lock();
+        held.more = held.more.max(frames);
+    }
+
+    /// Drops the oldest `frames`, as many as are held at most.
+    pub fn drop_oldest(&self, frames: usize) {
+        let mut held = self.lock();
+        let samples = (frames * self.channels).min(held.samples.len());
+        held.samples.drain(..samples);
+    }
+
     /// The device's side: adds one chunk, and notes the fill after it.
     pub fn device_push(&self, samples: &[f32]) {
         let mut held = self.lock();
         self.push_into(&mut held, samples);
-        self.note(&mut held, samples.len());
+        self.note(&mut held, samples.len(), None);
     }
 
-    /// The device's side: takes one chunk, and notes the fill after it.
-    pub fn device_pull(&self, out: &mut [f32]) {
+    /// The device's side: takes one chunk, and notes the fill after it
+    /// and, where the device says, when the oldest frame left plays.
+    pub fn device_pull(&self, out: &mut [f32], plays_at: Option<i64>) {
         let mut held = self.lock();
         self.pull_from(&mut held, out);
-        self.note(&mut held, out.len());
+        self.note(&mut held, out.len(), plays_at);
     }
 
-    fn note(&self, held: &mut Held, samples: usize) {
+    fn note(&self, held: &mut Held, samples: usize, plays_at: Option<i64>) {
         let chunks = held.sample.map_or(1, |sample| sample.chunks + 1);
         held.sample = Some(DeviceSample {
             chunks,
             level: held.samples.len() / self.channels,
             chunk: samples / self.channels,
+            pushed: held.pushed,
+            plays_at,
         });
     }
 
@@ -249,20 +289,36 @@ impl Drift {
     /// for each chunk: a fuller buffer than kept takes more input frames
     /// for each output frame, whichever side the device is on.
     pub fn steer(&mut self, buffer: &FrameBuffer) {
-        let Some(sample) = buffer.device_sample() else {
-            return;
-        };
+        if let Some(sample) = self.new_sample(buffer) {
+            let excess = sample.level as f64 - self.kept(buffer, &sample) as f64;
+            self.follow(excess, sample.chunk);
+        }
+    }
+
+    /// The device's last chunk, when not yet steered by.
+    fn new_sample(&mut self, buffer: &FrameBuffer) -> Option<DeviceSample> {
+        let sample = buffer.device_sample()?;
         if sample.chunks == self.chunks {
-            return;
+            return None;
         }
         self.chunks = sample.chunks;
-        // After an input's chunk the buffer holds it on top of what is
-        // kept; after an output's, just what is kept.
-        let kept = match self.side {
+        Some(sample)
+    }
+
+    /// The fill kept right after a chunk: after an input's the buffer
+    /// holds it on top of what is kept; after an output's, just what is
+    /// kept.
+    fn kept(&self, buffer: &FrameBuffer, sample: &DeviceSample) -> usize {
+        match self.side {
             DeviceSide::Pushes => buffer.margin + sample.chunk,
             DeviceSide::Pulls => buffer.margin,
-        };
-        let error = (sample.level as f64 - kept as f64) / sample.chunk.max(1) as f64;
+        }
+    }
+
+    /// Steers by `excess` frames held beyond what is wanted, after a
+    /// device chunk of `chunk` frames.
+    fn follow(&mut self, excess: f64, chunk: usize) {
+        let error = excess / chunk.max(1) as f64;
         let smoothed = self.error.get_or_insert(error);
         *smoothed += SMOOTHING * (error - *smoothed);
         self.integral = (self.integral + INTEGRAL * *smoothed).clamp(-MOST_DRIFT, MOST_DRIFT);
@@ -273,6 +329,12 @@ impl Drift {
 
     fn held_frames(&self) -> usize {
         self.held.len() / self.channels
+    }
+
+    /// Input frames taken but not yet made into output, counted from
+    /// where the next output frame lies.
+    fn pending(&self) -> f64 {
+        (self.held_frames() as f64 - 1.0 - self.position).max(0.0)
     }
 
     /// The input frames to add before `frames` output frames can be made.
@@ -492,14 +554,21 @@ where
     T: SizedSample + FromSample<f32>,
 {
     let device_channels = usize::from(config.channels).max(1);
+    let rate = i64::from(config.sample_rate.max(1));
     let mut frames = Vec::new();
     device
         .build_output_stream(
             config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            move |data: &mut [T], info: &cpal::OutputCallbackInfo| {
                 let count = data.len() / device_channels;
                 frames.resize(count * channels, 0.0);
-                buffer.device_pull(&mut frames);
+                // The chunk's first frame plays the device's latency from
+                // now, the frame after its last a chunk later.
+                let stamp = info.timestamp();
+                let latency = stamp.playback.duration_since(stamp.callback);
+                let plays_at = avb_net::clock::monotonic_now() + latency;
+                let after = plays_at.as_nanos() as i64 + count as i64 * 1_000_000_000 / rate;
+                buffer.device_pull(&mut frames, Some(after));
                 for (frame, samples) in data
                     .chunks_exact_mut(device_channels)
                     .zip(frames.chunks_exact(channels.max(1)))
@@ -656,11 +725,50 @@ impl Input {
     }
 }
 
+/// When the samples a listener writes are due.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Presented {
+    /// The first sample's presentation time, in gPTP nanoseconds.
+    pub first: i64,
+    /// gPTP time less monotonic time, in nanoseconds.
+    pub offset: i64,
+}
+
+/// How long an output watches its device before choosing the delay.
+const CHOOSING: i64 = 2_000_000_000;
+/// The delay comes in steps of this, and grows by one each time the
+/// device then finds nothing to play.
+const DELAY_STEP: i64 = 1_000_000;
+const MOST_DELAY: i64 = 500_000_000;
+
+/// The resampler toward the device, and when its frames play.
+struct Playing {
+    drift: Drift,
+    made: Vec<f32>,
+    /// The presentation time of the next input frame, and gPTP time less
+    /// monotonic time, in nanoseconds.
+    next_in: Option<i64>,
+    offset: Option<i64>,
+    /// Device frame `.0` presents at gPTP nanoseconds `.1`.
+    anchor: Option<(u64, i64)>,
+    /// How long after its presentation time each frame plays, once
+    /// chosen, and how far from that the last chunk played.
+    delay: Option<i64>,
+    error: i64,
+    /// While choosing: when it started, in monotonic nanoseconds, and the
+    /// lateness at the kept fill, summed, with the times it was seen.
+    choosing: Option<(i64, f64, u32)>,
+    /// The device's underruns when the delay was last set.
+    underruns: u64,
+}
+
 /// The stream's samples to their sink.
 pub struct Output {
-    buffer: Option<(Arc<FrameBuffer>, DeviceThread)>,
-    /// The resampler toward the device, and its output.
-    drift: Mutex<(Drift, Vec<f32>)>,
+    buffer: Option<Arc<FrameBuffer>>,
+    _thread: Option<DeviceThread>,
+    playing: Mutex<Playing>,
+    /// Input frames a second.
+    rate: u32,
     /// The loudest sample since the last look, as f32 bits.
     peak: AtomicU32,
 }
@@ -668,8 +776,8 @@ pub struct Output {
 impl Output {
     /// Opens `sink` for `channels` channels at `rate` hertz.
     pub fn open(sink: &Sink, channels: u16, rate: u32) -> io::Result<Self> {
-        let buffer = match sink {
-            Sink::Discard => None,
+        match sink {
+            Sink::Discard => Ok(Output::new(None, None, channels, rate, rate)),
             Sink::Device {
                 name,
                 first_channel,
@@ -701,33 +809,151 @@ impl Output {
                         )),
                     }
                 })?;
-                Some((buffer, thread, f64::from(rate) / f64::from(device_rate)))
+                Ok(Output::new(
+                    Some(buffer),
+                    Some(thread),
+                    channels,
+                    rate,
+                    device_rate,
+                ))
             }
-        };
-        let nominal = buffer.as_ref().map_or(1.0, |(_, _, nominal)| *nominal);
-        let buffer = buffer.map(|(buffer, thread, _)| (buffer, thread));
-        Ok(Output {
-            buffer,
-            drift: Mutex::new((Drift::new(channels, DeviceSide::Pulls, nominal), Vec::new())),
-            peak: AtomicU32::new(0),
-        })
+        }
     }
 
-    /// Takes interleaved frames.
-    pub fn write(&self, samples: &[f32]) {
+    fn new(
+        buffer: Option<Arc<FrameBuffer>>,
+        thread: Option<DeviceThread>,
+        channels: u16,
+        rate: u32,
+        device_rate: u32,
+    ) -> Self {
+        let nominal = f64::from(rate) / f64::from(device_rate.max(1));
+        Output {
+            buffer,
+            _thread: thread,
+            playing: Mutex::new(Playing {
+                drift: Drift::new(channels, DeviceSide::Pulls, nominal),
+                made: Vec::new(),
+                next_in: None,
+                offset: None,
+                anchor: None,
+                delay: None,
+                error: 0,
+                choosing: None,
+                underruns: 0,
+            }),
+            rate: rate.max(1),
+            peak: AtomicU32::new(0),
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Playing> {
+        self.playing.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Takes interleaved frames, and when they are due where the stream
+    /// says.
+    pub fn write(&self, samples: &[f32], presented: Option<Presented>) {
         let loudest = samples
             .iter()
             .fold(0.0f32, |most, sample| most.max(sample.abs()));
         self.peak.fetch_max(loudest.to_bits(), Ordering::Relaxed);
-        if let Some((buffer, _)) = &self.buffer {
-            let mut drift = self.drift.lock().unwrap_or_else(PoisonError::into_inner);
-            let (drift, made) = &mut *drift;
-            drift.steer(buffer);
-            drift.push(samples);
-            made.clear();
-            drift.make(made, usize::MAX);
-            buffer.push(made);
+        let Some(buffer) = &self.buffer else {
+            return;
+        };
+        let mut playing = self.lock();
+        let playing = &mut *playing;
+        if let Some(presented) = presented {
+            playing.next_in = Some(presented.first);
+            playing.offset = Some(presented.offset);
         }
+        if let Some(sample) = playing.drift.new_sample(buffer) {
+            self.steer(playing, buffer, &sample);
+        }
+        playing.drift.push(samples);
+        playing.made.clear();
+        playing.drift.make(&mut playing.made, usize::MAX);
+        buffer.push(&playing.made);
+        let frames = samples.len() / playing.drift.channels;
+        let frame = 1e9 / f64::from(self.rate);
+        if let Some(next) = &mut playing.next_in {
+            *next += (frames as f64 * frame).round() as i64;
+            // The next frame the resampler makes lies the frames it holds
+            // back before the next to come.
+            let made = *next - (playing.drift.pending() * frame).round() as i64;
+            playing.anchor = Some((buffer.pushed(), made));
+        }
+    }
+
+    /// Steers by when the frames play, once the device and the stream say
+    /// when, else by the buffer's fill.
+    fn steer(&self, playing: &mut Playing, buffer: &FrameBuffer, sample: &DeviceSample) {
+        let excess = sample.level as f64 - playing.drift.kept(buffer, sample) as f64;
+        let (Some(plays_at), Some((anchor, presented)), Some(offset)) =
+            (sample.plays_at, playing.anchor, playing.offset)
+        else {
+            playing.drift.follow(excess, sample.chunk);
+            return;
+        };
+        // How late the oldest frame held plays.
+        let frame = playing.drift.ratio() * 1e9 / f64::from(self.rate);
+        let oldest = sample.pushed - sample.level as u64;
+        let presents = presented as f64 - (anchor as f64 - oldest as f64) * frame;
+        let late = (plays_at + offset) as f64 - presents;
+        let Some(delay) = playing.delay else {
+            // Steered by the fill while choosing, noting how late frames
+            // play at the fill kept: the earliest that is safe.
+            playing.drift.follow(excess, sample.chunk);
+            let (since, sum, seen) = playing.choosing.get_or_insert((plays_at, 0.0, 0));
+            *sum += late - excess * frame;
+            *seen += 1;
+            if plays_at - *since >= CHOOSING {
+                let earliest = (*sum / f64::from(*seen)).max(0.0) as i64;
+                let steps = (earliest + DELAY_STEP - 1) / DELAY_STEP;
+                let delay = (steps * DELAY_STEP).min(MOST_DELAY);
+                self.set_delay(playing, buffer, delay, (late - delay as f64) / frame);
+            }
+            return;
+        };
+        let underruns = buffer.underruns.load(Ordering::Relaxed);
+        if underruns > playing.underruns && delay < MOST_DELAY {
+            let later = delay + DELAY_STEP;
+            self.set_delay(playing, buffer, later, (late - later as f64) / frame);
+            return;
+        }
+        playing.error = (late - delay as f64) as i64;
+        playing
+            .drift
+            .follow((late - delay as f64) / frame, sample.chunk);
+    }
+
+    /// Plays each frame `delay` after its presentation time from now on,
+    /// moving at once by the `excess` frames held beyond that.
+    fn set_delay(&self, playing: &mut Playing, buffer: &FrameBuffer, delay: i64, excess: f64) {
+        playing.delay = Some(delay);
+        playing.error = 0;
+        playing.underruns = buffer.underruns.load(Ordering::Relaxed);
+        let excess = excess.round() as i64;
+        buffer.hold_more(excess.unsigned_abs() as usize);
+        if excess > 0 {
+            buffer.drop_oldest(excess as usize);
+        } else if excess < 0 {
+            // Silence in front of what comes next, which then presents
+            // that much later than the frames before it.
+            let frames = excess.unsigned_abs() as usize;
+            buffer.push(&vec![0.0; frames * playing.drift.channels]);
+            if let Some((anchor, _)) = &mut playing.anchor {
+                *anchor += frames as u64;
+            }
+        }
+    }
+
+    /// How long after its presentation time each sample plays, once the
+    /// output knows, and how far from that the last chunk played, in
+    /// nanoseconds.
+    pub fn playout(&self) -> Option<(i64, i64)> {
+        let playing = self.lock();
+        playing.delay.map(|delay| (delay, playing.error))
     }
 
     /// How far the device's clock runs from the stream's, in parts per
@@ -736,15 +962,14 @@ impl Output {
         if self.buffer.is_none() {
             return 0;
         }
-        let drift = self.drift.lock().unwrap_or_else(PoisonError::into_inner);
-        drift.0.device_ppm()
+        self.lock().drift.device_ppm()
     }
 
     /// Times the device found nothing to play.
     pub fn underruns(&self) -> u64 {
         self.buffer
             .as_ref()
-            .map_or(0, |(buffer, _)| buffer.underruns.load(Ordering::Relaxed))
+            .map_or(0, |buffer| buffer.underruns.load(Ordering::Relaxed))
     }
 
     /// The loudest sample since the last call, from 0 to 1.
@@ -768,11 +993,13 @@ mod tests {
             Some(DeviceSample {
                 chunks: 1,
                 level: 4,
-                chunk: 4
+                chunk: 4,
+                pushed: 4,
+                plays_at: None,
             })
         );
         let mut out = [9.0; 6];
-        buffer.device_pull(&mut out);
+        buffer.device_pull(&mut out, None);
         assert_eq!(out, [1.0; 6]);
         assert_eq!(buffer.device_sample().map(|sample| sample.chunks), Some(2));
         // Past four times the margin and the chunk, the oldest go.
@@ -868,7 +1095,7 @@ mod tests {
             buffer.push(&made);
             let now = packet as f64 / 8000.0;
             while chunk_time(chunks + 1, 1024, device_rate) <= now {
-                buffer.device_pull(&mut played);
+                buffer.device_pull(&mut played, None);
                 chunks += 1;
             }
             if packet == 8000 {
@@ -927,6 +1154,78 @@ mod tests {
         // A 1 kHz sine at half scale steps at most 0.033 at 96 kHz.
         let most = steps.iter().fold(0.0f32, |most, step| most.max(*step));
         assert!(most < 0.04, "{most}");
+    }
+
+    /// A listener's output to a device 50 ppm slow that plays each chunk
+    /// of `chunk` frames `latency` after its callback, for frames arriving
+    /// `ahead` before their presentation time, for a simulated minute: the
+    /// delay it chooses, and the most any sample in the last 20 s played
+    /// away from that delay after its presentation time, in seconds.
+    fn play_out(chunk: usize, latency: f64, ahead: f64) -> (i64, f64, u64) {
+        let rate = 48_000.0;
+        let device_rate = rate * (1.0 - 50e-6);
+        let buffer = Arc::new(FrameBuffer::new(1, 480));
+        let output = Output::new(Some(buffer.clone()), None, 1, 48_000, 48_000);
+        let tone = |seconds: f64| (TAU as f64 * 100.0 * seconds).sin() as f32 * 0.5;
+        let mut played = vec![0.0; chunk];
+        let mut chunks = 0;
+        let mut most = 0.0f64;
+        let mut underruns = 0;
+        for packet in 0..8000 * 60u64 {
+            let arrives = packet as f64 / 8000.0;
+            while chunk_time(chunks, chunk, device_rate) <= arrives {
+                let plays = chunks as f64 * chunk as f64 / device_rate + latency;
+                let after = plays + chunk as f64 / device_rate;
+                buffer.device_pull(&mut played, Some((after * 1e9) as i64));
+                if arrives > 40.0 {
+                    let (delay, _) = output.playout().unwrap();
+                    for (index, sample) in played.iter().enumerate() {
+                        let at = plays + index as f64 / device_rate - delay as f64 * 1e-9;
+                        // How far in time the sample is from the one due.
+                        let off = f64::from(sample - tone(at)) / (TAU as f64 * 100.0 * 0.5);
+                        most = most.max(off.abs());
+                    }
+                }
+                chunks += 1;
+            }
+            if packet == 8000 * 10 {
+                underruns = buffer.underruns.load(Ordering::Relaxed);
+            }
+            let first = arrives + ahead;
+            let samples: Vec<f32> = (0..6)
+                .map(|index| tone(first + index as f64 / rate))
+                .collect();
+            let presented = Presented {
+                first: (first * 1e9) as i64,
+                offset: 0,
+            };
+            output.write(&samples, Some(presented));
+        }
+        let (delay, _) = output.playout().unwrap();
+        let more = buffer.underruns.load(Ordering::Relaxed) - underruns;
+        (delay, most, more)
+    }
+
+    /// Frames 1.7 ms ahead to a device 25 ms behind its callbacks of 1024
+    /// frames: too late for presentation time, so each plays the same
+    /// whole milliseconds after it, the device's latency, a chunk and
+    /// the margin less the 1.7 ms.
+    #[test]
+    fn a_slow_device_plays_a_fixed_delay_after_presentation() {
+        let (delay, most, underruns) = play_out(1024, 0.025, 0.0017);
+        assert_eq!(delay, 55_000_000);
+        assert!(most < 0.000_2, "{most}");
+        assert_eq!(underruns, 0);
+    }
+
+    /// Frames 100 ms ahead to a device 5 ms behind its callbacks of 256
+    /// frames: each plays at its presentation time.
+    #[test]
+    fn early_frames_play_at_presentation_time() {
+        let (delay, most, underruns) = play_out(256, 0.005, 0.1);
+        assert_eq!(delay, 0);
+        assert!(most < 0.000_2, "{most}");
+        assert_eq!(underruns, 0);
     }
 
     #[test]

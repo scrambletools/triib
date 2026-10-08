@@ -145,6 +145,8 @@ pub struct Received {
     /// A presentation time it carries: the low 32 bits of gPTP
     /// nanoseconds.
     pub timestamp: Option<u32>,
+    /// The presentation time of its first sample, where it carries one.
+    pub first_presented: Option<u32>,
     /// It carries what the media describes.
     pub matches: bool,
 }
@@ -163,6 +165,7 @@ pub fn read(pdu: &[u8], media: &Media, out: &mut Vec<f32>) -> Option<Received> {
                 sequence: header.sequence,
                 stream_id: header.stream_id,
                 timestamp: header.timestamp,
+                first_presented: header.timestamp,
                 matches,
             })
         }
@@ -172,10 +175,16 @@ pub fn read(pdu: &[u8], media: &Media, out: &mut Vec<f32>) -> Option<Received> {
             if matches {
                 am824::read_samples(data, out);
             }
+            // The timestamp is for the block at the SYT_INTERVAL boundary.
+            let block = layout.stamped_block(header.dbc).unwrap_or(0);
+            let before = u64::from(block) * 1_000_000_000 / u64::from(layout.sample_rate);
             Some(Received {
                 sequence: header.sequence,
                 stream_id: header.stream_id,
                 timestamp: header.timestamp,
+                first_presented: header
+                    .timestamp
+                    .map(|timestamp| timestamp.wrapping_sub(before as u32)),
                 matches,
             })
         }

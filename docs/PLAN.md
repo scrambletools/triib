@@ -708,6 +708,17 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     when it takes it, else at its own, and the resampler converts: a
     48 kHz-only USB microphone fed a 96 and a 192 kHz stream, nothing
     lost, its drift read as before.
+  - Playing out at presentation time (checked 2026-10-08 into a
+    PipeWire sink): the output notes when each chunk the device takes
+    plays, from the latency cpal reports, and each frame held is known
+    by its presentation time, so the resampler steers by how late frames
+    play rather than by the fill. Where the device's latency is longer
+    than the stream allows, it watches for 2 s, then plays every sample
+    the same whole milliseconds after its presentation time, a step
+    more each time the device then finds nothing to play; the daemon
+    reports the delay. Through PipeWire: 40 ms after, held within
+    0.01 ms. In simulation, frames far enough ahead play at their
+    presentation time.
   - The Linux packages carry `triib-endpointd` with `CAP_NET_RAW`.
   - Checked with AM824 both ways against a Milan endpoint and into
     macOS's AVB listener, which counted no sequence mismatches.
@@ -722,8 +733,7 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     becomes our own engine with both profiles, as esp_ptp has.
   - AVB Lite against an ESP: the bench has no path to them without the
     AVB switch.
-  - Playing out at presentation time; sinc resampling (`rubato`) if
-    cubic ever falls short.
+  - Sinc resampling (`rubato`) if cubic ever falls short.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
 

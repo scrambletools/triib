@@ -1518,7 +1518,7 @@ impl Runtime {
             if let Some(listener) = &endpoint.listener {
                 let stats = listener.stats();
                 log(format!(
-                    "{}: received {} frames, {} out of sequence, {} late, {} early, peak {:.3}, device {:+} ppm, {} short{}",
+                    "{}: received {} frames, {} out of sequence, {} late, {} early, peak {:.3}, device {:+} ppm, {} short{}{}",
                     endpoint.config.name,
                     stats.frames_received,
                     stats.sequence_mismatches,
@@ -1527,6 +1527,16 @@ impl Runtime {
                     listener.take_peak(),
                     stats.drift_ppm,
                     stats.device_underruns,
+                    match stats.playout {
+                        Some((0, error)) =>
+                            format!(", plays on time {:+.2} ms", error as f64 / 1e6),
+                        Some((delay, error)) => format!(
+                            ", plays {:.0} ms after presentation {:+.2} ms",
+                            delay as f64 / 1e6,
+                            error as f64 / 1e6
+                        ),
+                        None => String::new(),
+                    },
                     if stats.realtime { ", real time" } else { "" }
                 ));
             }

@@ -116,6 +116,12 @@ impl MediaClock {
         monotonic_now().as_nanos() as i64 + self.offset.load(Ordering::Relaxed)
     }
 
+    /// gPTP time less monotonic time, in nanoseconds.
+    pub fn offset(&self) -> i64 {
+        self.refresh(false);
+        self.offset.load(Ordering::Relaxed)
+    }
+
     /// The monotonic time at which gPTP time reaches `gptp` nanoseconds.
     pub fn monotonic_at(&self, gptp: i64) -> Duration {
         let monotonic = gptp - self.offset.load(Ordering::Relaxed);

@@ -4,7 +4,7 @@
 
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -13,7 +13,7 @@ use avb_net::MacAddress;
 use avb_net::stream::{FrameReceiver, avtp_payload};
 
 use crate::MediaClock;
-use crate::audio::{Output, Sink};
+use crate::audio::{Output, Presented, Sink};
 use crate::media::{self, Media};
 
 /// How long without a frame before the stream counts as interrupted.
@@ -53,6 +53,10 @@ pub struct ListenerStats {
     pub drift_ppm: i32,
     /// Times the audio device found nothing to play.
     pub device_underruns: u64,
+    /// How long after its presentation time each sample plays, once the
+    /// device has said when it plays, and how far from that the last
+    /// chunk played, in nanoseconds.
+    pub playout: Option<(i64, i64)>,
 }
 
 #[derive(Default)]
@@ -70,6 +74,9 @@ struct Counters {
     realtime: AtomicBool,
     drift_ppm: AtomicI32,
     device_underruns: AtomicU64,
+    /// Nothing until chosen.
+    delay: AtomicI64,
+    playout_error: AtomicI64,
 }
 
 /// A running listener. Dropping it stops listening.
@@ -91,7 +98,10 @@ impl Listener {
             FrameReceiver::open(&config.interface, media.subtype(), &config.destinations)?;
         let output = Output::open(&config.sink, media.channels(), media.sample_rate())?;
         let stop = Arc::new(AtomicBool::new(false));
-        let counters = Arc::new(Counters::default());
+        let counters = Arc::new(Counters {
+            delay: AtomicI64::new(i64::MIN),
+            ..Counters::default()
+        });
         let handle = {
             let stop = stop.clone();
             let counters = counters.clone();
@@ -122,6 +132,10 @@ impl Listener {
             realtime: counters.realtime.load(Ordering::Relaxed),
             drift_ppm: counters.drift_ppm.load(Ordering::Relaxed),
             device_underruns: read(&counters.device_underruns),
+            playout: match counters.delay.load(Ordering::Relaxed) {
+                i64::MIN => None,
+                delay => Some((delay, counters.playout_error.load(Ordering::Relaxed))),
+            },
         }
     }
 
@@ -196,10 +210,12 @@ fn run(
             counters.locked.store(true, Ordering::Relaxed);
             counters.media_locked.fetch_add(1, Ordering::Relaxed);
         }
+        let now = clock.now();
+        // How far ahead a presentation time is, from the low 32 bits of
+        // gPTP time.
+        let ahead = |timestamp: u32| i64::from(timestamp.wrapping_sub(now as u32) as i32);
         if let Some(timestamp) = header.timestamp {
-            // How far ahead the presentation time is, from the low 32 bits
-            // of gPTP time.
-            let ahead = i64::from(timestamp.wrapping_sub(clock.now() as u32) as i32);
+            let ahead = ahead(timestamp);
             if ahead < 0 {
                 counters.late.fetch_add(1, Ordering::Relaxed);
             } else if ahead > EARLY {
@@ -212,7 +228,11 @@ fn run(
         counters
             .peak
             .fetch_max(loudest.to_bits(), Ordering::Relaxed);
-        output.write(&samples);
+        let presented = header.first_presented.map(|first| Presented {
+            first: now + ahead(first),
+            offset: clock.offset(),
+        });
+        output.write(&samples, presented);
         if header.sequence == 0 {
             counters
                 .drift_ppm
@@ -220,6 +240,10 @@ fn run(
             counters
                 .device_underruns
                 .store(output.underruns(), Ordering::Relaxed);
+            if let Some((delay, error)) = output.playout() {
+                counters.delay.store(delay, Ordering::Relaxed);
+                counters.playout_error.store(error, Ordering::Relaxed);
+            }
         }
     }
 }
