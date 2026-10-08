@@ -24,8 +24,8 @@ const PDELAY_RESP_FOLLOW_UP: u8 = 0xa;
 const PDELAY_LEN: usize = 54;
 /// The Endpoint Declaration TLV (profile 2.1): an organization extension
 /// under the AVB Lite MA-S, saying the sender is an endpoint.
-const ENDPOINT_TLV: [u8; 11] = [
-    0x00, 0x03, 0x00, 0x07, 0x8c, 0x1f, 0x64, 0x36, 0xc0, 0x01, 0x01,
+const ENDPOINT_TLV: [u8; 12] = [
+    0x00, 0x03, 0x00, 0x08, 0x8c, 0x1f, 0x64, 0x36, 0xc0, 0x01, 0x01, 0x00,
 ];
 
 /// How often a Pdelay_Req goes out, and after fallback the beacon.
@@ -71,7 +71,8 @@ fn has_endpoint_tlv(message: &[u8], start: usize) -> bool {
         let Some(body) = message.get(at + 4..at + 4 + size) else {
             return false;
         };
-        if kind == 0x0003 && body.len() >= 7 && body[..7] == ENDPOINT_TLV[4..] {
+        // The identifiers and dataField; a pad octet may follow.
+        if kind == 0x0003 && body.len() >= 7 && body[..7] == ENDPOINT_TLV[4..11] {
             return true;
         }
         at += 4 + size;
@@ -403,11 +404,18 @@ mod tests {
     #[test]
     fn requests_carry_the_endpoint_declaration() {
         let request = pdelay_request(IDENTITY, 7);
-        assert_eq!(request.len(), 65);
-        assert_eq!(&request[..4], &[0x12, 0x02, 0x00, 0x41]);
+        assert_eq!(request.len(), 66);
+        assert_eq!(&request[..4], &[0x12, 0x02, 0x00, 0x42]);
         assert_eq!(&request[54..], &ENDPOINT_TLV);
         assert!(has_endpoint_tlv(&request, PDELAY_LEN));
         assert!(!has_endpoint_tlv(&request[..PDELAY_LEN], PDELAY_LEN));
+        // An endpoint of the profile's first revision, its TLV seven
+        // octets long with no pad, is still recognized.
+        let mut older = request[..PDELAY_LEN].to_vec();
+        older[2..4].copy_from_slice(&65u16.to_be_bytes());
+        older.extend_from_slice(&[0x00, 0x03, 0x00, 0x07]);
+        older.extend_from_slice(&ENDPOINT_TLV[4..11]);
+        assert!(has_endpoint_tlv(&older, PDELAY_LEN));
     }
 
     #[test]
