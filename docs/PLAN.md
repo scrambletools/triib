@@ -700,6 +700,14 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     to registered controllers on change. `avb_lite = "off"` or `"on"` in
     endpoints.toml keeps AVB or forces AVB Lite. On the LAN a talker
     and listener streamed 79,012 frames unicast with none lost.
+  - AVB Lite against an ESP (checked 2026-10-08 through a plain switch
+    on the LAN interface, which has no PTP clock): the daemon fell back
+    on the ESP's Endpoint Declaration TLV within seconds, CVU SRP bound
+    both ways, and each side sent its stream unicast to the other, over
+    700,000 frames each way with no sequence mismatches. The ESP sends
+    its declarations to the ATDECC multicast address and its streams
+    and declarations at priority 3, where the profile says broadcast
+    and priority 5; triib takes either.
   - Sampling rates (checked 2026-10-08 in the same daemon): 48, 96 and
     192 kHz, each where every packing fits one Ethernet frame, so up to
     60 channels at 48 kHz, 30 at 96 and 15 at 192. Setting the rate moves
@@ -731,8 +739,6 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     configuration with a systemd template unit and a polkit rule the
     daemon switches between (a few seconds of relock), or `avb-ptp`
     becomes our own engine with both profiles, as esp_ptp has.
-  - AVB Lite against an ESP: the bench has no path to them without the
-    AVB switch.
   - Sinc resampling (`rubato`) if cubic ever falls short.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
