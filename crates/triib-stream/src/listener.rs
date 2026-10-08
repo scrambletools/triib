@@ -228,10 +228,15 @@ fn run(
         counters
             .peak
             .fetch_max(loudest.to_bits(), Ordering::Relaxed);
-        let presented = header.first_presented.map(|first| Presented {
-            first: now + ahead(first),
-            offset: clock.offset(),
-        });
+        // Without gPTP time from a hardware clock the presentation times
+        // mean nothing here, and the device plays as frames come.
+        let presented = header
+            .first_presented
+            .filter(|_| clock.locked())
+            .map(|first| Presented {
+                first: now + ahead(first),
+                offset: clock.offset(),
+            });
         output.write(&samples, presented);
         if header.sequence == 0 {
             counters

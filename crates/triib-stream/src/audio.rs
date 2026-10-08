@@ -740,6 +740,9 @@ const CHOOSING: i64 = 2_000_000_000;
 /// device then finds nothing to play.
 const DELAY_STEP: i64 = 1_000_000;
 const MOST_DELAY: i64 = 500_000_000;
+/// Frames further ahead of the device than this say the clocks disagree,
+/// and the output steers by the fill alone.
+const MOST_AHEAD: i64 = 500_000_000;
 
 /// The resampler toward the device, and when its frames play.
 struct Playing {
@@ -900,6 +903,10 @@ impl Output {
         let oldest = sample.pushed - sample.level as u64;
         let presents = presented as f64 - (anchor as f64 - oldest as f64) * frame;
         let late = (plays_at + offset) as f64 - presents;
+        if !(-MOST_AHEAD as f64..=2.0 * MOST_DELAY as f64).contains(&late) {
+            playing.drift.follow(excess, sample.chunk);
+            return;
+        }
         let Some(delay) = playing.delay else {
             // Steered by the fill while choosing, noting how late frames
             // play at the fill kept: the earliest that is safe.
