@@ -1105,6 +1105,7 @@ impl Entity {
                         self.model.current_sampling_rate = rate;
                         self.events
                             .push_back(EntityEvent::SamplingRateChanged(rate));
+                        self.follow_rate(rate, None);
                     }
                 }
                 answer[4..8].copy_from_slice(&self.model.current_sampling_rate.to_be_bytes());
@@ -1254,10 +1255,66 @@ impl Entity {
                     index,
                     format,
                 });
+                // A format at another rate takes the entity to that rate,
+                // and its other streams with it.
+                if let Some(rate) = format.sample_rate()
+                    && rate != self.model.current_sampling_rate
+                    && self.model.sampling_rates.contains(&rate)
+                {
+                    self.model.current_sampling_rate = rate;
+                    self.events
+                        .push_back(EntityEvent::SamplingRateChanged(rate));
+                    let mut payload = Vec::from(DescriptorType::AUDIO_UNIT.0.to_be_bytes());
+                    payload.extend_from_slice(&[0, 0]);
+                    payload.extend_from_slice(&rate.to_be_bytes());
+                    self.notify(AemCommandType::SET_SAMPLING_RATE, &payload, None);
+                    self.follow_rate(rate, Some((descriptor_type, index)));
+                }
             }
         }
-        answer.extend_from_slice(&stream.current_format.0.to_be_bytes());
+        let stream = match descriptor_type {
+            DescriptorType::STREAM_INPUT => &self.model.inputs,
+            _ => &self.model.outputs,
+        };
+        answer.extend_from_slice(&stream[usize::from(index)].current_format.0.to_be_bytes());
         (AemStatus::SUCCESS, answer, true)
+    }
+
+    /// Moves every stream but `except` to the format that packs samples as
+    /// its current one does at `rate`, telling registered controllers.
+    fn follow_rate(&mut self, rate: u32, except: Option<(DescriptorType, u16)>) {
+        let mut moved = Vec::new();
+        for (descriptor_type, streams) in [
+            (DescriptorType::STREAM_INPUT, &mut self.model.inputs),
+            (DescriptorType::STREAM_OUTPUT, &mut self.model.outputs),
+        ] {
+            for (index, stream) in streams.iter_mut().enumerate() {
+                let index = index as u16;
+                if except == Some((descriptor_type, index))
+                    || stream.current_format.sample_rate() == Some(rate)
+                {
+                    continue;
+                }
+                let current = stream.current_format;
+                if let Some(format) = stream.formats.iter().copied().find(|format| {
+                    format.sample_rate() == Some(rate) && format.same_but_rate(current)
+                }) {
+                    stream.current_format = format;
+                    moved.push((descriptor_type, index, format));
+                }
+            }
+        }
+        for (descriptor_type, index, format) in moved {
+            self.events.push_back(EntityEvent::StreamFormatChanged {
+                descriptor_type,
+                index,
+                format,
+            });
+            let mut payload = Vec::from(descriptor_type.0.to_be_bytes());
+            payload.extend_from_slice(&index.to_be_bytes());
+            payload.extend_from_slice(&format.0.to_be_bytes());
+            self.notify(AemCommandType::SET_STREAM_FORMAT, &payload, None);
+        }
     }
 
     fn name(&mut self, command_type: AemCommandType, payload: &[u8]) -> (AemStatus, Vec<u8>, bool) {

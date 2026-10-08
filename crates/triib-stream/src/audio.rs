@@ -193,6 +193,10 @@ pub enum DeviceSide {
 pub struct Drift {
     channels: usize,
     side: DeviceSide,
+    /// Input frames for each output frame were both clocks exact: 1
+    /// when the device runs at the stream's rate, 2 for a 96 kHz stream
+    /// to a 48 kHz device.
+    nominal: f64,
     /// Input frames: the one before the current position, then those
     /// after.
     held: VecDeque<f32>,
@@ -209,13 +213,14 @@ pub struct Drift {
 }
 
 impl Drift {
-    pub fn new(channels: u16, side: DeviceSide) -> Self {
+    pub fn new(channels: u16, side: DeviceSide, nominal: f64) -> Self {
         Drift {
             channels: usize::from(channels).max(1),
             side,
+            nominal,
             held: VecDeque::new(),
             position: 0.0,
-            ratio: 1.0,
+            ratio: nominal,
             chunks: 0,
             error: None,
             integral: 0.0,
@@ -225,6 +230,19 @@ impl Drift {
     /// Input frames for each output frame now.
     pub fn ratio(&self) -> f64 {
         self.ratio
+    }
+
+    /// How far the device's clock runs from the stream's, in parts per
+    /// million, as the ratio follows it.
+    pub fn device_ppm(&self) -> i32 {
+        let relative = self.ratio / self.nominal;
+        let ppm = match self.side {
+            // A fast input device gives more frames than the stream takes.
+            DeviceSide::Pushes => relative - 1.0,
+            // A slow output device takes fewer than the stream gives.
+            DeviceSide::Pulls => 1.0 / relative - 1.0,
+        };
+        (ppm * 1e6).round() as i32
     }
 
     /// Steers the ratio from the fill after the device's last chunk, once
@@ -248,8 +266,9 @@ impl Drift {
         let smoothed = self.error.get_or_insert(error);
         *smoothed += SMOOTHING * (error - *smoothed);
         self.integral = (self.integral + INTEGRAL * *smoothed).clamp(-MOST_DRIFT, MOST_DRIFT);
-        self.ratio = (1.0 + PROPORTIONAL * *smoothed + self.integral)
-            .clamp(1.0 - MOST_DRIFT, 1.0 + MOST_DRIFT);
+        self.ratio = self.nominal
+            * (1.0 + PROPORTIONAL * *smoothed + self.integral)
+                .clamp(1.0 - MOST_DRIFT, 1.0 + MOST_DRIFT);
     }
 
     fn held_frames(&self) -> usize {
@@ -343,6 +362,35 @@ fn find_device(name: Option<&str>, input: bool) -> io::Result<cpal::Device> {
                 None => "no default audio device".to_owned(),
             },
         )
+    })
+}
+
+/// The rate to open a device at: the stream's when the device takes it,
+/// else the device's own, which the resampler then converts from or to.
+fn device_rate(device: &cpal::Device, input: bool, wanted: u32) -> io::Result<u32> {
+    let default = if input {
+        device.default_input_config()
+    } else {
+        device.default_output_config()
+    }
+    .map_err(device_error)?;
+    if default.sample_rate() == wanted {
+        return Ok(wanted);
+    }
+    let ranges: Vec<cpal::SupportedStreamConfigRange> = if input {
+        device.supported_input_configs().map(Iterator::collect)
+    } else {
+        device.supported_output_configs().map(Iterator::collect)
+    }
+    .unwrap_or_default();
+    let supported = ranges.iter().any(|range| {
+        range.channels() == default.channels()
+            && (range.min_sample_rate()..=range.max_sample_rate()).contains(&wanted)
+    });
+    Ok(if supported {
+        wanted
+    } else {
+        default.sample_rate()
     })
 }
 
@@ -509,17 +557,18 @@ impl Input {
                 name,
                 first_channel,
             } => {
-                // 10 ms kept beyond the device's chunks.
-                let margin = rate as usize / 100;
-                let buffer = Arc::new(FrameBuffer::new(channels, margin));
                 let device = find_device(name.as_deref(), true)?;
+                let device_rate = device_rate(&device, true, rate)?;
+                // 10 ms kept beyond the device's chunks.
+                let margin = device_rate as usize / 100;
+                let buffer = Arc::new(FrameBuffer::new(channels, margin));
                 let filling = buffer.clone();
                 let first = usize::from(*first_channel);
                 let wanted = usize::from(channels);
                 let thread = device_thread("audio input".into(), move || {
                     let supported = device.default_input_config().map_err(device_error)?;
                     let mut config = supported.config();
-                    config.sample_rate = rate;
+                    config.sample_rate = device_rate;
                     match supported.sample_format() {
                         cpal::SampleFormat::F32 => {
                             input_stream::<f32>(&device, config, wanted, first, filling)
@@ -538,7 +587,11 @@ impl Input {
                 })?;
                 InputKind::Device {
                     buffer,
-                    drift: Drift::new(channels, DeviceSide::Pushes),
+                    drift: Drift::new(
+                        channels,
+                        DeviceSide::Pushes,
+                        f64::from(device_rate) / f64::from(rate),
+                    ),
                     taken: Vec::new(),
                     made: Vec::new(),
                     _thread: thread,
@@ -555,7 +608,7 @@ impl Input {
     /// million, as the resampler follows it.
     pub fn drift_ppm(&self) -> i32 {
         match &self.kind {
-            InputKind::Device { drift, .. } => ((drift.ratio() - 1.0) * 1e6).round() as i32,
+            InputKind::Device { drift, .. } => drift.device_ppm(),
             _ => 0,
         }
     }
@@ -621,16 +674,17 @@ impl Output {
                 name,
                 first_channel,
             } => {
-                let margin = rate as usize / 100;
-                let buffer = Arc::new(FrameBuffer::new(channels, margin));
                 let device = find_device(name.as_deref(), false)?;
+                let device_rate = device_rate(&device, false, rate)?;
+                let margin = device_rate as usize / 100;
+                let buffer = Arc::new(FrameBuffer::new(channels, margin));
                 let draining = buffer.clone();
                 let first = usize::from(*first_channel);
                 let wanted = usize::from(channels);
                 let thread = device_thread("audio output".into(), move || {
                     let supported = device.default_output_config().map_err(device_error)?;
                     let mut config = supported.config();
-                    config.sample_rate = rate;
+                    config.sample_rate = device_rate;
                     match supported.sample_format() {
                         cpal::SampleFormat::F32 => {
                             output_stream::<f32>(&device, config, wanted, first, draining)
@@ -647,12 +701,14 @@ impl Output {
                         )),
                     }
                 })?;
-                Some((buffer, thread))
+                Some((buffer, thread, f64::from(rate) / f64::from(device_rate)))
             }
         };
+        let nominal = buffer.as_ref().map_or(1.0, |(_, _, nominal)| *nominal);
+        let buffer = buffer.map(|(buffer, thread, _)| (buffer, thread));
         Ok(Output {
             buffer,
-            drift: Mutex::new((Drift::new(channels, DeviceSide::Pulls), Vec::new())),
+            drift: Mutex::new((Drift::new(channels, DeviceSide::Pulls, nominal), Vec::new())),
             peak: AtomicU32::new(0),
         })
     }
@@ -681,8 +737,7 @@ impl Output {
             return 0;
         }
         let drift = self.drift.lock().unwrap_or_else(PoisonError::into_inner);
-        // The device takes fewer frames than the stream gives when slow.
-        ((1.0 / drift.0.ratio() - 1.0) * 1e6).round() as i32
+        drift.0.device_ppm()
     }
 
     /// Times the device found nothing to play.
@@ -755,7 +810,7 @@ mod tests {
         let rate = 48_000.0;
         let device_rate = rate * (1.0 + 120e-6);
         let buffer = FrameBuffer::new(1, 480);
-        let mut drift = Drift::new(1, DeviceSide::Pushes);
+        let mut drift = Drift::new(1, DeviceSide::Pushes, 1.0);
         let mut chunks = 0;
         let mut out = Vec::new();
         let mut steps = Vec::new();
@@ -800,7 +855,7 @@ mod tests {
         let rate = 48_000.0;
         let device_rate = rate * (1.0 - 80e-6);
         let buffer = FrameBuffer::new(1, 480);
-        let mut drift = Drift::new(1, DeviceSide::Pulls);
+        let mut drift = Drift::new(1, DeviceSide::Pulls, 1.0);
         let mut chunks = 0;
         let mut made = Vec::new();
         let mut played = vec![0.0; 1024];
@@ -828,6 +883,50 @@ mod tests {
         }
         assert_eq!(buffer.adjustments.load(Ordering::Relaxed), 0);
         assert_eq!(buffer.underruns.load(Ordering::Relaxed), 0);
+    }
+
+    /// A 48 kHz device 50 ppm fast feeding a 96 kHz stream: the ratio
+    /// settles on half the device's frames for each of the stream's,
+    /// the drift reads as the device's own, and the sine comes out whole
+    /// at twice the rate.
+    #[test]
+    fn a_device_at_half_the_rate_is_followed() {
+        let device_rate = 48_000.0 * (1.0 + 50e-6);
+        let buffer = FrameBuffer::new(1, 480);
+        let mut drift = Drift::new(1, DeviceSide::Pushes, 0.5);
+        let mut chunks = 0;
+        let mut out = Vec::new();
+        let mut steps = Vec::new();
+        let mut ppms = Vec::new();
+        for packet in 0..8000 * 120u64 {
+            let now = packet as f64 / 8000.0;
+            while chunk_time(chunks, 1024, device_rate) <= now {
+                buffer.device_push(&sine(1000.0, device_rate, chunks * 1024, 1024));
+                chunks += 1;
+            }
+            drift.steer(&buffer);
+            let mut taken = vec![0.0; drift.wanted(12)];
+            buffer.pull(&mut taken);
+            drift.push(&taken);
+            out.clear();
+            drift.make(&mut out, 12);
+            assert_eq!(out.len(), 12);
+            if packet == 8000 {
+                buffer.underruns.store(0, Ordering::Relaxed);
+            }
+            if packet > 8000 * 40 {
+                steps.extend(out.windows(2).map(|pair| (pair[1] - pair[0]).abs()));
+                ppms.push(drift.device_ppm());
+            }
+        }
+        for ppm in &ppms {
+            assert!((ppm - 50).abs() < 30, "{ppm}");
+        }
+        assert_eq!(buffer.adjustments.load(Ordering::Relaxed), 0);
+        assert_eq!(buffer.underruns.load(Ordering::Relaxed), 0);
+        // A 1 kHz sine at half scale steps at most 0.033 at 96 kHz.
+        let most = steps.iter().fold(0.0f32, |most, step| most.max(*step));
+        assert!(most < 0.04, "{most}");
     }
 
     #[test]

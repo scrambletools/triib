@@ -649,8 +649,8 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     the wire as remote ones do. Within the daemon, its entities' frames
     for each other go to them directly too, as a socket never hears its
     own.
-  - `triib-stream`: AAF at 48 kHz (32-bit, or 24 in 32) and IEC
-    61883-6 AM824, 1 to 60 channels, 6 samples every 125 us, paced in
+  - `triib-stream`: AAF (32-bit, or 24 in 32) and IEC 61883-6 AM824 at
+    48, 96 or 192 kHz, one class A frame of samples every 125 us, paced in
     user space on gPTP time read from the PHC, presentation time the max
     transit time ahead; AM824's timestamp falls on each frame's
     SYT_INTERVAL boundary, as strict listeners such as macOS want. The
@@ -680,8 +680,8 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     with a PTP hardware clock and a wired link, starts the daemon when
     it isn't running, and says when ptp4l is missing; they show as this
     computer's in the list, the matrix and the network view, and the
-    inspector picks their audio device and channels. Other controllers
-    see and bind them like any entity.
+    inspector picks their audio device and channels; the list can show
+    only them. Other controllers see and bind them like any entity.
   - Presets keep this computer's endpoints; recalling one starts them
     again and waits for them before binding, and on another computer
     their entity IDs become its own.
@@ -700,6 +700,14 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     to registered controllers on change. `avb_lite = "off"` or `"on"` in
     endpoints.toml keeps AVB or forces AVB Lite. On the LAN a talker
     and listener streamed 79,012 frames unicast with none lost.
+  - Sampling rates (checked 2026-10-08 in the same daemon): 48, 96 and
+    192 kHz, each where every packing fits one Ethernet frame, so up to
+    60 channels at 48 kHz, 30 at 96 and 15 at 192. Setting the rate moves
+    the entity's streams to the same packing at it, and a format at
+    another rate moves the rate. A device opens at the stream's rate
+    when it takes it, else at its own, and the resampler converts: a
+    48 kHz-only USB microphone fed a 96 and a 192 kHz stream, nothing
+    lost, its drift read as before.
   - The Linux packages carry `triib-endpointd` with `CAP_NET_RAW`.
   - Checked with AM824 both ways against a Milan endpoint and into
     macOS's AVB listener, which counted no sequence mismatches.
@@ -714,11 +722,8 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     becomes our own engine with both profiles, as esp_ptp has.
   - AVB Lite against an ESP: the bench has no path to them without the
     AVB switch.
-  - Sampling rates other than 48 kHz, and a filter for this computer's
-    entities in the list.
-  - Playing out at presentation time; launch time or CBS where the
-    card has them; sinc resampling (`rubato`) if cubic ever falls
-    short.
+  - Playing out at presentation time; sinc resampling (`rubato`) if
+    cubic ever falls short.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
 
@@ -734,6 +739,8 @@ triib is MIT OR Apache-2.0. Things to keep that true:
 
 - Firmware update over MVU, several interfaces at once, saving the log,
   MCP server, CRF talker, PipeWire native nodes per endpoint.
+- Pacing virtual endpoints' streams in hardware: launch time (SO_TXTIME
+  with the etf qdisc) or CBS where the card has them.
 
 ### Not in scope
 

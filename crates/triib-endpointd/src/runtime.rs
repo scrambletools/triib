@@ -67,23 +67,64 @@ enum Input {
     Gptp(Option<gptp::Status>),
 }
 
-/// AAF at 48 kHz, 6 samples a frame, 32-bit, in `bits` of them.
-fn aaf_48k(channels: u16, bits: u8) -> StreamFormat {
+/// The rates this computer's endpoints offer: those class A's 8000
+/// frames a second divide.
+const RATES: [u32; 3] = [48_000, 96_000, 192_000];
+
+/// The most octets an AVTPDU takes in one Ethernet frame.
+const MOST_PDU: usize = 1500;
+
+/// AAF at `rate`, a class A frame's samples each, 32-bit, in `bits` of
+/// them.
+fn aaf(rate: u32, channels: u16, bits: u8) -> StreamFormat {
+    let nsr: u64 = match rate {
+        96_000 => 0x07,
+        192_000 => 0x09,
+        _ => 0x05,
+    };
     StreamFormat(
         (0x02 << 56)
-            | (0x05 << 48)
+            | (nsr << 48)
             | (0x02 << 40)
             | (u64::from(bits) << 32)
             | (u64::from(channels & 0x3ff) << 22)
-            | (6 << 12),
+            | (u64::from(rate / 8000) << 12),
     )
 }
 
-/// IEC 61883-6 AM824 at 48 kHz, non-blocking, every quadlet multi-bit
+/// IEC 61883-6 AM824 at `rate`, non-blocking, every quadlet multi-bit
 /// linear audio, as the MOTU 8D and macOS use.
-fn am824_48k(channels: u16) -> StreamFormat {
+fn am824(rate: u32, channels: u16) -> StreamFormat {
+    let sfc: u64 = match rate {
+        96_000 => 0x04,
+        192_000 => 0x06,
+        _ => 0x02,
+    };
     let quadlets = u64::from(channels.min(255));
-    StreamFormat((0xa0 << 48) | (0x02 << 40) | (quadlets << 32) | (0x40 << 24) | (quadlets << 8))
+    StreamFormat((0xa0 << 48) | (sfc << 40) | (quadlets << 32) | (0x40 << 24) | (quadlets << 8))
+}
+
+/// The formats offered for `channels`: each packing at every rate where
+/// all of them fit one Ethernet frame, so a change of rate finds the
+/// same packing there.
+fn offered_formats(channels: u16) -> Vec<StreamFormat> {
+    RATES
+        .iter()
+        .map(|rate| {
+            [
+                aaf(*rate, channels, 32),
+                aaf(*rate, channels, 24),
+                am824(*rate, channels),
+            ]
+        })
+        .filter(|formats| {
+            formats.iter().all(|format| {
+                triib_stream::media::Media::of(*format)
+                    .is_some_and(|media| media.pdu_length() <= MOST_PDU)
+            })
+        })
+        .flatten()
+        .collect()
 }
 
 /// Whether two formats pack samples alike, whatever their channels.
@@ -141,13 +182,10 @@ impl Endpoint {
         interface: &str,
         clock: ClockIdentity,
     ) -> Self {
-        // As many as six samples of each fit in one Ethernet frame.
+        // As many as six samples of each fit in one Ethernet frame, at
+        // 48 kHz; fewer offer the higher rates too.
         let channels = config.channels.clamp(1, 60);
-        let formats = vec![
-            aaf_48k(channels, 32),
-            aaf_48k(channels, 24),
-            am824_48k(channels),
-        ];
+        let formats = offered_formats(channels);
         // The format chosen last, with the channels there are now.
         let current_format = config
             .stream_format()
@@ -158,6 +196,12 @@ impl Endpoint {
                     .find(|offered| same_packing(*offered, wanted))
             })
             .unwrap_or(formats[0]);
+        let mut sampling_rates: Vec<u32> = formats
+            .iter()
+            .filter_map(|format| format.sample_rate())
+            .collect();
+        sampling_rates.dedup();
+        let current_sampling_rate = current_format.sample_rate().unwrap_or(48_000);
         let stream = StreamModel {
             name: config.name.clone(),
             current_format,
@@ -182,8 +226,8 @@ impl Endpoint {
             mac,
             interface_name: interface.into(),
             clock_identity: clock,
-            sampling_rates: vec![48_000],
-            current_sampling_rate: 48_000,
+            sampling_rates,
+            current_sampling_rate,
             outputs: if talker { vec![stream.clone()] } else { vec![] },
             inputs: if talker { vec![] } else { vec![stream] },
             clock_source: 0,
@@ -2001,14 +2045,33 @@ mod tests {
 
     #[test]
     fn the_formats_are_the_bench_ones() {
-        assert_eq!(aaf_48k(8, 32), StreamFormat(0x0205_0220_0200_6000));
-        assert_eq!(aaf_48k(8, 24), StreamFormat(0x0205_0218_0200_6000));
-        assert_eq!(am824_48k(8), StreamFormat(0x00a0_0208_4000_0800));
+        assert_eq!(aaf(48_000, 8, 32), StreamFormat(0x0205_0220_0200_6000));
+        assert_eq!(aaf(48_000, 8, 24), StreamFormat(0x0205_0218_0200_6000));
+        assert_eq!(aaf(96_000, 8, 32), StreamFormat(0x0207_0220_0200_c000));
+        assert_eq!(am824(48_000, 8), StreamFormat(0x00a0_0208_4000_0800));
+        assert_eq!(am824(96_000, 8), StreamFormat(0x00a0_0408_4000_0800));
         // A format chosen for eight channels carries over to two.
-        assert!(same_packing(am824_48k(2), am824_48k(8)));
-        assert!(same_packing(aaf_48k(2, 24), aaf_48k(8, 24)));
-        assert!(!same_packing(aaf_48k(2, 32), aaf_48k(2, 24)));
-        assert!(!same_packing(aaf_48k(8, 32), am824_48k(8)));
+        assert!(same_packing(am824(48_000, 2), am824(48_000, 8)));
+        assert!(same_packing(aaf(48_000, 2, 24), aaf(48_000, 8, 24)));
+        assert!(!same_packing(aaf(48_000, 2, 32), aaf(48_000, 2, 24)));
+        assert!(!same_packing(aaf(48_000, 8, 32), am824(48_000, 8)));
+        assert!(!same_packing(aaf(48_000, 8, 32), aaf(96_000, 8, 32)));
+    }
+
+    /// Eight channels go at every rate, 16 to 96 kHz, and 60 only at
+    /// 48 kHz, each rate with all three packings.
+    #[test]
+    fn more_channels_take_fewer_rates() {
+        let rates = |channels| {
+            let formats = offered_formats(channels);
+            assert_eq!(formats.len() % 3, 0);
+            let mut rates: Vec<u32> = formats.iter().filter_map(|f| f.sample_rate()).collect();
+            rates.dedup();
+            rates
+        };
+        assert_eq!(rates(8), [48_000, 96_000, 192_000]);
+        assert_eq!(rates(16), [48_000, 96_000]);
+        assert_eq!(rates(60), [48_000]);
     }
 
     #[test]

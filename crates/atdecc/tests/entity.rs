@@ -314,3 +314,76 @@ fn a_controller_reads_an_entitys_avb_lite_status() {
     assert_ne!(listener.lite_supported, Some(true));
     assert_eq!(listener.lite_status(0), None);
 }
+
+#[test]
+fn the_sampling_rate_and_stream_formats_move_together() {
+    use atdecc::descriptor::SamplingRate;
+
+    // AAF, 8 channels of 32-bit, at 96 kHz: 12 samples a frame.
+    const AAF_96K_8CH: StreamFormat = StreamFormat(0x0207_0220_0200_c000);
+    let mut network = Network::new();
+    let mut model = model(TALKER, "Talker", true);
+    model.sampling_rates = vec![48_000, 96_000];
+    model.outputs[0].formats = vec![AAF_48K_8CH, AAF_96K_8CH];
+    let mut talker = Entity::new(model, &[(STREAM, DESTINATION)]);
+    talker.start(network.now);
+    network.talker = talker;
+    network.controller.discover(None);
+    network.run(3000);
+
+    // The rate goes to 96 kHz, and the stream with it.
+    let now = network.now;
+    network.controller.set_sampling_rate(
+        now,
+        TALKER,
+        DescriptorType::AUDIO_UNIT,
+        0,
+        SamplingRate(96_000),
+    );
+    network.run(1000);
+    assert_eq!(network.talker.model().current_sampling_rate, 96_000);
+    assert_eq!(
+        network.talker.model().outputs[0].current_format,
+        AAF_96K_8CH
+    );
+    assert!(
+        network
+            .entity_events
+            .contains(&EntityEvent::StreamFormatChanged {
+                descriptor_type: DescriptorType::STREAM_OUTPUT,
+                index: 0,
+                format: AAF_96K_8CH,
+            })
+    );
+
+    // A stream format at 48 kHz brings the rate back.
+    let now = network.now;
+    network.controller.set_stream_format(
+        now,
+        TALKER,
+        DescriptorType::STREAM_OUTPUT,
+        0,
+        AAF_48K_8CH,
+    );
+    network.run(1000);
+    assert_eq!(network.talker.model().current_sampling_rate, 48_000);
+    assert!(
+        network
+            .entity_events
+            .contains(&EntityEvent::SamplingRateChanged(48_000))
+    );
+    // The controller hears both, unsolicited or in answers.
+    let read = network.controller.model(TALKER).unwrap();
+    assert_eq!(
+        read.audio_units()
+            .next()
+            .map(|unit| unit.current_sampling_rate.0),
+        Some(48_000)
+    );
+    assert_eq!(
+        read.streams(false)
+            .next()
+            .map(|stream| stream.current_format),
+        Some(AAF_48K_8CH)
+    );
+}
