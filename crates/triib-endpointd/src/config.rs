@@ -17,8 +17,24 @@ pub struct Config {
     pub interface: String,
     /// ptp4l's read-only management socket.
     pub ptp4l_socket: String,
+    /// Whether the endpoints may fall back to AVB Lite.
+    pub avb_lite: LiteChoice,
     #[serde(rename = "endpoint")]
     pub endpoints: Vec<EndpointConfig>,
+}
+
+/// When the endpoints run AVB Lite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LiteChoice {
+    /// When nothing on the interface answers as an AVB bridge would
+    /// (AVB Lite profile, 2.2).
+    #[default]
+    Auto,
+    /// Never.
+    Off,
+    /// Always, as an operator may set it.
+    On,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

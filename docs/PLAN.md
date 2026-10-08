@@ -685,15 +685,35 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   - Presets keep this computer's endpoints; recalling one starts them
     again and waits for them before binding, and on another computer
     their entity IDs become its own.
+  - AVB Lite (checked 2026-10-07 on this computer's LAN interface,
+    where no AVB bridge answers): the daemon tells AVB from AVB Lite as
+    the profile's 2.2 says, sending its own Pdelay_Req with the Endpoint
+    Declaration TLV where ptp4l does not run on the interface (ptp4l's
+    clock identity says which), taking ptp4l's asCapable where it does,
+    and listening for other endpoints' TLV; after falling back it sends
+    the beacon every 3 s. Its endpoints then declare with CVU SRP, as
+    esp_avb does: talkers broadcast, listeners unicast to their talker,
+    VLAN 2 priority 5, refreshed every second and aged out after 30 s.
+    A talker sends a unicast copy to each ready listener, two at most,
+    else its MAAP address, within 75% of the link, and listeners take
+    either. GET_LITE_STATUS answers from every entity, unsolicited
+    to registered controllers on change. `avb_lite = "off"` or `"on"` in
+    endpoints.toml keeps AVB or forces AVB Lite. On the LAN a talker
+    and listener streamed 79,012 frames unicast with none lost.
   - The Linux packages carry `triib-endpointd` with `CAP_NET_RAW`.
   - Checked with AM824 both ways against a Milan endpoint and into
     macOS's AVB listener, which counted no sequence mismatches.
 - To do:
-  - AVB Lite: its PTP profile (ptp4l with another configuration, and
-    fallback between the two), CVU SRP in place of MSRP, unicast
-    streams, and answering GET_LITE_STATUS. Checking it needs a path to
-    the endpoints without an AVB bridge, which the bench does not have
-    now.
+  - AVB Lite's PTP profile. linuxptp cannot switch: ptp4l reads its
+    profile (delay mechanism, transportSpecific, intervals, domain) at
+    start, has no reload, and pmc cannot set those; it also cannot send
+    the Endpoint Declaration TLV or beacons, or tag PTP frames VLAN 0
+    priority 7. Either the packages ship a gPTP and an AVB Lite ptp4l
+    configuration with a systemd template unit and a polkit rule the
+    daemon switches between (a few seconds of relock), or `avb-ptp`
+    becomes our own engine with both profiles, as esp_ptp has.
+  - AVB Lite against an ESP: the bench has no path to them without the
+    AVB switch.
   - Sampling rates other than 48 kHz, and a filter for this computer's
     entities in the list.
   - Playing out at presentation time; launch time or CBS where the

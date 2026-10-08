@@ -44,6 +44,7 @@ fn first_config() -> Config {
             endpoint(Kind::Talker, "triib talker"),
             endpoint(Kind::Listener, "triib listener"),
         ],
+        ..Config::default()
     }
 }
 

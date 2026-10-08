@@ -26,7 +26,9 @@ const EARLY: i64 = 50_000_000;
 pub struct ListenerConfig {
     pub interface: String,
     pub stream_id: u64,
-    pub destination: MacAddress,
+    /// Where the stream comes to: its multicast address, and in AVB Lite
+    /// this computer's own as well.
+    pub destinations: Vec<MacAddress>,
     pub format: StreamFormat,
     pub sink: Sink,
 }
@@ -85,7 +87,8 @@ impl Listener {
                 "not an AAF or AM824 format this listener takes",
             )
         })?;
-        let receiver = FrameReceiver::open(&config.interface, media.subtype(), config.destination)?;
+        let receiver =
+            FrameReceiver::open(&config.interface, media.subtype(), &config.destinations)?;
         let output = Output::open(&config.sink, media.channels(), media.sample_rate())?;
         let stop = Arc::new(AtomicBool::new(false));
         let counters = Arc::new(Counters::default());

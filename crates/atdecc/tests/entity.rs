@@ -283,3 +283,34 @@ fn a_talker_without_an_address_is_probed_again_until_it_has_one() {
         Some(DESTINATION)
     );
 }
+
+#[test]
+fn a_controller_reads_an_entitys_avb_lite_status() {
+    use atdecc::ClockIdentity as Clock;
+    use atdecc::lite::{FallbackReason, LiteFlags, LiteStatus, PtpProfile};
+
+    let mut network = Network::new();
+    let status = LiteStatus {
+        interface: 0,
+        flags: LiteFlags::CAPABLE.union(LiteFlags::ACTIVE),
+        fallback_reason: FallbackReason::PDELAY_UNANSWERED,
+        ptp_profile: PtpProfile::AVB_LITE_PTP,
+        ptp_domain: 0,
+        media_vlan_id: 2,
+        unicast_fanout_limit: 2,
+        link_speed: 1000,
+        committed_egress: 0,
+        grandmaster: Clock(0),
+        offset_from_grandmaster: 0,
+    };
+    network.talker.set_lite_status(status);
+    network.controller.discover(None);
+    network.run(3000);
+    let model = network.controller.model(TALKER).expect("read");
+    assert_eq!(model.lite_supported, Some(true));
+    assert_eq!(model.lite_status(0), Some(&status));
+    // The listener has no AVB Lite to report.
+    let listener = network.controller.model(LISTENER).expect("read");
+    assert_ne!(listener.lite_supported, Some(true));
+    assert_eq!(listener.lite_status(0), None);
+}

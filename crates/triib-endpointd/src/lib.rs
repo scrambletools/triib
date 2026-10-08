@@ -4,5 +4,6 @@
 
 pub mod config;
 pub mod gptp;
+pub mod lite;
 pub mod runtime;
 pub mod status;

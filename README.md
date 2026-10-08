@@ -79,6 +79,13 @@ name = "Host listener 1"
 sink = "default"     # or "discard", or an output's name
 ```
 
+Where no AVB bridge answers on the interface, the endpoints fall back to
+AVB Lite as its profile describes: CVU SRP declarations in place of MSRP,
+and streams unicast to each listener. `avb_lite = "off"` at the top of
+the file keeps them on AVB, and `"on"` puts them on AVB Lite from the
+start. ptp4l cannot switch to AVB Lite's PTP profile by itself; it has
+to be started with a configuration for it.
+
 ## Building
 
 ```

@@ -28,6 +28,7 @@ use crate::aem::{AvbInfoFlags, StreamInfoFlags};
 use crate::avtp::{read_u16, read_u32, read_u64};
 use crate::descriptor::DescriptorType;
 use crate::id::{ClockIdentity, EntityId, StreamId};
+use crate::lite::{LiteCommandType, LiteStatus, STATUS_PROTOCOL_ID};
 use crate::mvu::{MVU_PROTOCOL_ID, MilanFeatures, MvuCommandType, MvuStatus};
 use crate::pdu::{self, Pdu};
 use crate::stream_format::StreamFormat;
@@ -216,6 +217,8 @@ pub struct Entity {
     registered: Vec<Registered>,
     unsolicited_sequence: u16,
     acmp_sequence: u16,
+    /// What GET_LITE_STATUS answers, for an entity that supports AVB Lite.
+    lite: Option<LiteStatus>,
     outputs: Vec<Output>,
     inputs: Vec<Input>,
     known: BTreeMap<EntityId, Known>,
@@ -262,6 +265,7 @@ impl Entity {
             registered: Vec::new(),
             unsolicited_sequence: 0,
             acmp_sequence: 0,
+            lite: None,
             outputs,
             inputs,
             known: BTreeMap::new(),
@@ -295,6 +299,54 @@ impl Entity {
     }
 
     /// The stream a bound input's probe found.
+    /// Sets what GET_LITE_STATUS answers for the entity's interface,
+    /// telling registered controllers when anything but the offset
+    /// changes, or the offset crosses the AVB Lite alarm of 50 us (AVB
+    /// Lite profile, 2.4).
+    pub fn set_lite_status(&mut self, status: LiteStatus) {
+        const ALARM: i32 = 50_000;
+        let alarmed = |status: &LiteStatus| {
+            status
+                .offset()
+                .is_some_and(|offset| offset.unsigned_abs() > ALARM.unsigned_abs())
+        };
+        let tell = self.lite.is_none_or(|before| {
+            let quiet = |status: &LiteStatus| LiteStatus {
+                offset_from_grandmaster: 0,
+                ..*status
+            };
+            quiet(&before) != quiet(&status) || alarmed(&before) != alarmed(&status)
+        });
+        self.lite = Some(status);
+        if tell {
+            let registered = self.registered.clone();
+            for registered in registered {
+                self.unsolicited_sequence = self.unsolicited_sequence.wrapping_add(1);
+                let header = AecpHeader {
+                    message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+                    status: 0,
+                    target_entity_id: self.model.entity_id,
+                    controller_entity_id: registered.controller,
+                    sequence_id: self.unsolicited_sequence,
+                };
+                let mut data = (0x8000 | LiteCommandType::GET_LITE_STATUS.0)
+                    .to_be_bytes()
+                    .to_vec();
+                data.extend_from_slice(&status.to_bytes());
+                let pdu = VendorUniquePdu {
+                    header,
+                    protocol_id: STATUS_PROTOCOL_ID,
+                    payload: &data,
+                };
+                let mut out = [0; 200];
+                if let Ok(length) = pdu.encode(&mut out) {
+                    self.outgoing
+                        .push_back((registered.mac, out[..length].to_vec()));
+                }
+            }
+        }
+    }
+
     /// Sends output `index`'s stream to `destination` from now on, as MAAP
     /// gave it, telling registered controllers.
     pub fn set_output_destination(&mut self, index: u16, destination: MacAddress) {
@@ -1373,7 +1425,23 @@ impl Entity {
     fn handle_vendor_unique(&mut self, source: MacAddress, command: &VendorUniquePdu<'_>) {
         let mut data = Vec::new();
         let mut status = MvuStatus::NOT_IMPLEMENTED.0;
-        if command.protocol_id == MVU_PROTOCOL_ID && command.payload.len() >= 2 {
+        if command.protocol_id == STATUS_PROTOCOL_ID && command.payload.len() >= 4 {
+            let command_type = LiteCommandType(read_u16(command.payload, 0) & 0x7fff);
+            let interface = read_u16(command.payload, 2);
+            data.extend_from_slice(&command.payload[..2]);
+            match self.lite {
+                Some(lite) if command_type == LiteCommandType::GET_LITE_STATUS => {
+                    if interface == lite.interface {
+                        status = MvuStatus::SUCCESS.0;
+                        data.extend_from_slice(&lite.to_bytes());
+                    } else {
+                        status = AemStatus::NO_SUCH_DESCRIPTOR.0;
+                        data.extend_from_slice(&command.payload[2..]);
+                    }
+                }
+                _ => data.extend_from_slice(&command.payload[2..]),
+            }
+        } else if command.protocol_id == MVU_PROTOCOL_ID && command.payload.len() >= 2 {
             let command_type = MvuCommandType(read_u16(command.payload, 0) & 0x7fff);
             data.extend_from_slice(&command.payload[..2]);
             if command_type == MvuCommandType::GET_MILAN_INFO {

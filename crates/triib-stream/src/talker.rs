@@ -2,8 +2,8 @@
 //! time, its presentation time the max transit time ahead.
 
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -36,7 +36,10 @@ pub struct TalkerConfig {
     /// The interface's address, the frames' source.
     pub mac: MacAddress,
     pub stream_id: u64,
-    pub destination: MacAddress,
+    /// Where the stream goes: its multicast address, or in AVB Lite a
+    /// unicast copy to each listener. [`Talker::set_destinations`] moves
+    /// it while it runs.
+    pub destinations: Vec<MacAddress>,
     pub vlan_id: u16,
     pub priority: u8,
     pub format: StreamFormat,
@@ -80,6 +83,7 @@ pub struct Talker {
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
     counters: Arc<Counters>,
+    destinations: Arc<Mutex<Vec<MacAddress>>>,
 }
 
 impl Talker {
@@ -95,18 +99,41 @@ impl Talker {
         let input = Input::open(&config.source, media.channels(), media.sample_rate())?;
         let stop = Arc::new(AtomicBool::new(false));
         let counters = Arc::new(Counters::default());
+        let destinations = Arc::new(Mutex::new(config.destinations.clone()));
         let handle = {
             let stop = stop.clone();
             let counters = counters.clone();
+            let destinations = destinations.clone();
             std::thread::Builder::new()
                 .name("talker".into())
-                .spawn(move || run(&config, media, &sender, input, &clock, &stop, &counters))?
+                .spawn(move || {
+                    let streaming = Streaming {
+                        config: &config,
+                        media,
+                        sender: &sender,
+                        clock: &clock,
+                        stop: &stop,
+                        counters: &counters,
+                        destinations: &destinations,
+                    };
+                    run(streaming, input);
+                })?
         };
         Ok(Talker {
             stop,
             handle: Some(handle),
             counters,
+            destinations,
         })
+    }
+
+    /// Sends the stream to `destinations` from the next frame on, none
+    /// pausing it.
+    pub fn set_destinations(&self, destinations: Vec<MacAddress>) {
+        *self
+            .destinations
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = destinations;
     }
 
     pub fn stats(&self) -> TalkerStats {
@@ -135,7 +162,7 @@ impl Drop for Talker {
 /// The frame's Ethernet header: destination, source, VLAN tag, ethertype.
 fn ethernet_header(config: &TalkerConfig) -> [u8; ETHERNET_LEN] {
     let mut header = [0; ETHERNET_LEN];
-    header[..6].copy_from_slice(&config.destination.0);
+    header[..6].copy_from_slice(&config.destinations.first().map_or([0; 6], |mac| mac.0));
     header[6..12].copy_from_slice(&config.mac.0);
     header[12..14].copy_from_slice(&ETHERTYPE_VLAN.to_be_bytes());
     let tag = (u16::from(config.priority & 0x7) << 13) | (config.vlan_id & 0x0fff);
@@ -144,15 +171,28 @@ fn ethernet_header(config: &TalkerConfig) -> [u8; ETHERNET_LEN] {
     header
 }
 
-fn run(
-    config: &TalkerConfig,
+/// What the pacing thread works with.
+struct Streaming<'a> {
+    config: &'a TalkerConfig,
     media: Media,
-    sender: &FrameSender,
-    mut input: Input,
-    clock: &MediaClock,
-    stop: &AtomicBool,
-    counters: &Counters,
-) {
+    sender: &'a FrameSender,
+    clock: &'a MediaClock,
+    stop: &'a AtomicBool,
+    counters: &'a Counters,
+    destinations: &'a Mutex<Vec<MacAddress>>,
+}
+
+fn run(streaming: Streaming<'_>, mut input: Input) {
+    let Streaming {
+        config,
+        media,
+        sender,
+        clock,
+        stop,
+        counters,
+        destinations,
+    } = streaming;
+    let mut sending: Vec<MacAddress> = Vec::new();
     precise_sleeps();
     counters
         .realtime
@@ -204,10 +244,14 @@ fn run(
             &samples,
             &mut frame[ETHERNET_LEN..],
         );
-        match sender.send(&frame) {
-            Ok(()) => counters.frames_sent.fetch_add(1, Ordering::Relaxed),
-            Err(_) => counters.send_errors.fetch_add(1, Ordering::Relaxed),
-        };
+        sending.clone_from(&destinations.lock().unwrap_or_else(PoisonError::into_inner));
+        for destination in &sending {
+            frame[..6].copy_from_slice(&destination.0);
+            match sender.send(&frame) {
+                Ok(()) => counters.frames_sent.fetch_add(1, Ordering::Relaxed),
+                Err(_) => counters.send_errors.fetch_add(1, Ordering::Relaxed),
+            };
+        }
         next += interval;
         frames += 1;
         if frames.is_multiple_of(800) {

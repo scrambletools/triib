@@ -19,6 +19,8 @@ const POLL: Duration = Duration::from_secs(2);
 pub struct Status {
     pub gptp: Gptp,
     pub own_clock: ClockIdentity,
+    /// The servo's last offset from the grandmaster, in nanoseconds.
+    pub offset: Option<i64>,
 }
 
 /// A clock identity as linuxptp prints it, such as `0001f2.fffe.ff3b14`.
@@ -54,6 +56,7 @@ pub fn parse(output: &str) -> Option<Status> {
     let domain = value("domainNumber")
         .and_then(|text| text.parse().ok())
         .unwrap_or(0);
+    let offset = value("master_offset").and_then(|text| text.parse().ok());
     let mut path = Vec::new();
     if present {
         path.push(grandmaster);
@@ -72,6 +75,7 @@ pub fn parse(output: &str) -> Option<Status> {
             path,
         },
         own_clock,
+        offset,
     })
 }
 
@@ -134,6 +138,7 @@ mod tests {
         parentPortIdentity                    0001f2.fffe.ff3b14-6
         clockIdentity           f0a731.fffe.f40f14
         domainNumber            0
+        master_offset              -12
     ";
 
     #[test]
@@ -145,6 +150,7 @@ mod tests {
             ClockIdentity(0x0001_f2ff_feff_3b14)
         );
         assert_eq!(status.gptp.propagation_delay, 305);
+        assert_eq!(status.offset, Some(-12));
         assert!(status.gptp.as_capable);
         assert_eq!(
             status.gptp.path,

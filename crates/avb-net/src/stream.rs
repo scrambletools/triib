@@ -32,17 +32,25 @@ impl FrameSender {
 }
 
 /// Receives the whole frames of one AVTP stream: frames of an AVTP subtype
-/// sent to one destination.
+/// sent to one destination, or either of two, as an AVB Lite listener
+/// takes a stream unicast to it or at its multicast address.
 pub struct FrameReceiver {
     inner: platform::FrameReceiver,
 }
 
 impl FrameReceiver {
-    /// Opens `interface` for frames of AVTP `subtype` sent to
-    /// `destination`, and joins it when it is a group address.
-    pub fn open(interface: &str, subtype: u8, destination: MacAddress) -> io::Result<Self> {
+    /// Opens `interface` for frames of AVTP `subtype` sent to any of
+    /// `destinations` (one or two), and joins those that are group
+    /// addresses.
+    pub fn open(interface: &str, subtype: u8, destinations: &[MacAddress]) -> io::Result<Self> {
+        if destinations.is_empty() || destinations.len() > 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "a stream comes to one or two addresses",
+            ));
+        }
         Ok(Self {
-            inner: platform::FrameReceiver::open(interface, subtype, destination)?,
+            inner: platform::FrameReceiver::open(interface, subtype, destinations)?,
         })
     }
 
@@ -149,30 +157,42 @@ mod platform {
     }
 
     impl FrameReceiver {
-        pub fn open(interface: &str, subtype: u8, destination: MacAddress) -> io::Result<Self> {
+        pub fn open(interface: &str, subtype: u8, destinations: &[MacAddress]) -> io::Result<Self> {
             let (fd, index) = open_raw(interface)?;
             // The filter goes on before the socket hears anything: the
-            // destination, then the AVTP subtype, after a VLAN tag or not.
+            // destination, either of two, then the AVTP subtype, after a
+            // VLAN tag or not.
             let step = |code: u16, jt: u8, jf: u8, k: u32| libc::sock_filter { code, jt, jf, k };
-            let mac = destination.0;
-            let high = u32::from_be_bytes([mac[0], mac[1], mac[2], mac[3]]);
-            let low = u32::from(u16::from_be_bytes([mac[4], mac[5]]));
+            let halves = |mac: MacAddress| {
+                let mac = mac.0;
+                (
+                    u32::from_be_bytes([mac[0], mac[1], mac[2], mac[3]]),
+                    u32::from(u16::from_be_bytes([mac[4], mac[5]])),
+                )
+            };
+            let (high, low) = halves(destinations[0]);
+            // With one destination the second test repeats the first.
+            let (other_high, other_low) = halves(*destinations.get(1).unwrap_or(&destinations[0]));
             let program = [
                 step(0x20, 0, 0, 0),                         // 0: ld [0]
-                step(0x15, 0, 12, high),                     // 1: jeq #mac[0..4]
+                step(0x15, 0, 2, high),                      // 1: jeq #first[0..4], else 4
                 step(0x28, 0, 0, 4),                         // 2: ldh [4]
-                step(0x15, 0, 10, low),                      // 3: jeq #mac[4..6]
-                step(0x28, 0, 0, 12),                        // 4: ldh [12]
-                step(0x15, 0, 2, u32::from(ETHERTYPE_AVTP)), // 5: jeq #avtp
-                step(0x30, 0, 0, 14),                        // 6: ldb [14]
-                step(0x05, 0, 0, 4),                         // 7: ja 12
-                step(0x15, 0, 5, u32::from(ETHERTYPE_VLAN)), // 8: jeq #vlan
-                step(0x28, 0, 0, 16),                        // 9: ldh [16]
-                step(0x15, 0, 3, u32::from(ETHERTYPE_AVTP)), // 10: jeq #avtp
-                step(0x30, 0, 0, 18),                        // 11: ldb [18]
-                step(0x15, 0, 1, u32::from(subtype)),        // 12: jeq #subtype
-                step(0x06, 0, 0, u32::MAX),                  // 13: ret #-1
-                step(0x06, 0, 0, 0),                         // 14: ret #0
+                step(0x15, 4, 0, low),                       // 3: jeq #first[4..6], 8
+                step(0x20, 0, 0, 0),                         // 4: ld [0]
+                step(0x15, 0, 12, other_high),               // 5: jeq #second[0..4], else 18
+                step(0x28, 0, 0, 4),                         // 6: ldh [4]
+                step(0x15, 0, 10, other_low),                // 7: jeq #second[4..6], else 18
+                step(0x28, 0, 0, 12),                        // 8: ldh [12]
+                step(0x15, 0, 2, u32::from(ETHERTYPE_AVTP)), // 9: jeq #avtp
+                step(0x30, 0, 0, 14),                        // 10: ldb [14]
+                step(0x05, 0, 0, 4),                         // 11: ja 16
+                step(0x15, 0, 5, u32::from(ETHERTYPE_VLAN)), // 12: jeq #vlan
+                step(0x28, 0, 0, 16),                        // 13: ldh [16]
+                step(0x15, 0, 3, u32::from(ETHERTYPE_AVTP)), // 14: jeq #avtp
+                step(0x30, 0, 0, 18),                        // 15: ldb [18]
+                step(0x15, 0, 1, u32::from(subtype)),        // 16: jeq #subtype
+                step(0x06, 0, 0, u32::MAX),                  // 17: ret #-1
+                step(0x06, 0, 0, 0),                         // 18: ret #0
             ];
             let filter = libc::sock_fprog {
                 len: program.len() as u16,
@@ -193,7 +213,11 @@ mod platform {
                 return Err(io::Error::last_os_error());
             }
             bind(&fd, index, libc::ETH_P_ALL as u16)?;
-            if mac[0] & 1 == 1 {
+            for destination in destinations {
+                let mac = destination.0;
+                if mac[0] & 1 == 0 {
+                    continue;
+                }
                 // SAFETY: packet_mreq is plain data, valid when zeroed.
                 let mut request: libc::packet_mreq = unsafe { zeroed() };
                 request.mr_ifindex = index;
@@ -294,7 +318,11 @@ mod platform {
     pub struct FrameReceiver;
 
     impl FrameReceiver {
-        pub fn open(_interface: &str, _subtype: u8, _destination: MacAddress) -> io::Result<Self> {
+        pub fn open(
+            _interface: &str,
+            _subtype: u8,
+            _destinations: &[MacAddress],
+        ) -> io::Result<Self> {
             Err(unsupported())
         }
 
