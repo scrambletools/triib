@@ -78,8 +78,12 @@ const SWITCH_AGAIN: Duration = Duration::from_secs(30);
 /// The least time between runs of the link unit, which renegotiates the
 /// link each time.
 const LINK_AGAIN: Duration = Duration::from_secs(600);
-/// How long the link unit has before the daemon looks again.
-const LINK_SETTLE: Duration = Duration::from_secs(5);
+/// How long the link unit has before the daemon looks again, the link
+/// having gone down and up.
+const LINK_SETTLE: Duration = Duration::from_secs(15);
+/// How long after running the link unit the link coming up is its doing,
+/// not a new link.
+const LINK_OWN: Duration = Duration::from_secs(30);
 
 /// What the sockets and ptp4l hand the runtime.
 enum Input {
@@ -959,9 +963,11 @@ impl Runtime {
                     }
                 }
                 // AVB Lite holds until the link comes up again (profile
-                // 2.2).
+                // 2.2), though not from the link unit taking it down.
+                let since = self.elapsed();
                 let came_up = link.carrier == Some(true)
-                    && last.is_some_and(|last| last.carrier == Some(false));
+                    && last.is_some_and(|last| last.carrier == Some(false))
+                    && !self.link_fixed_at.is_some_and(|at| since < at + LINK_OWN);
                 if came_up && self.lite.is_some() && self.config.avb_lite == LiteChoice::Auto {
                     self.leave_lite();
                 }
