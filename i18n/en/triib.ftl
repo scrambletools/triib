@@ -419,6 +419,11 @@ netmap-gptp-not-reported = gPTP not reported
 # Also a label over the devices off the tree, in capitals where the script
 # has them.
 netmap-off-tree = Not on the gPTP tree
+# The same in AVB Lite, over the devices not following a grandmaster.
+netmap-off-ptp = Not on the PTP tree
+# A device on a network running AVB Lite that does not run it.
+netmap-not-lite = Not in AVB Lite
+netmap-lite-not-reported = AVB Lite not reported
 # In step with the grandmaster's clock: short for in sync.
 netmap-synced = Sync
 netmap-not-synced = No sync
@@ -439,6 +444,8 @@ netmap-apart-unreported = It has not reported its gPTP state
 netmap-apart-no-neighbor = No bridge heard on this computer's interface
 netmap-apart-cannot-listen = This computer cannot listen for gPTP on its interface
 netmap-apart-on-this-computer = It runs on this computer; read it from another computer to see its gPTP state
+netmap-apart-not-lite = It does not run AVB Lite, so it does not follow the grandmaster
+netmap-apart-lite-unreported = It reports nothing of AVB Lite, so whom it follows is not known
 netmap-clock-tree = Clock tree
 netmap-no-grandmaster = No grandmaster heard
 netmap-grandmaster-is = Grandmaster: { $grandmaster }
@@ -454,6 +461,9 @@ netmap-link-drops = Link drops
 netmap-synced-to-grandmaster = In sync with the grandmaster
 netmap-host-no-gptp = No sync: this computer does not run gPTP
 netmap-link-no-gptp = No sync: gPTP does not run on its link
+# In AVB Lite. $offset is a time such as "-72 µs".
+netmap-ptp-offset-high = No sync: { $offset } from the grandmaster, past the 50 µs AVB Lite allows
+netmap-ptp-no-offset = No sync: it has measured no offset from the grandmaster
 netmap-audio = Audio
 netmap-media-clock-streams = Media clock streams
 netmap-audio-streams = Audio streams
@@ -476,6 +486,7 @@ netmap-receiving = Receiving
 netmap-problems = Problems
 netmap-help-back = Click the background to go back to the overview.
 netmap-help-stream = Click a stream to inspect it, or the background to go back to the overview.
+netmap-help-ptp = In AVB Lite the clock flows end to end from the grandmaster to every device, through switches that take no part, so none are shown. A device is in sync while it follows the grandmaster within 50 µs. Click a device or its wire to inspect its clock; click the background to clear.
 netmap-help-clock = The clock flows from the grandmaster through each bridge to every node on the tree. A broken grey line is a link gPTP does not run on. Click a device or its wire to inspect its clock path; click the background to clear.
 netmap-help-media-clock = Media clock (CRF) streams only, drawn the same way as audio: one wire per stream, coloured by talker. Click a wire to inspect its stream, or a device to see its streams; click the background to clear.
 netmap-help-audio = Each stream has its own wire, entering and leaving every bridge it crosses. Colour is by talker: each talker has a hue, and its streams are shades of it. Moving dots mean audio is flowing; a still red line is a failed reservation and a still grey line is advertised with no listener ready; both stop where the reservation stops. Devices in the middle column connect straight to the grandmaster's bridge. Click a wire to inspect its stream, or a device to see its streams; click the background to clear.

@@ -8,6 +8,7 @@ mod map;
 use std::collections::HashMap;
 
 use atdecc::descriptor::DescriptorType;
+use atdecc::lite::{LiteFlags, LiteStatus};
 use atdecc::model::{EntityModel, EnumerationFailure, EnumerationState};
 use atdecc::{ClockIdentity, DiscoveredEntity, EntityId};
 use iced::widget::{button as plain_button, container, mouse_area, scrollable, space};
@@ -24,7 +25,8 @@ use crate::describe;
 use crate::fl;
 use crate::settings::NetworkShows;
 use crate::topology::{
-    Apart, EntityReport, HostReport, InterfaceReport, Kind as NodeKind, NodeId, Route, Topology,
+    Apart, EntityReport, HostLite, HostReport, InterfaceReport, Kind as NodeKind, LiteReport,
+    NodeId, Route, Topology,
 };
 
 const PANEL_WIDTH: f32 = 360.0;
@@ -167,8 +169,14 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
     let wide = width >= WIDE;
     let list_open = !wide && triib.network_list;
     let padding = if wide { [16, 24] } else { [12, 12] };
-    let topology = topology_of(triib);
     let shows = triib.settings.network_shows;
+    // Where the network runs AVB Lite, the clock is PTP's, end to end.
+    let lite = lite_topology(triib);
+    let ptp = lite.is_some();
+    let topology = match lite {
+        Some(lite) if shows == NetworkShows::Clock => lite,
+        _ => topology_of(triib),
+    };
     let streams: Vec<Stream> = match shows {
         NetworkShows::Clock => Vec::new(),
         _ => streams(triib, &topology)
@@ -187,7 +195,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
         Focus::Stream(..) => streams.iter().any(|stream| stream.focus() == *focus),
         Focus::Node(key) => find(&topology, *key).is_some(),
     });
-    let header = header(&topology, shows, &streams, focus, width, list_open);
+    let header = header(&topology, ptp, shows, &streams, focus, width, list_open);
 
     if topology.nodes.is_empty() {
         return column![
@@ -257,6 +265,7 @@ fn view_at(triib: &Triib, width: f32) -> Element<'_, Message> {
 /// forward; on narrow windows the last on a row of its own.
 fn header<'a>(
     topology: &Topology,
+    ptp: bool,
     shows: NetworkShows,
     streams: &[Stream],
     focus: Option<Focus>,
@@ -271,7 +280,11 @@ fn header<'a>(
             .on_press(Message::NetworkShows(value))
     };
     let choices = component::connected(vec![
-        choice(Icon::Schedule, "gPTP".to_owned(), NetworkShows::Clock),
+        choice(
+            Icon::Schedule,
+            if ptp { "PTP" } else { "gPTP" }.to_owned(),
+            NetworkShows::Clock,
+        ),
         choice(Icon::GraphicEq, fl!("netmap-audio"), NetworkShows::Audio),
         choice(Icon::Timer, "CRF".to_owned(), NetworkShows::MediaClock),
     ]);
@@ -322,15 +335,13 @@ fn header<'a>(
         entities.sort_by_key(|entity_id| entity_id.0);
         entities.dedup();
         let devices = entities.len();
+        // AVB Lite's switches take no part, so none are shown.
+        let mut counts = vec![fl!("netmap-devices", count = devices)];
+        if !topology.ptp {
+            counts.push(fl!("netmap-bridges", count = bridges));
+        }
         header = header.push(
-            styled(
-                crate::i18n::list([
-                    fl!("netmap-devices", count = devices),
-                    fl!("netmap-bridges", count = bridges),
-                ]),
-                Type::BodyMedium,
-            )
-            .style(style::on_surface_variant),
+            styled(crate::i18n::list(counts), Type::BodyMedium).style(style::on_surface_variant),
         );
     }
     header = header.push(space::horizontal());
@@ -409,11 +420,74 @@ fn topology_of(triib: &Triib) -> Topology {
     topology
 }
 
+/// The clock as AVB Lite runs it, when it does: this computer hears no
+/// AVB bridge with gPTP running to it, and an entity it reads, its own
+/// endpoints or another's, operates in AVB Lite.
+fn lite_topology(triib: &Triib) -> Option<Topology> {
+    if triib.neighbor.is_some_and(|neighbor| neighbor.synced) {
+        return None;
+    }
+    let active = |status: &&LiteStatus| status.flags.contains(LiteFlags::ACTIVE);
+    let names: Vec<(EntityId, String)> = triib
+        .entities
+        .values()
+        .map(|entity| (entity.entity_id(), triib.entity_name(entity)))
+        .collect();
+    let reports: Vec<LiteReport<'_>> = names
+        .iter()
+        .map(|(entity_id, name)| LiteReport {
+            entity_id: *entity_id,
+            name,
+            interfaces: triib
+                .models
+                .get(entity_id)
+                .map(|model| {
+                    model
+                        .avb_interfaces()
+                        .map(|interface| {
+                            (
+                                interface.index,
+                                interface.clock_identity,
+                                model.lite_status(interface.index),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        })
+        .collect();
+    let running = reports
+        .iter()
+        .flat_map(|report| &report.interfaces)
+        .any(|(_, _, status)| status.as_ref().is_some_and(active));
+    if !running {
+        return None;
+    }
+    // This computer follows whom its own endpoints follow, as they share
+    // its ptp4l.
+    let host = reports
+        .iter()
+        .filter(|report| triib.is_host(report.entity_id))
+        .flat_map(|report| &report.interfaces)
+        .find_map(|(_, _, status)| status.filter(active))
+        .map(|status| HostLite {
+            grandmaster: status.grandmaster,
+            offset: status.offset(),
+        });
+    Some(Topology::build_lite(
+        &reports,
+        host,
+        crate::lite_view::OFFSET_ALARM,
+    ))
+}
+
 fn key_of(topology: &Topology, node: NodeId) -> NodeKey {
     match topology.nodes[node].kind {
         NodeKind::Entity { entity_id, .. } => NodeKey::Entity(entity_id),
         NodeKind::Host => NodeKey::Host,
-        NodeKind::Bridge => NodeKey::Clock(topology.nodes[node].clock.unwrap_or(ClockIdentity(0))),
+        NodeKind::Bridge | NodeKind::Clock => {
+            NodeKey::Clock(topology.nodes[node].clock.unwrap_or(ClockIdentity(0)))
+        }
     }
 }
 
@@ -445,6 +519,10 @@ fn node_name(topology: &Topology, node: NodeId) -> String {
             .unwrap_or_else(|| fl!("netmap-bridge")),
         NodeKind::Host => fl!("netmap-this-computer"),
         NodeKind::Entity { .. } => entry.name.clone(),
+        NodeKind::Clock => entry
+            .clock
+            .map(|clock| clock.to_string())
+            .unwrap_or_default(),
     }
 }
 
@@ -723,6 +801,7 @@ fn cards(
             let (glyph, tag) = match entry.kind {
                 NodeKind::Bridge => (Icon::Hub, String::new()),
                 NodeKind::Host => (Icon::Computer, String::new()),
+                NodeKind::Clock => (Icon::Schedule, String::new()),
                 NodeKind::Entity { entity_id, .. } => {
                     let found = triib.entities.get(&entity_id);
                     (
@@ -745,6 +824,10 @@ fn cards(
                 ),
                 (_, Some(Apart::OnThisComputer), _) => {
                     (fl!("netmap-on-this-computer"), Paint::Muted)
+                }
+                (_, Some(Apart::NotLite), _) => (fl!("netmap-not-lite"), Paint::Muted),
+                (_, Some(Apart::LiteUnreported), _) => {
+                    (fl!("netmap-lite-not-reported"), Paint::Muted)
                 }
                 (_, Some(apart), _) => (
                     match apart {
@@ -943,16 +1026,110 @@ fn synced(topology: &Topology, node: NodeId) -> bool {
 
 fn clock_item(topology: &Topology, node: NodeId) -> Item {
     let ok = synced(topology, node);
+    // In AVB Lite, a device taking no part says why.
+    let apart = match topology.nodes[node].apart {
+        Some(Apart::NotLite) => Some(fl!("netmap-not-lite")),
+        Some(Apart::LiteUnreported) => Some(fl!("netmap-lite-not-reported")),
+        _ => None,
+    };
     Item {
         name: node_name(topology, node),
-        detail: if ok {
-            fl!("netmap-synced")
-        } else {
-            fl!("netmap-not-synced")
+        detail: match &apart {
+            Some(apart) => apart.clone(),
+            None if ok => fl!("netmap-synced"),
+            None => fl!("netmap-not-synced"),
         },
-        detail_paint: if ok { Paint::Muted } else { Paint::Failed },
+        detail_paint: if ok || apart.is_some() {
+            Paint::Muted
+        } else {
+            Paint::Failed
+        },
         swatch: if ok { Paint::Clock } else { Paint::Unsynced },
         focus: Focus::Node(key_of(topology, node)),
+    }
+}
+
+/// A device's clock in AVB Lite: whom it follows and how closely, as it
+/// reports it, or why it takes no part.
+fn lite_details(
+    triib: &Triib,
+    topology: &Topology,
+    node: NodeId,
+    kicker: String,
+    title: String,
+) -> Page {
+    let entry = &topology.nodes[node];
+    let status = match entry.kind {
+        NodeKind::Entity {
+            entity_id,
+            interface,
+        } => triib
+            .models
+            .get(&entity_id)
+            .and_then(|model| model.lite_status(interface))
+            .copied(),
+        _ => None,
+    };
+    let mut facts = Vec::new();
+    if let Some(parent) = entry.parent {
+        facts.push((
+            fl!("avb-interface-grandmaster"),
+            node_name(topology, parent),
+        ));
+    }
+    if let Some(offset) = entry.link.offset {
+        facts.push((fl!("lite-offset"), crate::lite_view::duration(offset)));
+    }
+    if let Some(status) = status {
+        facts.push((
+            "PTP".to_owned(),
+            fl!(
+                "lite-ptp-domain",
+                profile = crate::lite_view::profile_name(status.ptp_profile),
+                domain = status.ptp_domain
+            ),
+        ));
+        if status.flags.contains(LiteFlags::ACTIVE) {
+            facts.push((
+                fl!("lite-because"),
+                crate::lite_view::fallback(status.fallback_reason),
+            ));
+        }
+        if status.link_speed > 0 {
+            facts.push((
+                fl!("lite-link"),
+                crate::lite_view::rate(u64::from(status.link_speed) * 1_000_000),
+            ));
+        }
+    }
+    if let Some(clock) = entry.clock {
+        facts.push((fl!("avb-interface-clock-identity"), clock.to_string()));
+    }
+    let ok = synced(topology, node);
+    let state = match (entry.apart, entry.link.offset) {
+        (Some(apart), _) => apart_reason(apart),
+        (None, _) if ok => fl!("netmap-synced-to-grandmaster"),
+        (None, Some(offset)) => fl!(
+            "netmap-ptp-offset-high",
+            offset = crate::lite_view::duration(offset)
+        ),
+        (None, None) => fl!("netmap-ptp-no-offset"),
+    };
+    Page {
+        kicker,
+        title,
+        swatch: Some(if ok { Paint::Clock } else { Paint::Unsynced }),
+        state,
+        state_icon: if ok { Icon::CheckCircle } else { Icon::Error },
+        state_filled: true,
+        state_paint: if ok || entry.apart.is_some() {
+            Paint::Soft
+        } else {
+            Paint::Failed
+        },
+        facts,
+        sections: Vec::new(),
+        help: fl!("netmap-help-back"),
     }
 }
 
@@ -968,6 +1145,8 @@ fn apart_reason(apart: Apart) -> String {
         Apart::NoNeighbor => fl!("netmap-apart-no-neighbor"),
         Apart::CannotListen => fl!("netmap-apart-cannot-listen"),
         Apart::OnThisComputer => fl!("netmap-apart-on-this-computer"),
+        Apart::NotLite => fl!("netmap-apart-not-lite"),
+        Apart::LiteUnreported => fl!("netmap-apart-lite-unreported"),
     }
 }
 
@@ -982,7 +1161,7 @@ fn clock_overview(topology: &Topology) -> Page {
         .map(|&root| node_name(topology, root))
         .collect();
     Page {
-        kicker: "gPTP".to_owned(),
+        kicker: if topology.ptp { "PTP" } else { "gPTP" }.to_owned(),
         title: fl!("netmap-clock-tree"),
         swatch: Some(Paint::Clock),
         state: if grandmasters.is_empty() {
@@ -1008,16 +1187,20 @@ fn clock_overview(topology: &Topology) -> Page {
         } else {
             vec![(fl!("netmap-needs-attention"), unsynced)]
         },
-        help: fl!("netmap-help-clock"),
+        help: if topology.ptp {
+            fl!("netmap-help-ptp")
+        } else {
+            fl!("netmap-help-clock")
+        },
     }
 }
 
 fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
     let entry = &topology.nodes[node];
-    let kicker = if entry.kind == NodeKind::Bridge {
-        fl!("netmap-bridge")
-    } else {
-        fl!("netmap-device")
+    let kicker = match entry.kind {
+        NodeKind::Bridge => fl!("netmap-bridge"),
+        NodeKind::Clock => "PTP".to_owned(),
+        _ => fl!("netmap-device"),
     };
     let title = node_name(topology, node);
     let below_here: Vec<NodeId> = (0..topology.nodes.len())
@@ -1063,6 +1246,9 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
             sections: vec![(heading, items)],
             help: fl!("netmap-help-back"),
         };
+    }
+    if topology.ptp {
+        return lite_details(triib, topology, node, kicker, title);
     }
     let mut facts = Vec::new();
     if entry.apart.is_none() {
@@ -1262,6 +1448,7 @@ fn node_details(topology: &Topology, streams: &[Stream], paints: &[Paint], node:
         NodeKind::Bridge => Icon::Hub,
         NodeKind::Host => Icon::Computer,
         NodeKind::Entity { .. } => Icon::GraphicEq,
+        NodeKind::Clock => Icon::Schedule,
     };
     if bridge && entry.kind != NodeKind::Host {
         let through = items(&|stream| via(topology, &stream.route).contains(&node));
@@ -1579,6 +1766,7 @@ mod tests {
             let content: Element<'_, Message> = iced::widget::column![
                 header(
                     &topology,
+                    false,
                     NetworkShows::Audio,
                     &streams,
                     focus,
@@ -1593,6 +1781,78 @@ mod tests {
             let mut simulator =
                 iced_test::Simulator::with_size(settings, Size::new(1280.0, 640.0), content);
             let snapshot = simulator.snapshot(&theme).expect("draws");
+            assert!(snapshot.matches_image(&file).expect("writes"));
+        }
+    }
+
+    /// The bench on a plain switch, the wired ESP following a grandmaster
+    /// in AVB Lite `offset` nanoseconds off, the clock view showing.
+    fn lite_triib(offset: i32) -> Triib {
+        let (entities, models) =
+            crate::view::tests::bench_then(&crate::view::tests::lite_frames(offset, 6_336));
+        let interface = avb_net::Interface {
+            name: "enp6s0".to_owned(),
+            mac: avb_net::MacAddress([0x9c, 0x6b, 0x00, 0x30, 0x9a, 0x2b]),
+            up: true,
+            speed: None,
+            physical: true,
+            wireless: false,
+            hardware_clock: None,
+        };
+        let settings = crate::settings::Settings {
+            network_shows: NetworkShows::Clock,
+            ..crate::settings::Settings::default()
+        };
+        Triib::sample(settings, interface, entities, models)
+    }
+
+    /// With no AVB bridge heard and an entity in AVB Lite, the clock is
+    /// PTP's: the ESP hangs under its grandmaster, in sync within 50 us
+    /// and out of it past that.
+    #[test]
+    fn avb_lite_shows_the_ptp_clock() {
+        let triib = lite_triib(-180);
+        let topology = lite_topology(&triib).expect("AVB Lite runs");
+        assert!(topology.ptp);
+        let esp = find(&topology, NodeKey::Entity(EntityId(0xe8f6_0ae0_9220_0000))).unwrap();
+        assert!(synced(&topology, esp));
+        assert!(topology.nodes[topology.nodes[esp].parent.unwrap()].kind == NodeKind::Clock);
+        let triib = lite_triib(72_000);
+        let topology = lite_topology(&triib).unwrap();
+        let esp = find(&topology, NodeKey::Entity(EntityId(0xe8f6_0ae0_9220_0000))).unwrap();
+        assert!(!synced(&topology, esp));
+    }
+
+    /// Writes a picture of the network view in AVB Lite to the PNG file the
+    /// variable `NETWORK_LITE_PICTURE` names.
+    #[test]
+    #[ignore = "writes a picture to look at"]
+    fn lite_picture() {
+        let Ok(path) = std::env::var("NETWORK_LITE_PICTURE") else {
+            return;
+        };
+        let theme = scramble_ui::scheme::theme("triib".to_owned(), crate::app::TRIIB_SEED, true);
+        let mut triib = lite_triib(-180);
+        let esp = EntityId(0xe8f6_0ae0_9220_0000);
+        for (suffix, focus) in [
+            ("overview", None),
+            ("device", Some(Focus::Node(NodeKey::Entity(esp)))),
+        ] {
+            triib.network_focus = focus;
+            let settings = iced::Settings {
+                fonts: scramble_ui::font::files().collect(),
+                default_font: scramble_ui::font::TEXT,
+                antialiasing: true,
+                ..iced::Settings::default()
+            };
+            let content = view_at(&triib, 1280.0);
+            let mut simulator =
+                iced_test::Simulator::with_size(settings, Size::new(1280.0, 720.0), content);
+            let snapshot = simulator.snapshot(&theme).expect("draws");
+            let file = format!("{path}-{suffix}.png");
+            for renderer in ["tiny-skia", "wgpu"] {
+                let _ = std::fs::remove_file(format!("{path}-{suffix}-{renderer}.png"));
+            }
             assert!(snapshot.matches_image(&file).expect("writes"));
         }
     }

@@ -1208,8 +1208,12 @@ impl NetMap {
             );
             frame.fill_text(Text {
                 // In capitals where the script has them, gPTP kept as written.
-                content: crate::i18n::uppercase(&crate::fl!("netmap-off-tree"))
-                    .replace("GPTP", "gPTP"),
+                content: crate::i18n::uppercase(&if self.map.topology.ptp {
+                    crate::fl!("netmap-off-ptp")
+                } else {
+                    crate::fl!("netmap-off-tree")
+                })
+                .replace("GPTP", "gPTP"),
                 position: Point::new(band.x + BAND_PADDING, band.y + BAND_LABEL / 2.0),
                 color: colors.muted,
                 size: Pixels(11.0),
@@ -1692,6 +1696,7 @@ mod tests {
                     Kind::Bridge => (Icon::Hub, node.name.clone()),
                     Kind::Host => (Icon::Computer, "This computer".to_owned()),
                     Kind::Entity { .. } => (Icon::GraphicEq, node.name.clone()),
+                    Kind::Clock => (Icon::Schedule, node.name.clone()),
                 };
                 let sending = streams
                     .iter()

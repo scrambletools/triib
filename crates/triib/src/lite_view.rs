@@ -18,7 +18,7 @@ use crate::app::{Message, Triib};
 use crate::fl;
 
 /// The PTP offset past which the profile calls for an alarm (9).
-const OFFSET_ALARM: i32 = 50_000;
+pub(crate) const OFFSET_ALARM: i32 = 50_000;
 /// The share of a link streams may take (4 and 6.5).
 const EGRESS_LIMIT: f64 = 0.75;
 /// The link speed taken when an entity does not report it.
@@ -89,7 +89,7 @@ pub fn rate(bits: u64) -> String {
 }
 
 /// A time in nanoseconds in the unit that suits it: "180 ns", "72 µs".
-fn duration(nanoseconds: i32) -> String {
+pub(crate) fn duration(nanoseconds: i32) -> String {
     if nanoseconds.unsigned_abs() >= 10_000 {
         format!("{} µs", nanoseconds / 1000)
     } else {
@@ -128,7 +128,7 @@ pub fn mode(model: &EntityModel) -> String {
     }
 }
 
-fn fallback(reason: FallbackReason) -> String {
+pub(crate) fn fallback(reason: FallbackReason) -> String {
     match reason {
         FallbackReason::NONE => fl!("lite-fallback-none"),
         FallbackReason::ENDPOINT_TLV => fl!("lite-fallback-endpoint"),
@@ -136,6 +136,15 @@ fn fallback(reason: FallbackReason) -> String {
         FallbackReason::MULTIPLE_RESPONDERS => fl!("lite-fallback-responders"),
         FallbackReason::CONFIGURED => fl!("lite-fallback-configured"),
         _ => fl!("lite-fallback-other"),
+    }
+}
+
+/// A PTP profile's name.
+pub(crate) fn profile_name(profile: PtpProfile) -> String {
+    match profile {
+        PtpProfile::GPTP => "gPTP (802.1AS)".to_owned(),
+        PtpProfile::AVB_LITE_PTP => "AVB Lite PTP".to_owned(),
+        _ => fl!("lite-other-profile"),
     }
 }
 
@@ -165,11 +174,7 @@ pub fn entity_section<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
                 false,
             ));
         }
-        let profile = match status.ptp_profile {
-            PtpProfile::GPTP => "gPTP (802.1AS)".to_owned(),
-            PtpProfile::AVB_LITE_PTP => "AVB Lite PTP".to_owned(),
-            _ => fl!("lite-other-profile"),
-        };
+        let profile = profile_name(status.ptp_profile);
         items.push(property(
             "PTP",
             fl!(
