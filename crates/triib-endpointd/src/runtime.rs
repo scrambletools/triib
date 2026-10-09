@@ -52,12 +52,20 @@ const REPORT: Duration = Duration::from_secs(30);
 const REDECLARE: Duration = Duration::from_secs(2);
 /// AVB Lite's media priority (profile 7), the unicast copies a talker
 /// sends before it falls back to multicast, how often CVU SRP declarations
-/// go out again, and how long one lasts unrefreshed.
+/// AVB Lite's priority for streams and CVU SRP, and the broadcast
+/// address talkers declare to.
 const LITE_PRIORITY: u8 = 5;
 const BROADCAST: MacAddress = MacAddress([0xff; 6]);
 const FANOUT: usize = 2;
-const CVU_REFRESH: Duration = Duration::from_secs(1);
-const CVU_STALE: Duration = Duration::from_secs(30);
+/// CVU SRP's timing, MRP's (IEEE 802.1Q-2022, Table 10-7) as the AVB Lite
+/// profile carries it over: a declaration goes out twice, JoinTime
+/// apart; a withdrawn one lasts LeaveTime more; all are sent again every
+/// LeaveAllTime and up to half as much again; and one not sent again
+/// within 1.5 LeaveAllTime and LeaveTime is gone.
+const JOIN_TIME: Duration = Duration::from_millis(200);
+const LEAVE_TIME: Duration = Duration::from_millis(800);
+const LEAVE_ALL_TIME: Duration = Duration::from_secs(10);
+const AGE_OUT: Duration = Duration::from_secs(16);
 /// The least time between starting one ptp4l unit and the next, so a
 /// profile switch has time to show.
 const SWITCH_AGAIN: Duration = Duration::from_secs(30);
@@ -318,6 +326,41 @@ struct LiteMode {
     /// listener's address.
     listeners: HashMap<u64, HashMap<MacAddress, (ListenerState, Duration)>>,
     next_refresh: Duration,
+    /// Declarations to send a second time, JoinTime after the first: when,
+    /// from which endpoint, where to, and what.
+    repeats: Vec<(Duration, usize, MacAddress, avb_mrp::mrpdu::Message)>,
+    /// Declarations withdrawn, kept until LeaveTime after their Lv unless
+    /// declared again first.
+    leaving_talkers: HashMap<u64, Duration>,
+    leaving_listeners: HashMap<(u64, MacAddress), Duration>,
+    /// Draws the refresh interval.
+    random: u64,
+}
+
+impl LiteMode {
+    /// When to send every declaration again: from LeaveAllTime to half as
+    /// much again from `since`.
+    fn refresh_after(&mut self, since: Duration) -> Duration {
+        self.random ^= self.random << 13;
+        self.random ^= self.random >> 7;
+        self.random ^= self.random << 17;
+        since + LEAVE_ALL_TIME + Duration::from_millis(self.random % 5000)
+    }
+}
+
+/// Whether two CVU SRP messages are about the same declaration: the same
+/// kind, talker or listener, and the same stream.
+fn same_declaration(one: &avb_mrp::mrpdu::Message, other: &avb_mrp::mrpdu::Message) -> bool {
+    let listener =
+        |message: &avb_mrp::mrpdu::Message| message.attribute_type == msrp::attribute::LISTENER;
+    let stream = |message: &avb_mrp::mrpdu::Message| {
+        message
+            .values
+            .first()
+            .and_then(|(value, _, _)| value.get(..8))
+            .map(<[u8]>::to_vec)
+    };
+    listener(one) == listener(other) && stream(one) == stream(other)
 }
 
 /// Why the runtime ended.
@@ -738,6 +781,16 @@ impl Runtime {
         let lite = [
             Some(self.fallback.poll_timeout()),
             self.lite.as_ref().map(|lite| lite.next_refresh),
+            self.lite
+                .as_ref()
+                .and_then(|lite| lite.repeats.iter().map(|(at, ..)| *at).min()),
+            self.lite.as_ref().and_then(|lite| {
+                lite.leaving_talkers
+                    .values()
+                    .chain(lite.leaving_listeners.values())
+                    .min()
+                    .copied()
+            }),
         ]
         .into_iter()
         .flatten()
@@ -761,7 +814,7 @@ impl Runtime {
             }
             Input::Avtp(source, bytes) => {
                 if self.lite.is_some() && source != self.mac {
-                    self.cvu_heard(source, &bytes, true);
+                    self.cvu_heard(source, &bytes);
                 }
                 for endpoint in &mut self.endpoints {
                     endpoint.entity.handle_frame(now, source, &bytes);
@@ -978,10 +1031,10 @@ impl Runtime {
             return;
         };
         if self.lite.is_some() {
-            self.send_cvu(
+            self.declare_cvu(
                 index,
                 BROADCAST,
-                &lite::talker_message(&declaration, avb_mrp::Event::New),
+                lite::talker_message(&declaration, avb_mrp::Event::New),
             );
             self.endpoints[index].entity.set_output_reservation(
                 0,
@@ -1676,13 +1729,28 @@ impl Runtime {
             .withdraw(since, mvrp::VID, &mvrp::value(VLAN));
         self.talkers.clear();
         self.ready_remotely.clear();
-        self.lite = Some(LiteMode {
+        let mut lite = LiteMode {
             reason,
             sequence: 0,
             talkers: HashMap::new(),
             listeners: HashMap::new(),
             next_refresh: since,
-        });
+            repeats: Vec::new(),
+            leaving_talkers: HashMap::new(),
+            leaving_listeners: HashMap::new(),
+            random: u64::from_be_bytes([
+                0,
+                0,
+                self.mac.0[0],
+                self.mac.0[1],
+                self.mac.0[2],
+                self.mac.0[3],
+                self.mac.0[4],
+                self.mac.0[5],
+            ]) | 1,
+        };
+        lite.next_refresh = lite.refresh_after(since);
+        self.lite = Some(lite);
         for index in 0..self.endpoints.len() {
             match self.endpoints[index].config.kind {
                 Kind::Talker if self.addressed() => self.declare_talker(index),
@@ -1777,8 +1845,8 @@ impl Runtime {
         let Some(lite) = &mut self.lite else {
             return;
         };
-        let stale = |at: &Duration| since.saturating_sub(*at) > CVU_STALE;
-        let gone_talkers: Vec<u64> = lite
+        let stale = |at: &Duration| since.saturating_sub(*at) > AGE_OUT;
+        let mut gone_talkers: Vec<u64> = lite
             .talkers
             .iter()
             .filter(|(_, (_, _, at))| stale(at))
@@ -1795,12 +1863,48 @@ impl Runtime {
                 gone_listeners.push(*stream_id);
             }
         }
+        // Withdrawn declarations not declared again within LeaveTime.
+        let left: Vec<u64> = lite
+            .leaving_talkers
+            .iter()
+            .filter(|(_, at)| **at <= since)
+            .map(|(stream_id, _)| *stream_id)
+            .collect();
+        for stream_id in left {
+            lite.leaving_talkers.remove(&stream_id);
+            if lite.talkers.remove(&stream_id).is_some() {
+                gone_talkers.push(stream_id);
+            }
+        }
+        let left: Vec<(u64, MacAddress)> = lite
+            .leaving_listeners
+            .iter()
+            .filter(|(_, at)| **at <= since)
+            .map(|(key, _)| *key)
+            .collect();
+        for (stream_id, listener) in left {
+            lite.leaving_listeners.remove(&(stream_id, listener));
+            let removed = lite
+                .listeners
+                .get_mut(&stream_id)
+                .and_then(|listeners| listeners.remove(&listener))
+                .is_some();
+            if removed && !gone_listeners.contains(&stream_id) {
+                gone_listeners.push(stream_id);
+            }
+        }
+        let repeats = std::mem::take(&mut lite.repeats);
+        let (due, later): (Vec<_>, Vec<_>) = repeats.into_iter().partition(|(at, ..)| *at <= since);
+        lite.repeats = later;
         let refresh = since >= lite.next_refresh;
         if refresh {
-            lite.next_refresh = since + CVU_REFRESH;
+            lite.next_refresh = lite.refresh_after(since);
+        }
+        for (_, index, destination, message) in due {
+            self.send_cvu(index, destination, &message);
         }
         for stream_id in gone_talkers {
-            log(format!("AVB Lite: talker of {stream_id:#018x} went quiet"));
+            log(format!("AVB Lite: talker of {stream_id:#018x} is gone"));
             self.lite_talker_changed(stream_id);
         }
         for stream_id in gone_listeners {
@@ -1815,17 +1919,17 @@ impl Runtime {
                     if self.addressed()
                         && let Some(declaration) = self.declaration(index)
                     {
-                        self.send_cvu(
+                        self.declare_cvu(
                             index,
                             BROADCAST,
-                            &lite::talker_message(&declaration, avb_mrp::Event::JoinIn),
+                            lite::talker_message(&declaration, avb_mrp::Event::JoinIn),
                         );
                     }
                 } else if let Some((stream_id, talker, state)) = endpoint.cvu_to {
-                    self.send_cvu(
+                    self.declare_cvu(
                         index,
                         talker,
-                        &lite::listener_message(stream_id, state, avb_mrp::Event::JoinIn),
+                        lite::listener_message(stream_id, state, avb_mrp::Event::JoinIn),
                     );
                 }
             }
@@ -1844,6 +1948,10 @@ impl Runtime {
         let Some(lite) = &mut self.lite else {
             return;
         };
+        // What goes now supersedes a repeat still to go.
+        lite.repeats.retain(|(_, from, to, pending)| {
+            !(*from == index && *to == destination && same_declaration(pending, message))
+        });
         lite.sequence = lite.sequence.wrapping_add(1);
         let sender = self.endpoints[index].entity.entity_id();
         let Some(pdu) = lite::cvu_command(sender, lite.sequence, message) else {
@@ -1859,19 +1967,31 @@ impl Runtime {
         frame.resize(frame.len().max(64), 0);
         let _ = self.tagged.send(&frame);
         if destination == BROADCAST || destination == self.mac {
-            self.cvu_heard(self.mac, &pdu, false);
+            self.cvu_heard(self.mac, &pdu);
         }
     }
 
-    /// Takes the declarations of a CVU SRP command `source` sent, and
-    /// answers it when `respond`.
-    fn cvu_heard(&mut self, source: MacAddress, pdu: &[u8], respond: bool) {
+    /// Sends a new, changed or refreshed declaration, and the same again
+    /// JoinTime later, as an MRP applicant makes sure two go out.
+    fn declare_cvu(
+        &mut self,
+        index: usize,
+        destination: MacAddress,
+        message: avb_mrp::mrpdu::Message,
+    ) {
+        self.send_cvu(index, destination, &message);
+        let at = self.elapsed() + JOIN_TIME;
+        if let Some(lite) = &mut self.lite {
+            lite.repeats.push((at, index, destination, message));
+        }
+    }
+
+    /// Takes the declarations of a CVU SRP command `source` sent. CVU SRP
+    /// commands are not answered (profile 6).
+    fn cvu_heard(&mut self, source: MacAddress, pdu: &[u8]) {
         let Some(declared) = lite::cvu_declarations(pdu) else {
             return;
         };
-        if respond && let Some(response) = lite::cvu_response(pdu) {
-            let _ = self.avtp.send(source, &response);
-        }
         let since = self.elapsed();
         for declaration in declared {
             let Some(lite) = &mut self.lite else {
@@ -1879,6 +1999,7 @@ impl Runtime {
             };
             match declaration {
                 Declared::Talker(talker) => {
+                    lite.leaving_talkers.remove(&talker.stream_id);
                     let changed =
                         lite.talkers
                             .get(&talker.stream_id)
@@ -1894,11 +2015,14 @@ impl Runtime {
                     }
                 }
                 Declared::TalkerGone(stream_id) => {
-                    if lite.talkers.remove(&stream_id).is_some() {
-                        self.lite_talker_changed(stream_id);
+                    if lite.talkers.contains_key(&stream_id) {
+                        lite.leaving_talkers
+                            .entry(stream_id)
+                            .or_insert(since + LEAVE_TIME);
                     }
                 }
                 Declared::Listener(stream_id, state) => {
+                    lite.leaving_listeners.remove(&(stream_id, source));
                     let listeners = lite.listeners.entry(stream_id).or_default();
                     let changed = listeners
                         .get(&source)
@@ -1909,13 +2033,14 @@ impl Runtime {
                     }
                 }
                 Declared::ListenerGone(stream_id) => {
-                    let removed = lite
+                    let known = lite
                         .listeners
-                        .get_mut(&stream_id)
-                        .and_then(|listeners| listeners.remove(&source))
-                        .is_some();
-                    if removed && let Some(index) = self.own_talker(stream_id) {
-                        self.update_talker(index);
+                        .get(&stream_id)
+                        .is_some_and(|listeners| listeners.contains_key(&source));
+                    if known {
+                        lite.leaving_listeners
+                            .entry((stream_id, source))
+                            .or_insert(since + LEAVE_TIME);
                     }
                 }
             }
@@ -2060,10 +2185,10 @@ impl Runtime {
         if wanted != before
             && let Some((stream_id, talker, state)) = wanted
         {
-            self.send_cvu(
+            self.declare_cvu(
                 index,
                 talker,
-                &lite::listener_message(stream_id, state, avb_mrp::Event::New),
+                lite::listener_message(stream_id, state, avb_mrp::Event::New),
             );
         }
         let reservation = match heard {
@@ -2204,6 +2329,40 @@ mod tests {
         assert_eq!(rates(8), [48_000, 96_000, 192_000]);
         assert_eq!(rates(16), [48_000, 96_000]);
         assert_eq!(rates(60), [48_000]);
+    }
+
+    /// Every declaration goes out again from LeaveAllTime to half as much
+    /// again later, at a different point each time.
+    #[test]
+    fn declarations_refresh_every_10_to_15_s() {
+        let mut lite = LiteMode {
+            reason: FallbackReason::CONFIGURED,
+            sequence: 0,
+            talkers: HashMap::new(),
+            listeners: HashMap::new(),
+            next_refresh: Duration::ZERO,
+            repeats: Vec::new(),
+            leaving_talkers: HashMap::new(),
+            leaving_listeners: HashMap::new(),
+            random: 0xf0a7_31f4_0f14 | 1,
+        };
+        let since = Duration::from_secs(100);
+        let intervals: Vec<Duration> = (0..50).map(|_| lite.refresh_after(since) - since).collect();
+        for interval in &intervals {
+            assert!(*interval >= LEAVE_ALL_TIME && *interval < LEAVE_ALL_TIME * 3 / 2);
+        }
+        assert!(intervals.windows(2).any(|pair| pair[0] != pair[1]));
+    }
+
+    /// A repeat still to go is superseded by what goes for the same
+    /// stream's declaration of the same kind, not by another's.
+    #[test]
+    fn a_new_declaration_supersedes_its_repeat() {
+        let ready = lite::listener_message(7, ListenerState::Ready, avb_mrp::Event::New);
+        let gone = lite::listener_message(7, ListenerState::Ready, avb_mrp::Event::Lv);
+        let other = lite::listener_message(8, ListenerState::Ready, avb_mrp::Event::New);
+        assert!(same_declaration(&ready, &gone));
+        assert!(!same_declaration(&ready, &other));
     }
 
     #[test]

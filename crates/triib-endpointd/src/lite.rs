@@ -23,10 +23,15 @@ const PDELAY_RESP_FOLLOW_UP: u8 = 0xa;
 /// Octets of a Pdelay message before any TLV.
 const PDELAY_LEN: usize = 54;
 /// The Endpoint Declaration TLV (profile 2.1): an organization extension
-/// under the AVB Lite MA-S, saying the sender is an endpoint.
+/// under the AVB Lite MA-S, saying the sender is an endpoint, of the
+/// do-not-propagate type IEEE 1588-2019 asks of new extensions.
 const ENDPOINT_TLV: [u8; 12] = [
-    0x00, 0x03, 0x00, 0x08, 0x8c, 0x1f, 0x64, 0x36, 0xc0, 0x01, 0x01, 0x00,
+    0x80, 0x00, 0x00, 0x08, 0x8c, 0x1f, 0x64, 0x36, 0xc0, 0x01, 0x01, 0x00,
 ];
+/// The organization extension types the TLV comes in: the profile's,
+/// and the one its earlier revisions used.
+const ORGANIZATION_EXTENSION_DO_NOT_PROPAGATE: u16 = 0x8000;
+const ORGANIZATION_EXTENSION: u16 = 0x0003;
 
 /// How often a Pdelay_Req goes out, and after fallback the beacon.
 const PROBE_INTERVAL: Duration = Duration::from_secs(1);
@@ -72,7 +77,12 @@ fn has_endpoint_tlv(message: &[u8], start: usize) -> bool {
             return false;
         };
         // The identifiers and dataField; a pad octet may follow.
-        if kind == 0x0003 && body.len() >= 7 && body[..7] == ENDPOINT_TLV[4..11] {
+        if matches!(
+            kind,
+            ORGANIZATION_EXTENSION_DO_NOT_PROPAGATE | ORGANIZATION_EXTENSION
+        ) && body.len() >= 7
+            && body[..7] == ENDPOINT_TLV[4..11]
+        {
             return true;
         }
         at += 4 + size;
@@ -251,24 +261,6 @@ pub fn cvu_command(sender: EntityId, sequence: u16, message: &mrpdu::Message) ->
     Some(out)
 }
 
-/// The response to a CVU SRP command, which the command's octets give
-/// back with SUCCESS.
-pub fn cvu_response(command: &[u8]) -> Option<Vec<u8>> {
-    let pdu = VendorUniquePdu::decode(command).ok()?;
-    let response = VendorUniquePdu {
-        header: AecpHeader {
-            message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
-            status: 0,
-            ..pdu.header
-        },
-        ..pdu
-    };
-    let mut out = vec![0; command.len().max(64)];
-    let length = response.encode(&mut out).ok()?;
-    out.truncate(length);
-    Some(out)
-}
-
 /// What one CVU SRP command declares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Declared {
@@ -406,11 +398,11 @@ mod tests {
         let request = pdelay_request(IDENTITY, 7);
         assert_eq!(request.len(), 66);
         assert_eq!(&request[..4], &[0x12, 0x02, 0x00, 0x42]);
-        assert_eq!(&request[54..], &ENDPOINT_TLV);
+        assert_eq!(&request[54..58], &[0x80, 0x00, 0x00, 0x08]);
         assert!(has_endpoint_tlv(&request, PDELAY_LEN));
         assert!(!has_endpoint_tlv(&request[..PDELAY_LEN], PDELAY_LEN));
-        // An endpoint of the profile's first revision, its TLV seven
-        // octets long with no pad, is still recognized.
+        // An endpoint of the profile's first revision, its TLV of type
+        // 0x0003 and seven octets long with no pad, is still recognized.
         let mut older = request[..PDELAY_LEN].to_vec();
         older[2..4].copy_from_slice(&65u16.to_be_bytes());
         older.extend_from_slice(&[0x00, 0x03, 0x00, 0x07]);
@@ -537,14 +529,16 @@ mod tests {
             cvu_declarations(&gone).unwrap(),
             [Declared::ListenerGone(declaration.stream_id)]
         );
-        // The response gives the command back.
-        let response = cvu_response(&command).unwrap();
-        let answered = VendorUniquePdu::decode(&response).unwrap();
-        assert_eq!(
-            answered.header.message_type,
-            AecpMessageType::VENDOR_UNIQUE_RESPONSE
-        );
-        assert_eq!(answered.payload, pdu.payload);
-        assert_eq!(cvu_declarations(&response), None);
+        // A response, as earlier implementations sent, declares nothing.
+        let response = VendorUniquePdu {
+            header: AecpHeader {
+                message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+                ..pdu.header
+            },
+            ..pdu
+        };
+        let mut out = vec![0; 200];
+        let length = response.encode(&mut out).unwrap();
+        assert_eq!(cvu_declarations(&out[..length]), None);
     }
 }
