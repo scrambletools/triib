@@ -45,7 +45,7 @@ cp "$root/LICENSE-MIT" "$root/LICENSE-APACHE" "$app/Contents/Resources/licenses/
 cp "$root"/packaging/licenses/* "$app/Contents/Resources/licenses/fonts/"
 
 # The icon, when there is one: each size an .iconset asks for, from the
-# PNGs the Linux packages use; 1024 is scaled up from 512.
+# PNGs the Linux packages use and the 1024 one they are made from.
 icons="$root/data/icons/hicolor"
 png() { echo "$icons/$1x$1/apps/io.github.scrambletools.triib.png"; }
 icon_entry=""
@@ -59,7 +59,7 @@ if [ -e "$(png 512)" ]; then
     cp "$(png 64)" "$iconset/icon_32x32@2x.png"
     cp "$(png 256)" "$iconset/icon_128x128@2x.png"
     cp "$(png 512)" "$iconset/icon_256x256@2x.png"
-    sips -z 1024 1024 "$(png 512)" --out "$iconset/icon_512x512@2x.png" >/dev/null
+    cp "$root/data/icons/triib-1024.png" "$iconset/icon_512x512@2x.png"
     iconutil -c icns "$iconset" -o "$app/Contents/Resources/triib.icns"
     icon_entry="<key>CFBundleIconFile</key><string>triib</string>"
 fi

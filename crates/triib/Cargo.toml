@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 iced = { version = "0.14", features = ["advanced", "canvas"] }
+png = "0.18"
 serde = { version = "1", features = ["derive"] }
 scramble-ui.workspace = true
 atdecc = { workspace = true, features = ["std"] }

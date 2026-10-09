@@ -97,6 +97,7 @@ fn main() -> iced::Result {
     })
     .window(iced::window::Settings {
         size: iced::Size::new(1280.0, 800.0),
+        icon: window_icon(),
         min_size: Some(iced::Size::new(360.0, 480.0)),
         // On Linux, the app id desktops match windows and launchers by.
         #[cfg(target_os = "linux")]
@@ -110,6 +111,24 @@ fn main() -> iced::Result {
     .theme(app::Triib::theme)
     .subscription(app::Triib::subscription)
     .run()
+}
+
+/// The app's icon on its windows, where the desktop takes it from them,
+/// as X11 and Windows do; Wayland desktops take it from the desktop entry.
+fn window_icon() -> Option<iced::window::Icon> {
+    let file: &[u8] = include_bytes!(
+        "../../../data/icons/hicolor/256x256/apps/io.github.scrambletools.triib.png"
+    );
+    let mut reader = png::Decoder::new(std::io::Cursor::new(file))
+        .read_info()
+        .ok()?;
+    let mut rgba = vec![0; reader.output_buffer_size()?];
+    let frame = reader.next_frame(&mut rgba).ok()?;
+    if frame.color_type != png::ColorType::Rgba || frame.bit_depth != png::BitDepth::Eight {
+        return None;
+    }
+    rgba.truncate(frame.buffer_size());
+    iced::window::icon::from_rgba(rgba, frame.width, frame.height).ok()
 }
 
 /// Posts the interface list whenever it changes.
@@ -165,4 +184,12 @@ fn external_events() -> impl iced::futures::Stream<Item = External> {
         .unwrap_or_else(|error| error.into_inner())
         .take();
     iced::futures::StreamExt::flatten(iced::futures::stream::iter(receiver))
+}
+
+#[cfg(test)]
+mod icon_tests {
+    #[test]
+    fn the_window_icon_decodes() {
+        assert!(super::window_icon().is_some());
+    }
 }

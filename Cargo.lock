@@ -3805,6 +3805,7 @@ dependencies = [
  "i18n-embed-fl",
  "iced",
  "iced_test",
+ "png",
  "rust-embed",
  "scramble-ui",
  "serde",
