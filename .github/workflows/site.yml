@@ -1,0 +1,39 @@
+name: Site
+
+# Publishes triib's website from site/ to GitHub Pages whenever it or
+# what it shows changes on main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - scripts/build-site.sh
+      - docs/screenshots/**
+      - data/icons/**
+      - .github/workflows/site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/build-site.sh "$RUNNER_TEMP/site"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+      - id: deployment
+        uses: actions/deploy-pages@v4

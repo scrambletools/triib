@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>triib: an AVB and Milan controller for Linux, Windows and macOS</title>
+<meta name="description" content="triib is a free, open source ATDECC (IEEE 1722.1) controller with Milan and AVB Lite support: it finds the AVB devices on your network, connects their streams, maps the network and its clocks, and on Linux runs talkers and listeners of its own.">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="#"><img src="icon.png" alt="" width="32" height="32">triib</a>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#download">Download</a>
+    <a href="guide.html">Tour</a>
+    <a href="specs.html">Specs</a>
+    <a class="repo" href="https://github.com/scrambletoolsllc/triib">Source on GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <img class="hero-icon" src="icon.png" alt="The triib icon" width="128" height="128">
+    <h1>triib</h1>
+    <p class="lede"><span class="lede-first">See, connect and look after your AVB network.</span>
+      <span class="lede-rest">Find every Milan and AVB device, connect their streams in a matrix, follow each stream and clock across the network, and change formats, clocks, channel maps and controls. On Linux, add talkers and listeners of your own, routed to the computer's&nbsp;audio.</span></p>
+    <p class="actions">
+      <a class="button filled" href="#download">Download</a>
+      <a class="button tonal" href="https://github.com/scrambletoolsllc/triib">Source on GitHub</a>
+    </p>
+    <p class="small">Free and open source under MIT or Apache 2.0, on Linux, Windows and macOS. In 38 languages, including right-to-left.</p>
+    <img class="shot hero-shot" src="screenshots/matrix.png" alt="triib in dark mode with the connection matrix of three entities, talker outputs across the top and listener inputs down the side, and the inspector on the right showing the selected Mac mini's name, product, firmware, media clock and sampling rate" width="1360" height="850">
+  </section>
+
+  <section id="features" class="features">
+    <h2>What triib does</h2>
+    <div class="grid">
+      <article>
+        <h3>Finds every device</h3>
+        <p>triib discovers the ATDECC entities on the interface you pick, reads each entity model, its names, streams, clocks and Milan support, and keeps it, so a device you have seen before shows in full at once.</p>
+      </article>
+      <article>
+        <h3>A connection matrix</h3>
+        <p>Talker outputs across, listener inputs down: click a cell to connect or disconnect. Each cell shows whether the stream flows, waits or has failed, and whether the two formats can meet at all.</p>
+      </article>
+      <article>
+        <h3>A map of the network</h3>
+        <p>Bridges and devices from each entity's gPTP path, every stream as its own wire, and the clock tree from the grandmaster, with each device in sync or not. A failed reservation shows in red where it stops.</p>
+      </article>
+      <article>
+        <h3>Changes that matter</h3>
+        <p>Rename entities, change stream formats, sampling rates and clock sources, map channels to streams, set controls such as gain and mute, and make a device identify itself.</p>
+      </article>
+      <article>
+        <h3>Presets</h3>
+        <p>Save each entity's clock sources, sampling rates, stream formats, controls and connections, and recall them later: triib changes only what differs.</p>
+      </article>
+      <article>
+        <h3>Every frame in the log</h3>
+        <p>Every ATDECC frame sent and heard, decoded in plain words, with the ones that break the rules marked and the reason given.</p>
+      </article>
+      <article>
+        <h3>AVB Lite</h3>
+        <p>See how devices run <a href="https://github.com/avbcommunity/profiles/blob/main/avb_lite.md">AVB Lite</a> over switches that are not AVB bridges: their mode and why, their PTP offset, what their streams take of each link, and the alarms the profile calls for.</p>
+      </article>
+      <article>
+        <h3>Talkers and listeners of your own</h3>
+        <p>On Linux, with a PTP hardware clock and ptp4l, triib runs Milan talkers and listeners streaming AAF or AM824 at 48, 96 or 192 kHz to and from the computer's audio devices.</p>
+      </article>
+      <article>
+        <h3>A command line and libraries</h3>
+        <p><code>triib-cli</code> does the same from scripts. The protocols are Rust crates of their own, <code>atdecc</code>, <code>avb-mrp</code> and <code>avb-net</code>, for other apps and for microcontrollers.</p>
+      </article>
+    </div>
+    <div class="gallery">
+      <figure><img class="shot" src="screenshots/network-clock.png" alt="The network map's clock tree: a core bridge as grandmaster, two more bridges below it and twenty devices, each marked Sync except one monitor amp marked No sync" width="1360" height="1038" loading="lazy"><figcaption>The gPTP clock tree, device by device</figcaption></figure>
+      <figure><img class="shot" src="screenshots/avb-lite.png" alt="The network view in AVB Lite: the PTP tree from the grandmaster clock to a device in sync, two devices not on the PTP tree, and a panel counting two in sync and two not" width="1360" height="765" loading="lazy"><figcaption>The PTP tree when devices run AVB Lite</figcaption></figure>
+      <figure><img class="shot" src="screenshots/log.png" alt="The log below the entity list, listing a Connect RX command, a Get counters response with a warning that its control data length claims eight octets past the end of the frame, and a response marked Not implemented" width="1360" height="850" loading="lazy"><figcaption>Frames decoded, and the broken ones marked</figcaption></figure>
+      <figure><img class="shot" src="screenshots/presets.png" alt="The Presets dialog with a preset named Matinee about to be saved, and Rehearsal and Sunday service ready to recall" width="1360" height="850" loading="lazy"><figcaption>Presets, recalled in one click</figcaption></figure>
+    </div>
+    <figure class="wide">
+      <img class="shot" src="screenshots/network.png" alt="The network map of a show: a core bridge, a stage bridge and a front of house bridge, twenty devices from stage boxes to amps, and each audio stream as its own coloured wire, with two failed reservations marked" width="1360" height="932" loading="lazy">
+      <figcaption>A show's network: three bridges, twenty devices and every audio stream as its own wire</figcaption>
+    </figure>
+  </section>
+
+  <section id="download" class="download">
+    <h2>Download</h2>
+    <p>triib has not had its first release yet. Releases will have packages for Linux on x86_64 and ARM64, Windows on x64 and ARM64, and macOS on Apple Silicon, each setting up what triib needs to send and receive raw Ethernet. Until then, build it from source with Rust:</p>
+    <pre><code>git clone https://github.com/scrambletoolsllc/triib
+cd triib
+cargo run -p triib</code></pre>
+    <p class="small">The <a href="https://github.com/scrambletoolsllc/triib#building">building notes</a> say what each system needs first. Watch the repository's <a href="https://github.com/scrambletoolsllc/triib/releases">releases</a> to hear of the first one.</p>
+    <div class="table">
+      <table>
+        <thead><tr><th>System</th><th>Packages</th><th>What they set up</th></tr></thead>
+        <tbody>
+          <tr><td>Linux</td><td>.deb, .rpm, PKGBUILD for Arch</td><td>Raw Ethernet for <code>triib</code>, <code>triib-cli</code> and <code>triib-endpointd</code> (<code>CAP_NET_RAW</code>)</td></tr>
+          <tr><td>Linux</td><td>.tar.gz</td><td>Nothing: run <code>sudo setcap cap_net_raw+ep</code> on the three programs</td></tr>
+          <tr><td>Windows</td><td>Installer (.msi), portable .zip</td><td>Install <a href="https://npcap.com">Npcap</a> first; the installer and triib point to it when it is missing</td></tr>
+          <tr><td>macOS, Apple Silicon</td><td>Installer package (.pkg)</td><td>Raw Ethernet (<code>/dev/bpf*</code>) for the user installing it, at every start, as Wireshark's ChmodBPF gives</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="code-signing" class="policy">
+    <h2>Code signing policy</h2>
+    <p>Windows releases of triib are signed by Scramble Tools LLC with
+      <a href="https://learn.microsoft.com/azure/artifact-signing/">Microsoft Azure Artifact Signing</a>, from its first release.</p>
+    <ul>
+      <li><strong>What is signed:</strong> only programs built from this project's own
+        <a href="https://github.com/scrambletoolsllc/triib">source code</a> by its GitHub Actions release
+        workflow: <code>triib.exe</code>, <code>triib-cli.exe</code> and the triib installer. triib carries no
+        programs of others; Npcap, which it needs on Windows, comes from Npcap's own installer.</li>
+      <li><strong>Committers and reviewers:</strong> the members of the
+        <a href="https://github.com/scrambletoolsllc">scrambletoolsllc</a> GitHub organization, who review
+        every outside contribution before it is merged.</li>
+      <li><strong>Approvers:</strong> the owner of the
+        <a href="https://github.com/scrambletoolsllc">scrambletoolsllc</a> GitHub organization, who alone can
+        publish a release, and with it a signing.</li>
+      <li>Signing runs only in the release workflow, which signs in to Azure without a stored secret.
+        Everyone on the team signs in to GitHub and Azure with two-factor authentication.</li>
+    </ul>
+    <h3 id="privacy">Privacy</h3>
+    <p>This program will not transfer any information to other networked systems unless specifically
+      requested by the user or the person installing or operating it. triib never goes online: it
+      sends and receives AVB frames only on the local network interface you pick, as an AVB
+      controller does, and the only web page it opens is Npcap's, on Windows, when you click its
+      link. triib has no accounts and sends no telemetry. This website sets no cookies and loads
+      nothing from other sites.</p>
+  </section>
+</main>
+
+<footer>
+  <p>triib is free software under the <a href="https://github.com/scrambletoolsllc/triib/blob/main/LICENSE-MIT">MIT</a> or <a href="https://github.com/scrambletoolsllc/triib/blob/main/LICENSE-APACHE">Apache 2.0</a> license.
+    Made by <a href="https://github.com/scrambletoolsllc">Scramble Tools</a>.
+    Milan and AVB are trademarks of Avnu Alliance; triib is not certified by Avnu Alliance.
+    <a href="#code-signing">Code signing policy</a> · <a href="#privacy">Privacy</a></p>
+</footer>
+
+</body>
+</html>

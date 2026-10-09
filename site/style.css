@@ -1,0 +1,217 @@
+/* triib's website, in the app's own Material 3 colors, from its teal seed. */
+
+@font-face {
+  font-family: "Roboto Flex";
+  src: url("RobotoFlex.ttf") format("truetype");
+  font-weight: 100 1000;
+  font-display: swap;
+}
+
+:root {
+  --primary: #006b5f;
+  --on-primary: #ffffff;
+  --primary-container: #9ef2e3;
+  --on-primary-container: #00201c;
+  --surface: #f4fbf8;
+  --surface-container: #e9efec;
+  --surface-container-high: #e3eae7;
+  --on-surface: #161d1b;
+  --on-surface-variant: #3f4946;
+  --outline-variant: #bec9c5;
+  --shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 8px 24px rgb(0 0 0 / 0.10);
+  --hero-shadow: var(--shadow);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #82d5c7;
+    --on-primary: #003731;
+    --primary-container: #005048;
+    --on-primary-container: #9ef2e3;
+    --surface: #0e1513;
+    --surface-container: #1a211f;
+    --surface-container-high: #252b2a;
+    --on-surface: #dde4e1;
+    --on-surface-variant: #bec9c5;
+    --outline-variant: #3f4946;
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+    /* A hairline and a soft glow in the accent color, so the dark hero
+       screenshot stands off the dark page. */
+    --hero-shadow:
+      0 0 0 1px rgb(130 213 199 / 0.20),
+      0 0 48px 0 rgb(130 213 199 / 0.18),
+      0 0 140px 16px rgb(0 137 123 / 0.22),
+      0 24px 64px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: "Roboto Flex", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+a { color: var(--primary); }
+
+code {
+  font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+  font-size: 0.88em;
+  background: var(--surface-container-high);
+  padding: 0.1em 0.4em;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px max(16px, calc((100% - 1080px) / 2));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--on-surface);
+  font-weight: 650;
+  font-size: 20px;
+  text-decoration: none;
+}
+
+.top nav { display: flex; gap: 20px; flex-wrap: wrap; }
+.top nav a { color: var(--on-surface-variant); text-decoration: none; font-weight: 500; }
+.top nav a:hover { color: var(--primary); }
+.top nav .repo { color: var(--primary); }
+
+main, footer { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+section { padding: 56px 0; }
+h1 { font-size: clamp(48px, 9vw, 72px); line-height: 1; margin: 16px 0 12px; font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 32px; line-height: 1.2; margin: 0 0 20px; font-weight: 650; }
+h3 { font-size: 20px; margin: 0 0 6px; font-weight: 650; }
+
+.hero { text-align: center; padding-top: 48px; }
+.hero-icon { display: block; margin: 0 auto; }
+.lede { font-size: 20px; max-width: 680px; margin: 0 auto 24px; color: var(--on-surface-variant); }
+/* The rest of the hero's lede wraps at twice the width of its first
+   line, centred under it; narrower windows wrap it at their own width. */
+.hero .lede { width: fit-content; max-width: none; }
+.lede-first { display: block; white-space: nowrap; }
+.lede-rest { display: block; width: 0; min-width: 200%; margin-left: -50%; }
+@media (max-width: 1000px) {
+  .hero .lede { max-width: 680px; }
+  .lede-rest { width: auto; min-width: 0; margin-left: 0; }
+}
+@media (max-width: 640px) {
+  .lede-first { white-space: normal; }
+}
+.small { font-size: 15px; color: var(--on-surface-variant); }
+
+.actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 0 0 12px; }
+.button {
+  display: inline-block;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.button.filled { background: var(--primary); color: var(--on-primary); }
+.button.tonal { background: var(--primary-container); color: var(--on-primary-container); }
+.button:hover { filter: brightness(1.08); }
+
+.shot { display: block; width: 100%; height: auto; border-radius: 16px; box-shadow: var(--shadow); }
+.hero-shot { margin-top: 40px; box-shadow: var(--hero-shadow); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid article { background: var(--surface-container); border-radius: 20px; padding: 22px 24px; }
+.grid p { margin: 0; color: var(--on-surface-variant); }
+
+.gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 40px; }
+.gallery.three { grid-template-columns: repeat(3, 1fr); }
+.shot.plain { border-radius: 8px; }
+.section-lede { max-width: 720px; margin: 0 auto; text-align: center; color: var(--on-surface-variant); }
+figure { margin: 0; }
+figure.wide { margin-top: 24px; }
+figcaption { margin-top: 10px; text-align: center; color: var(--on-surface-variant); font-size: 15px; }
+
+.table { overflow-x: auto; border-radius: 16px; border: 1px solid var(--outline-variant); }
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--outline-variant); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+th { background: var(--surface-container); font-weight: 600; }
+td a { white-space: nowrap; }
+
+.policy { border-top: 1px solid var(--outline-variant); }
+.policy ul { padding-left: 20px; }
+.policy li { margin-bottom: 8px; }
+.policy h3 { margin-top: 28px; }
+
+/* The specifications: label and value rows. */
+.spec { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 16px; }
+.spec th, .spec td { text-align: left; vertical-align: top; padding: 10px 0; border-bottom: 1px solid var(--outline-variant); }
+.spec th { width: 190px; padding-right: 20px; background: none; color: var(--on-surface-variant); font-weight: 600; }
+.spec tr:last-child th, .spec tr:last-child td { border-bottom: none; }
+.lede-left { color: var(--on-surface-variant); font-size: 18px; }
+@media (max-width: 640px) {
+  .spec, .spec tbody, .spec tr, .spec th, .spec td { display: block; width: auto; }
+  .spec tr { padding: 0; border-bottom: 1px solid var(--outline-variant); }
+  .spec tr:last-child { border-bottom: none; }
+  .spec th { padding: 10px 0 0; border: none; }
+  .spec td { padding: 2px 0 10px; border: none; }
+}
+
+/* The guide: one column of text, its screenshots a little wider. */
+.guide { max-width: 860px; padding-top: 32px; padding-bottom: 56px; }
+.guide h1 { font-size: clamp(40px, 7vw, 56px); margin-bottom: 24px; }
+.guide h2 { margin-top: 56px; scroll-margin-top: 80px; }
+.guide h3 { margin-top: 32px; scroll-margin-top: 80px; }
+.guide figure { margin: 24px 0; }
+.guide .table { margin: 16px 0; }
+.guide pre { background: var(--surface-container-high); border-radius: 12px; padding: 14px 16px; overflow-x: auto; }
+.guide pre code { background: none; padding: 0; overflow-wrap: normal; }
+.guide li { margin-bottom: 6px; }
+.guide .gallery { margin: 16px 0; gap: 16px; }
+.guide figure.states { max-width: 520px; margin-left: auto; margin-right: auto; }
+.guide figure.portrait { max-width: 460px; margin-left: auto; margin-right: auto; }
+.contents ul { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0 0 24px; list-style: none; }
+.contents li { margin: 0; }
+.contents a { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--surface-container); color: var(--on-surface); text-decoration: none; font-size: 15px; }
+.contents a:hover { background: var(--primary-container); color: var(--on-primary-container); }
+
+/* Building from source, until the first release. */
+.download pre { background: var(--surface-container-high); border-radius: 12px; padding: 14px 16px; overflow-x: auto; }
+.download pre code { background: none; padding: 0; overflow-wrap: normal; }
+
+footer { padding: 32px 16px 48px; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 15px; }
+
+@media (max-width: 640px) {
+  section { padding: 40px 0; }
+  .gallery, .gallery.three { grid-template-columns: 1fr; }
+  /* Each download as a small card: the system, the file, then how. */
+  thead { display: none; }
+  table, tbody, tr, td { display: block; }
+  tr { padding: 12px 16px; border-bottom: 1px solid var(--outline-variant); }
+  tr:last-child { border-bottom: none; }
+  td { padding: 2px 0; border: none; }
+  td:first-child { font-weight: 600; }
+  td:empty { display: none; }
+  td code { white-space: normal; word-break: break-all; }
+  .lede { font-size: 18px; }
+  .top nav { gap: 14px; font-size: 15px; }
+}

@@ -14,6 +14,8 @@ Everything a release ships is built from this repository:
 | `packaging/windows/` | Windows MSI (WiX 5) and zip, made by `build.ps1` |
 | `packaging/macos/` | triib.app and its installer package, made by `bundle.sh --pkg`, with the capture access helper |
 | `.github/workflows/release.yml` | Builds all of them for a tag and drafts the GitHub release |
+| `site/`, `scripts/build-site.sh`, `.github/workflows/site.yml` | The website, published to GitHub Pages whenever it changes on main |
+| `scripts/site-screenshots.sh` | Renders the website's screenshots into `docs/screenshots` from the test bench |
 
 Each package is built for x86_64 and ARM64 on GitHub's runners of that
 architecture; the macOS package is built for Apple Silicon only.
@@ -74,7 +76,9 @@ triib sends and receives raw Ethernet, which each system guards:
    checks that the tag matches `Cargo.toml`, builds the packages and
    drafts a release with them, `SHA256SUMS`, and a `PKGBUILD` with the
    source checksum filled in, beside its `triib.install`. Check the draft
-   and publish it.
+   and publish it. Then point the website's download section
+   (`site/index.html`) at the version's packages and update the version
+   on `site/specs.html`; pushing `site/` redeploys the website.
 5. AUR: in a clone of `ssh://aur@aur.archlinux.org/triib.git`, replace
    `PKGBUILD` with the one from the release and copy
    `packaging/arch/triib/triib.install`, run
