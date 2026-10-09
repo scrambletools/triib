@@ -81,8 +81,8 @@ const LINK_AGAIN: Duration = Duration::from_secs(600);
 /// How long the link unit has before the daemon looks again, the link
 /// having gone down and up.
 const LINK_SETTLE: Duration = Duration::from_secs(15);
-/// How long after running the link unit the link coming up is its doing,
-/// not a new link.
+/// How long after running the link unit, where AVB Lite held, the link
+/// coming up is its doing, not a new link.
 const LINK_OWN: Duration = Duration::from_secs(30);
 
 /// What the sockets and ptp4l hand the runtime.
@@ -330,6 +330,9 @@ pub struct Runtime {
     switched_at: Option<Duration>,
     /// When the daemon last ran the link unit again.
     link_fixed_at: Option<Duration>,
+    /// Until when the link coming up is the link unit's doing, where AVB
+    /// Lite held as the daemon ran it.
+    link_own_until: Option<Duration>,
     clock: Arc<MediaClock>,
     /// The talker declarations registered, by stream ID.
     talkers: HashMap<u64, TalkerDeclaration>,
@@ -582,6 +585,7 @@ impl Runtime {
             link: None,
             switched_at: None,
             link_fixed_at: None,
+            link_own_until: None,
             clock,
             talkers: HashMap::new(),
             ready_remotely: HashMap::new(),
@@ -967,7 +971,7 @@ impl Runtime {
                 let since = self.elapsed();
                 let came_up = link.carrier == Some(true)
                     && last.is_some_and(|last| last.carrier == Some(false))
-                    && !self.link_fixed_at.is_some_and(|at| since < at + LINK_OWN);
+                    && !self.link_own_until.is_some_and(|until| since < until);
                 if came_up && self.lite.is_some() && self.config.avb_lite == LiteChoice::Auto {
                     self.leave_lite();
                 }
@@ -1956,6 +1960,7 @@ impl Runtime {
             return;
         }
         self.link_fixed_at = Some(since);
+        self.link_own_until = self.lite.is_some().then_some(since + LINK_OWN);
         let what = match (power.eee, power.pause) {
             (true, true) => "EEE and PAUSE are",
             (true, false) => "EEE is",
