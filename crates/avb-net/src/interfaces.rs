@@ -56,7 +56,8 @@ pub struct LinkPower {
     /// EEE is enabled, so the interface advertises it and its link may
     /// sleep between frames.
     pub eee: bool,
-    /// The interface negotiates PAUSE, or sends or acts on it.
+    /// The interface sends PAUSE or acts on it, or offers to when it
+    /// negotiates.
     pub pause: bool,
 }
 
@@ -129,7 +130,9 @@ mod ethtool {
             ..Eee::default()
         };
         let pause = match ask(&socket, bytes, (&raw mut pause).cast()) {
-            Ok(()) => pause.autoneg != 0 || pause.rx_pause != 0 || pause.tx_pause != 0,
+            // Negotiating PAUSE while sending and taking none advertises
+            // none, so it stays off.
+            Ok(()) => pause.rx_pause != 0 || pause.tx_pause != 0,
             Err(error) if unsupported(&error) => false,
             Err(error) => return Err(error),
         };
