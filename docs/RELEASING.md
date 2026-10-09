@@ -89,9 +89,15 @@ Artifact Signing once the repository variables `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_SIGNING_ENDPOINT`,
 `AZURE_SIGNING_ACCOUNT` and `AZURE_CERTIFICATE_PROFILE` are set, signing
 in with GitHub's OpenID Connect token as the environment `release`. The
-account, identity validation and certificate profile can be prev's: set
-it up as prev's `docs/RELEASING.md` describes, adding a federated
-credential for this repository, entity type Environment, name `release`.
+account, identity validation, certificate profile and app registration
+are prev's, and the variables hold the same values as prev's. The app
+registration has a federated credential for this repository with the
+issuer `https://token.actions.githubusercontent.com`, the audience
+`api://AzureADTokenExchange` and the subject
+`repo:scrambletoolsllc@339905752/triib@1406492142:environment:release`.
+GitHub puts the organization's and repository's IDs in the subject, so
+the portal's GitHub Actions scenario, which leaves them out, does not
+match; the azure/login step prints the subject a run presents.
 
 ## macOS signing
 
