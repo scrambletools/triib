@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Assembles triib's website into OUT: the pages in site/, plus the icon
-# and the screenshots, from the repository.
+# Assembles triib's website (triib.run) into OUT: the pages in site/,
+# plus the icon and the screenshots, from the repository.
 #
 #   scripts/build-site.sh [OUT]
 set -euo pipefail

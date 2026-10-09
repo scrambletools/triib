@@ -1,7 +1,7 @@
 name: Site
 
-# Publishes triib's website from site/ to GitHub Pages whenever it or
-# what it shows changes on main.
+# Publishes triib's website, triib.run, from site/ to GitHub Pages
+# whenever it or what it shows changes on main.
 on:
   push:
     branches: [main]

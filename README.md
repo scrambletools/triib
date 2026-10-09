@@ -8,9 +8,9 @@ listeners, routed to the computer's audio. Built in Rust with
 [prev](https://github.com/scrambletools/prev) through
 [scramble-ui](https://github.com/scrambletools/scramble-ui).
 
-Website: **[scrambletoolsllc.github.io/triib](https://scrambletoolsllc.github.io/triib/)**,
-with [a tour](https://scrambletoolsllc.github.io/triib/guide.html) and
-[the specifications](https://scrambletoolsllc.github.io/triib/specs.html).
+Website: **[triib.run](https://triib.run)**, with
+[a tour](https://triib.run/guide.html) and
+[the specifications](https://triib.run/specs.html).
 
 > **Status:** early. On Linux, macOS and Windows, triib discovers ATDECC entities, reads their
 > entity models (names, streams, clocks, Milan support) and keeps them for
