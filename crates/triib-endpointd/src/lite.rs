@@ -45,6 +45,10 @@ const GRANDMASTER_LINK: [u8; 6] = [0x8c, 0x1f, 0x64, 0x36, 0xc0, 0x04];
 /// frame, which the link-speed asymmetry counts.
 const PTP_FRAME_OCTETS: f64 = 64.0;
 
+/// How long after starting this waits before its first Pdelay_Req, so it
+/// knows first whether ptp4l runs, which an unasked-for answer would make
+/// fault.
+const START_GRACE: Duration = Duration::from_secs(3);
 /// How often a Pdelay_Req goes out, and after fallback the beacon.
 const PROBE_INTERVAL: Duration = Duration::from_secs(1);
 const BEACON_INTERVAL: Duration = Duration::from_secs(3);
@@ -138,22 +142,39 @@ fn has_endpoint_tlv(message: &[u8], start: usize) -> bool {
     false
 }
 
+/// What runs PTP on the interface besides this daemon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ptp4l {
+    Absent,
+    /// ptp4l running gPTP, peer to peer. It takes any Pdelay_Resp it did
+    /// not ask for as a fault, so this then sends no Pdelay_Req of its own.
+    Gptp,
+    /// ptp4l running the AVB Lite PTP profile, end to end.
+    Lite,
+}
+
 /// Decides between AVB and AVB Lite from the Pdelay exchange (profile
 /// 2.2): an Endpoint Declaration TLV heard, nine requests unanswered, or
 /// two responders to one request each make the fallback, which then
 /// holds. Where ptp4l runs gPTP on the interface it asks the peer itself,
-/// and ptp4l's word on the peer stands for the answers.
+/// and the answers to its requests, which this hears too, count as they
+/// would to this one's: whether ptp4l calls the peer asCapable does not,
+/// as it does not while it starts.
 pub struct Fallback {
     identity: u64,
     sequence: u16,
-    /// Whether this sends its own Pdelay_Req: when ptp4l does not.
-    probing: bool,
+    /// What else runs PTP on the interface.
+    ptp4l: Ptp4l,
     /// The request waiting for answers, and who answered it.
     waiting: Option<u16>,
     responders: Vec<[u8; 10]>,
     unanswered: u32,
-    /// Since when ptp4l has said it has no peer.
-    peerless_since: Option<Duration>,
+    /// Since when ptp4l has run gPTP, when a Pdelay_Resp to this clock last
+    /// came, whoever asked, and who answered the latest request ptp4l
+    /// sent.
+    ptp4l_since: Option<Duration>,
+    answered_at: Option<Duration>,
+    ptp4l_request: Option<(u16, Vec<[u8; 10]>)>,
     reason: Option<FallbackReason>,
     next: Duration,
     outgoing: VecDeque<Vec<u8>>,
@@ -166,13 +187,15 @@ impl Fallback {
         Fallback {
             identity,
             sequence: 0,
-            probing: false,
+            ptp4l: Ptp4l::Absent,
             waiting: None,
             responders: Vec::new(),
             unanswered: 0,
-            peerless_since: None,
+            ptp4l_since: None,
+            answered_at: None,
+            ptp4l_request: None,
             reason: configured.then_some(FallbackReason::CONFIGURED),
-            next: now,
+            next: now + START_GRACE,
             outgoing: VecDeque::new(),
         }
     }
@@ -181,19 +204,17 @@ impl Fallback {
         self.reason
     }
 
-    /// What ptp4l says of the interface: `None` when it does not run
-    /// gPTP there, which this then asks the peer itself for; else whether
-    /// it has a gPTP peer.
-    pub fn set_ptp4l(&mut self, now: Duration, peer: Option<bool>) {
-        self.probing = peer.is_none();
-        match peer {
-            Some(false) => {
-                let since = *self.peerless_since.get_or_insert(now);
-                if now.saturating_sub(since) >= PEERLESS {
-                    self.fall_back(FallbackReason::PDELAY_UNANSWERED);
-                }
-            }
-            _ => self.peerless_since = None,
+    /// What runs PTP on the interface. Where ptp4l runs gPTP, it asks the
+    /// peer and this listens; where nothing does, this asks the peer
+    /// itself; and after falling back this sends its beacon unless ptp4l
+    /// still runs gPTP.
+    pub fn set_ptp4l(&mut self, now: Duration, ptp4l: Ptp4l) {
+        self.ptp4l = ptp4l;
+        if ptp4l == Ptp4l::Gptp {
+            self.ptp4l_since.get_or_insert(now);
+        } else {
+            self.ptp4l_since = None;
+            self.ptp4l_request = None;
         }
     }
 
@@ -205,7 +226,7 @@ impl Fallback {
 
     /// Hands it a PTP message heard on the interface, after the
     /// ethertype.
-    pub fn handle_ptp(&mut self, message: &[u8]) {
+    pub fn handle_ptp(&mut self, now: Duration, message: &[u8]) {
         let Some(&first) = message.first() else {
             return;
         };
@@ -223,31 +244,54 @@ impl Fallback {
         }
         let sequence = u16::from_be_bytes([message[30], message[31]]);
         let requester = u64::from_be_bytes(message[44..52].try_into().unwrap_or_default());
-        if self.waiting != Some(sequence) || requester != self.identity {
+        if requester != self.identity {
             return;
         }
+        self.answered_at = Some(now);
         let mut responder = [0; 10];
         responder.copy_from_slice(&message[20..30]);
-        if !self.responders.contains(&responder) {
-            self.responders.push(responder);
+        let responders = if self.waiting == Some(sequence) {
+            &mut self.responders
+        } else if self.ptp4l == Ptp4l::Gptp {
+            // ptp4l's request: who answered it.
+            let request = self.ptp4l_request.get_or_insert((sequence, Vec::new()));
+            if request.0 != sequence {
+                *request = (sequence, Vec::new());
+            }
+            &mut request.1
+        } else {
+            return;
+        };
+        if !responders.contains(&responder) {
+            responders.push(responder);
         }
-        if self.responders.len() >= 2 {
+        if responders.len() >= 2 {
             self.fall_back(FallbackReason::MULTIPLE_RESPONDERS);
         }
     }
 
     pub fn handle_timeout(&mut self, now: Duration) {
+        // Where ptp4l asks, nine requests unanswered are 10 s without an
+        // answer to it, counted from when ptp4l was first seen.
+        if let Some(since) = self.ptp4l_since {
+            let last = self.answered_at.map_or(since, |at| at.max(since));
+            if now.saturating_sub(last) >= PEERLESS {
+                self.fall_back(FallbackReason::PDELAY_UNANSWERED);
+            }
+        }
         if now < self.next {
             return;
         }
         if self.reason.is_some() {
             // An endpoint that fell back says so every 3 s, for peers
-            // still in gPTP (profile 2.3).
-            self.send_request();
+            // still in gPTP (profile 2.3), once ptp4l no longer does.
+            if self.ptp4l != Ptp4l::Gptp {
+                self.send_request();
+            }
             self.next = now + BEACON_INTERVAL;
             return;
         }
-        if !self.probing {
+        if self.ptp4l != Ptp4l::Absent {
             self.waiting = None;
             self.next = now + PROBE_INTERVAL;
             return;
@@ -435,7 +479,7 @@ mod tests {
             while let Some(request) = fallback.poll_transmit() {
                 let sequence = u16::from_be_bytes([request[30], request[31]]);
                 for message in answer(sequence) {
-                    fallback.handle_ptp(&message);
+                    fallback.handle_ptp(now, &message);
                 }
             }
         }
@@ -502,7 +546,7 @@ mod tests {
     #[test]
     fn a_single_bridge_answering_keeps_avb() {
         let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
-        fallback.set_ptp4l(Duration::ZERO, None);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Absent);
         run(&mut fallback, 0, 30, |sequence| {
             vec![response(0x0001_f2ff_feff_3b14, IDENTITY, sequence, false)]
         });
@@ -512,18 +556,19 @@ mod tests {
     #[test]
     fn nine_unanswered_requests_fall_back() {
         let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
-        fallback.set_ptp4l(Duration::ZERO, None);
-        run(&mut fallback, 0, 8, |_| Vec::new());
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Absent);
+        // The first request goes out after the start's grace of 3 s.
+        run(&mut fallback, 0, 11, |_| Vec::new());
         assert_eq!(fallback.reason(), None);
-        run(&mut fallback, 8, 11, |_| Vec::new());
+        run(&mut fallback, 11, 14, |_| Vec::new());
         assert_eq!(fallback.reason(), Some(FallbackReason::PDELAY_UNANSWERED));
     }
 
     #[test]
     fn two_responders_or_an_endpoint_fall_back() {
         let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
-        fallback.set_ptp4l(Duration::ZERO, None);
-        run(&mut fallback, 0, 3, |sequence| {
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Absent);
+        run(&mut fallback, 0, 6, |sequence| {
             vec![
                 response(0x1111_11ff_fe11_1111, IDENTITY, sequence, false),
                 response(0x2222_22ff_fe22_2222, IDENTITY, sequence, false),
@@ -532,25 +577,61 @@ mod tests {
         assert_eq!(fallback.reason(), Some(FallbackReason::MULTIPLE_RESPONDERS));
 
         let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
-        fallback.set_ptp4l(Duration::ZERO, Some(true));
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Gptp);
         // Another endpoint's request, heard through a plain switch.
-        fallback.handle_ptp(&pdelay_request(0x3333_33ff_fe33_3333, 1));
+        fallback.handle_ptp(Duration::ZERO, &pdelay_request(0x3333_33ff_fe33_3333, 1));
         assert_eq!(fallback.reason(), Some(FallbackReason::ENDPOINT_TLV));
     }
 
+    /// Where ptp4l runs, this sends nothing of its own and goes by the
+    /// answers to ptp4l's requests, asCapable or not: a bridge answering
+    /// keeps AVB, two responders to one request fall back, and so do 10 s
+    /// without an answer.
     #[test]
-    fn where_ptp4l_runs_it_neither_asks_nor_falls_back_while_ptp4l_has_a_peer() {
+    fn where_ptp4l_runs_it_goes_by_the_answers_to_ptp4l() {
+        const BRIDGE: u64 = 0x0001_f2ff_feff_3b14;
         let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
-        for second in 0..30 {
-            fallback.set_ptp4l(Duration::from_secs(second), Some(true));
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Gptp);
+        for second in 0..30u16 {
+            let now = Duration::from_secs(u64::from(second));
+            fallback.handle_timeout(now);
+            assert_eq!(fallback.poll_transmit(), None);
+            // ptp4l's request `second`, which the bridge answers.
+            fallback.handle_ptp(now, &response(BRIDGE, IDENTITY, second, false));
         }
-        run(&mut fallback, 0, 30, |_| Vec::new());
         assert_eq!(fallback.reason(), None);
-        // Without a peer for 10 s, it falls back.
+        // The bridge stops answering: 10 s later, the fallback.
         for second in 30..41 {
-            fallback.set_ptp4l(Duration::from_secs(second), Some(false));
+            fallback.handle_timeout(Duration::from_secs(second));
         }
         assert_eq!(fallback.reason(), Some(FallbackReason::PDELAY_UNANSWERED));
+
+        // Two responders to one of ptp4l's requests.
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Gptp);
+        fallback.handle_ptp(Duration::ZERO, &response(BRIDGE, IDENTITY, 4, false));
+        assert_eq!(fallback.reason(), None);
+        fallback.handle_ptp(
+            Duration::ZERO,
+            &response(0x2222_22ff_fe22_2222, IDENTITY, 4, false),
+        );
+        assert_eq!(fallback.reason(), Some(FallbackReason::MULTIPLE_RESPONDERS));
+    }
+
+    /// After falling back, no beacon goes out while ptp4l still runs gPTP:
+    /// an answer to it would make ptp4l fault. Once ptp4l runs AVB Lite's
+    /// profile, the beacon goes out again.
+    #[test]
+    fn no_beacon_while_ptp4l_runs_gptp() {
+        let mut fallback = Fallback::new(IDENTITY, true, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Gptp);
+        for second in 0..10 {
+            fallback.handle_timeout(Duration::from_secs(second));
+        }
+        assert_eq!(fallback.poll_transmit(), None);
+        fallback.set_ptp4l(Duration::from_secs(10), Ptp4l::Lite);
+        fallback.handle_timeout(Duration::from_secs(13));
+        assert!(fallback.poll_transmit().is_some());
     }
 
     #[test]
@@ -558,7 +639,8 @@ mod tests {
         let mut fallback = Fallback::new(IDENTITY, true, Duration::ZERO);
         assert_eq!(fallback.reason(), Some(FallbackReason::CONFIGURED));
         let mut beacons = 0;
-        for tick in 0..90 {
+        // At 3, 6 and 9 s, the first after the start's grace.
+        for tick in 0..120 {
             fallback.handle_timeout(Duration::from_millis(tick * 100));
             while let Some(beacon) = fallback.poll_transmit() {
                 assert!(has_endpoint_tlv(&beacon, PDELAY_LEN));

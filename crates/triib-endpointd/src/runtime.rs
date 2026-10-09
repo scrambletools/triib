@@ -31,7 +31,7 @@ use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 
 use crate::config::{Config, EndpointConfig, Kind, LiteChoice, binding_text};
 use crate::gptp;
-use crate::lite::{self, Declared, Fallback};
+use crate::lite::{self, Declared, Fallback, Ptp4l};
 use crate::profile::{self, Profile};
 use crate::status::{DaemonStatus, EndpointStatus, status_path};
 
@@ -887,7 +887,7 @@ impl Runtime {
                 }
             }
             Input::Ptp(bytes) => {
-                self.fallback.handle_ptp(&bytes);
+                self.fallback.handle_ptp(since, &bytes);
                 if let Some((grandmaster, speed)) = lite::grandmaster_link(&bytes)
                     && self.grandmaster_links.insert(grandmaster, speed) != Some(speed)
                 {
@@ -900,20 +900,12 @@ impl Runtime {
                 // ptp4l on another interface says nothing of this one: its
                 // clock identity comes from that interface's address.
                 let status = status.filter(|status| status.own_clock == self.own_clock);
-                // ptp4l's word on the gPTP peer counts only while it runs
-                // gPTP.
-                self.fallback.set_ptp4l(
-                    since,
-                    status
-                        .as_ref()
-                        .filter(|status| !status.end_to_end)
-                        .map(|status| status.gptp.as_capable),
-                );
                 if status.is_none() && self.ptp_status.is_none() && !self.gptp_text.ends_with("yet")
                 {
                     return;
                 }
                 self.ptp_status.clone_from(&status);
+                self.update_ptp4l();
                 self.update_correction();
                 self.gptp_text = match &status {
                     Some(status) => format!(
@@ -965,6 +957,7 @@ impl Runtime {
                 if came_up && self.lite.is_some() && self.config.avb_lite == LiteChoice::Auto {
                     self.leave_lite();
                 }
+                self.update_ptp4l();
                 self.steer_profile();
             }
         }
@@ -1922,6 +1915,21 @@ impl Runtime {
         }
         self.update_lite_status();
         self.steer_profile();
+    }
+
+    /// Tells the fallback what runs PTP on the interface: what ptp4l
+    /// answers, else what triib's unit runs, as ptp4l does not answer
+    /// while its unit starts it.
+    fn update_ptp4l(&mut self) {
+        let since = self.elapsed();
+        let ptp4l = match (&self.ptp_status, self.link.and_then(|link| link.unit)) {
+            (Some(status), _) if status.end_to_end => Ptp4l::Lite,
+            (Some(_), _) => Ptp4l::Gptp,
+            (None, Some(Profile::Gptp)) => Ptp4l::Gptp,
+            (None, Some(Profile::Lite)) => Ptp4l::Lite,
+            (None, None) => Ptp4l::Absent,
+        };
+        self.fallback.set_ptp4l(since, ptp4l);
     }
 
     /// Starts the ptp4l unit for the profile the endpoints run, where one
