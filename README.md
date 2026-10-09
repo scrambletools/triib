@@ -80,11 +80,28 @@ sink = "default"     # or "discard", or an output's name
 ```
 
 Where no AVB bridge answers on the interface, the endpoints fall back to
-AVB Lite as its profile describes: CVU SRP declarations in place of MSRP,
-and streams unicast to each listener. `avb_lite = "off"` at the top of
-the file keeps them on AVB, and `"on"` puts them on AVB Lite from the
-start. ptp4l cannot switch to AVB Lite's PTP profile by itself; it has
-to be started with a configuration for it.
+[AVB Lite](https://github.com/avbcommunity/profiles/blob/main/avb_lite.md),
+a working if degraded path over switches that are not AVB bridges: CVU
+SRP declarations in place of MSRP, and streams unicast to each listener.
+At the top of the file:
+
+- `avb_lite = "off"` keeps them on AVB, and `"on"` puts them on AVB Lite
+  from the start.
+- `unicast_fanout` sets how many listeners a talker serves unicast, 2 if
+  not given. A listener beyond that is refused with Talker Failed,
+  unless `multicast_escalation = true` lets the talker move the stream
+  to multicast, which non-AVB switches flood to every port; allow it
+  only where the media VLAN is confined. Controllers can set it too
+  (`triib-cli lite-config`).
+- `media_vlan` sets the VLAN of AVB Lite's streams, 2 if not given, or 0
+  for a priority tag only on switches whose VLANs cannot be set up.
+
+ptp4l cannot switch to AVB Lite's PTP profile by itself. The Linux
+packages install `triib-ptp4l-gptp@<interface>` and
+`triib-ptp4l-lite@<interface>` units and a polkit rule; with ptp4l run
+by `systemctl enable --now triib-ptp4l-gptp@enp2s0`, the daemon moves it
+to the AVB Lite profile when its endpoints fall back, and back when the
+link comes up again.
 
 ## Building
 

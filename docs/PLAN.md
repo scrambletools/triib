@@ -730,15 +730,30 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   - The Linux packages carry `triib-endpointd` with `CAP_NET_RAW`.
   - Checked with AM824 both ways against a Milan endpoint and into
     macOS's AVB listener, which counted no sequence mismatches.
+  - AVB Lite's revised profile (avbcommunity/profiles ea25611, checked
+    2026-10-08 on the LAN interface against this computer's own
+    endpoints and an ESP): the Endpoint Declaration TLV as type 0x8000;
+    CVU SRP on MRP's timers, unanswered; the declared destination
+    showing unicast or multicast; escalation to multicast only where
+    allowed (endpoints.toml or SET_LITE_CONFIG, which triib-cli
+    lite-config sends), with the frames moving 200 ms after the
+    declaration; a listener refused alone with a unicast Talker Failed;
+    listeners admitting against their link; and a configurable fan-out
+    and media VLAN. The media clock's correction for the grandmaster's
+    link speed, from its Grandmaster Link TLV, is in but waits for an ESP
+    grandmaster that announces it.
+  - ptp4l switched between gPTP and the AVB Lite PTP profile through
+    triib's systemd units and polkit rule, back to gPTP when the link
+    comes up again; the units are packaged but not yet run on the bench.
 - To do:
-  - AVB Lite's PTP profile. linuxptp cannot switch: ptp4l reads its
-    profile (delay mechanism, transportSpecific, intervals, domain) at
-    start, has no reload, and pmc cannot set those; it also cannot send
-    the Endpoint Declaration TLV or beacons, or tag PTP frames VLAN 0
-    priority 7. Either the packages ship a gPTP and an AVB Lite ptp4l
-    configuration with a systemd template unit and a polkit rule the
-    daemon switches between (a few seconds of relock), or `avb-ptp`
-    becomes our own engine with both profiles, as esp_ptp has.
+  - Run the ptp4l profile switch on the bench (an install action in the
+    root helper is ready for review).
+  - Endpoints keeping EEE and PAUSE off their own link, which needs
+    privileges the daemon does not have.
+  - Unicast delay requests (ptp4l's hybrid_e2e) once the ESP answers
+    them, and the link-speed correction against an ESP grandmaster.
+  - The linuxptp organization TLV tables (v2 of the series), then the
+    Endpoint Declaration TLV from ptp4l in gPTP mode.
   - Sinc resampling (`rubato`) if cubic ever falls short.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
