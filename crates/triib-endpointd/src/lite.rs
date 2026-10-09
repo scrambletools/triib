@@ -33,6 +33,18 @@ const ENDPOINT_TLV: [u8; 12] = [
 const ORGANIZATION_EXTENSION_DO_NOT_PROPAGATE: u16 = 0x8000;
 const ORGANIZATION_EXTENSION: u16 = 0x0003;
 
+/// Where PTP's other messages go, Announce among them.
+pub const PTP_DESTINATION: MacAddress = MacAddress([0x01, 0x1b, 0x19, 0x00, 0x00, 0x00]);
+/// Announce's message type, and its octets before any TLV.
+const ANNOUNCE: u8 = 0xb;
+const ANNOUNCE_LEN: usize = 64;
+/// The Grandmaster Link TLV's identifiers (profile 5): the AVB Lite MA-S
+/// and sub-id 0x004.
+const GRANDMASTER_LINK: [u8; 6] = [0x8c, 0x1f, 0x64, 0x36, 0xc0, 0x04];
+/// The octets of a Sync or Delay_Req frame on the wire, a minimum-size
+/// frame, which the link-speed asymmetry counts.
+const PTP_FRAME_OCTETS: f64 = 64.0;
+
 /// How often a Pdelay_Req goes out, and after fallback the beacon.
 const PROBE_INTERVAL: Duration = Duration::from_secs(1);
 const BEACON_INTERVAL: Duration = Duration::from_secs(3);
@@ -58,6 +70,42 @@ pub fn pdelay_request(identity: u64, sequence: u16) -> Vec<u8> {
     message[32] = 5;
     message.extend_from_slice(&ENDPOINT_TLV);
     message
+}
+
+/// The grandmaster an Announce names and the link speed in Mb/s its
+/// Grandmaster Link TLV gives (profile 5), when it carries one.
+pub fn grandmaster_link(message: &[u8]) -> Option<(u64, u32)> {
+    if message.first()? & 0x0f != ANNOUNCE || message.len() < ANNOUNCE_LEN {
+        return None;
+    }
+    let grandmaster = u64::from_be_bytes(message[53..61].try_into().ok()?);
+    let length = usize::from(u16::from_be_bytes([message[2], message[3]])).min(message.len());
+    let mut at = ANNOUNCE_LEN;
+    while at + 4 <= length {
+        let kind = u16::from_be_bytes([message[at], message[at + 1]]);
+        let size = usize::from(u16::from_be_bytes([message[at + 2], message[at + 3]]));
+        let body = message.get(at + 4..at + 4 + size)?;
+        if kind == ORGANIZATION_EXTENSION_DO_NOT_PROPAGATE
+            && body.len() >= 10
+            && body[..6] == GRANDMASTER_LINK
+        {
+            let speed = u32::from_be_bytes(body[6..10].try_into().ok()?);
+            return (speed > 0).then_some((grandmaster, speed));
+        }
+        at += 4 + size;
+    }
+    None
+}
+
+/// How much longer, in nanoseconds, a minimum-size frame takes from a
+/// grandmaster linked at `grandmaster` Mb/s to an endpoint linked at
+/// `local` Mb/s than back, halved: PTP's delayAsymmetry (IEEE 1588-2019,
+/// 7.4.2), which store-and-forward switches make of the two links'
+/// speeds whatever lies between (profile 5). An endpoint following the
+/// grandmaster settles that much behind it.
+pub fn link_asymmetry(grandmaster: u32, local: u32) -> i64 {
+    let held = |megabits: u32| PTP_FRAME_OCTETS * 8.0 * 1000.0 / f64::from(megabits.max(1));
+    ((held(grandmaster) - held(local)) / 2.0).round() as i64
 }
 
 /// Whether a PTP message's TLVs, after its first `start` octets, hold
@@ -391,6 +439,47 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// An Announce from `grandmaster` with a Grandmaster Link TLV giving
+    /// `speed`, after a TLV of another kind.
+    fn announce(grandmaster: u64, speed: u32) -> Vec<u8> {
+        let mut message = vec![0; ANNOUNCE_LEN];
+        message[0] = ANNOUNCE;
+        message[1] = 0x02;
+        message[53..61].copy_from_slice(&grandmaster.to_be_bytes());
+        // A path trace TLV, then the Grandmaster Link TLV.
+        message.extend_from_slice(&[0x00, 0x08, 0x00, 0x08]);
+        message.extend_from_slice(&grandmaster.to_be_bytes());
+        message.extend_from_slice(&[0x80, 0x00, 0x00, 0x0a]);
+        message.extend_from_slice(&GRANDMASTER_LINK);
+        message.extend_from_slice(&speed.to_be_bytes());
+        let length = message.len() as u16;
+        message[2..4].copy_from_slice(&length.to_be_bytes());
+        message
+    }
+
+    #[test]
+    fn an_announce_tells_the_grandmasters_link_speed() {
+        let message = announce(0xe8f6_0aff_fee0_9220, 100);
+        assert_eq!(
+            grandmaster_link(&message),
+            Some((0xe8f6_0aff_fee0_9220, 100))
+        );
+        // Without the TLV, or from another kind of message, nothing.
+        assert_eq!(grandmaster_link(&message[..ANNOUNCE_LEN]), None);
+        assert_eq!(grandmaster_link(&pdelay_request(IDENTITY, 1)), None);
+    }
+
+    /// The profile's example: a 1 Gb/s endpoint following a 100 Mb/s
+    /// grandmaster settles 2.3 us behind it; the other way round, ahead;
+    /// at one speed, neither.
+    #[test]
+    fn mixed_link_speeds_make_an_asymmetry() {
+        assert_eq!(link_asymmetry(100, 1000), 2304);
+        assert_eq!(link_asymmetry(1000, 100), -2304);
+        assert_eq!(link_asymmetry(1000, 1000), 0);
+        assert_eq!(link_asymmetry(100, 10_000), 2534);
     }
 
     #[test]

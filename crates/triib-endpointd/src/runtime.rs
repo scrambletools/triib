@@ -308,6 +308,10 @@ pub struct Runtime {
     own_clock: ClockIdentity,
     link_speed: u32,
     ptp_status: Option<gptp::Status>,
+    /// The link speed each grandmaster announced, in Mb/s, and the
+    /// correction for it the media clock carries, in nanoseconds.
+    grandmaster_links: HashMap<u64, u32>,
+    correction: i64,
     /// CVU SRP messages this computer sent its own endpoints, whether to a
     /// group address, taken once the update that sent them is done.
     local_cvu: VecDeque<(bool, Vec<u8>)>,
@@ -464,6 +468,7 @@ impl Runtime {
         mvrp.join_multicast(avb_mrp::MVRP_DESTINATION)?;
         let ptp = Arc::new(Socket::open(&interface, lite::PTP_ETHERTYPE)?);
         ptp.join_multicast(lite::PDELAY_DESTINATION)?;
+        ptp.join_multicast(lite::PTP_DESTINATION)?;
 
         let (sender, inputs) = mpsc::channel();
         read_into(
@@ -561,6 +566,8 @@ impl Runtime {
             link_speed,
             ptp_status: None,
             local_cvu: VecDeque::new(),
+            grandmaster_links: HashMap::new(),
+            correction: 0,
             link: None,
             switched_at: None,
             clock,
@@ -879,7 +886,14 @@ impl Runtime {
                     endpoint.entity.handle_frame(now, source, &bytes);
                 }
             }
-            Input::Ptp(bytes) => self.fallback.handle_ptp(&bytes),
+            Input::Ptp(bytes) => {
+                self.fallback.handle_ptp(&bytes);
+                if let Some((grandmaster, speed)) = lite::grandmaster_link(&bytes)
+                    && self.grandmaster_links.insert(grandmaster, speed) != Some(speed)
+                {
+                    self.update_correction();
+                }
+            }
             Input::Msrp(bytes) => self.msrp_participant.handle_pdu(since, &bytes),
             Input::Mvrp(bytes) => self.mvrp_participant.handle_pdu(since, &bytes),
             Input::Gptp(status) => {
@@ -900,6 +914,7 @@ impl Runtime {
                     return;
                 }
                 self.ptp_status.clone_from(&status);
+                self.update_correction();
                 self.gptp_text = match &status {
                     Some(status) => format!(
                         "grandmaster {}, {}",
@@ -2230,6 +2245,28 @@ impl Runtime {
             if settled {
                 self.update_listener(index);
             }
+        }
+    }
+
+    /// Corrects the media clock for the asymmetry of the grandmaster's and
+    /// this computer's link speeds, where ptp4l runs the AVB Lite PTP
+    /// profile and the grandmaster announces its speed (profile 5); else
+    /// for nothing.
+    fn update_correction(&mut self) {
+        let wanted = match &self.ptp_status {
+            Some(status) if status.end_to_end && self.link_speed > 0 => self
+                .grandmaster_links
+                .get(&status.gptp.grandmaster.0)
+                .map_or(0, |speed| lite::link_asymmetry(*speed, self.link_speed)),
+            _ => 0,
+        };
+        if wanted != self.correction {
+            self.correction = wanted;
+            self.clock.set_correction(wanted);
+            log(format!(
+                "PTP: correcting {wanted} ns for the grandmaster's link speed against {} Mb/s here",
+                self.link_speed
+            ));
         }
     }
 

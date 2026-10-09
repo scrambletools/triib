@@ -42,6 +42,10 @@ pub struct MediaClock {
     taken: AtomicI64,
     /// The offset comes from a hardware clock, not a guess.
     locked: AtomicBool,
+    /// Nanoseconds added to the hardware clock's time to give gPTP time:
+    /// what PTP's measurement cannot see, such as the asymmetry of links
+    /// at different speeds.
+    correction: AtomicI64,
 }
 
 impl MediaClock {
@@ -62,6 +66,7 @@ impl MediaClock {
             measured: AtomicI64::new(i64::MIN),
             taken: AtomicI64::new(0),
             locked: AtomicBool::new(false),
+            correction: AtomicI64::new(0),
         };
         clock.refresh(true);
         Ok(clock)
@@ -113,18 +118,27 @@ impl MediaClock {
     /// gPTP time now, in nanoseconds.
     pub fn now(&self) -> i64 {
         self.refresh(false);
-        monotonic_now().as_nanos() as i64 + self.offset.load(Ordering::Relaxed)
+        monotonic_now().as_nanos() as i64
+            + self.offset.load(Ordering::Relaxed)
+            + self.correction.load(Ordering::Relaxed)
     }
 
     /// gPTP time less monotonic time, in nanoseconds.
     pub fn offset(&self) -> i64 {
         self.refresh(false);
-        self.offset.load(Ordering::Relaxed)
+        self.offset.load(Ordering::Relaxed) + self.correction.load(Ordering::Relaxed)
+    }
+
+    /// Adds `nanoseconds` to the hardware clock's time from now on, in
+    /// place of what was added before.
+    pub fn set_correction(&self, nanoseconds: i64) {
+        self.correction.store(nanoseconds, Ordering::Relaxed);
     }
 
     /// The monotonic time at which gPTP time reaches `gptp` nanoseconds.
     pub fn monotonic_at(&self, gptp: i64) -> Duration {
-        let monotonic = gptp - self.offset.load(Ordering::Relaxed);
+        let monotonic =
+            gptp - self.offset.load(Ordering::Relaxed) - self.correction.load(Ordering::Relaxed);
         Duration::from_nanos(monotonic.max(0) as u64)
     }
 }
