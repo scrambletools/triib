@@ -7,10 +7,11 @@ Before=triib-ptp4l-gptp@%i.service triib-ptp4l-lite@%i.service
 # The AVB Lite profile asks an endpoint to keep Energy-Efficient Ethernet
 # and PAUSE off its own link. Once a boot is enough: the interface keeps
 # them until its driver starts again, which triib-endpointd notices and
-# runs this again for. Changing them renegotiates the link, after which
-# some drivers (atlantic) leave their hardware timestamps on received PTP
-# frames, so where they changed on an interface that is up, the interface
-# goes down and up again to start its driver afresh.
+# runs this again for. Drivers that cannot force PAUSE (r8169) keep
+# negotiating it, offering none. Changing them renegotiates the link,
+# after which some drivers (atlantic) leave their hardware timestamps on
+# received PTP frames, so where they changed on an interface that is up,
+# the interface goes down and up again to start its driver afresh.
 [Service]
 Type=oneshot
 RemainAfterExit=yes
@@ -18,7 +19,8 @@ ExecStart=/bin/sh -c '\
     state() { ethtool --show-eee "$$1"; ethtool --show-pause "$$1"; } 2>/dev/null; \
     before=$$(state "$$1"); \
     ethtool --set-eee "$$1" eee off 2>/dev/null; \
-    ethtool --pause "$$1" autoneg off rx off tx off 2>/dev/null; \
+    ethtool --pause "$$1" autoneg off rx off tx off 2>/dev/null \
+        || ethtool --pause "$$1" rx off tx off 2>/dev/null; \
     [ "$$(state "$$1")" = "$$before" ] && exit 0; \
     [ $$(( $$(cat "/sys/class/net/$$1/flags") & 1 )) -eq 1 ] || exit 0; \
     ip link set "$$1" down && ip link set "$$1" up' sh %i
