@@ -744,12 +744,10 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     grandmaster that announces it.
   - ptp4l switched between gPTP and the AVB Lite PTP profile through
     triib's systemd units and polkit rule, back to gPTP when the link
-    comes up again; the units are packaged but not yet run on the bench.
+    comes up again, run on the bench.
+  - EEE and PAUSE kept off the endpoint's link by a boot unit,
+    `triib-link@`, which the daemon runs again should they come back.
 - To do:
-  - Run the ptp4l profile switch on the bench (an install action in the
-    root helper is ready for review).
-  - Endpoints keeping EEE and PAUSE off their own link, which needs
-    privileges the daemon does not have.
   - Unicast delay requests (ptp4l's hybrid_e2e) once the ESP answers
     them, and the link-speed correction against an ESP grandmaster.
   - The linuxptp organization TLV tables (v2 of the series), then the

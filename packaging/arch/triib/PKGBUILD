@@ -9,6 +9,7 @@ license=('MIT OR Apache-2.0')
 depends=('alsa-lib' 'gcc-libs' 'glibc' 'libcap' 'libxkbcommon' 'vulkan-icd-loader' 'wayland')
 makedepends=('cargo')
 optdepends=('linuxptp: gPTP for talkers and listeners on this computer'
+            'ethtool: EEE and PAUSE off on their link, as AVB Lite asks'
             'libx11: running under X11'
             'libxcursor: running under X11'
             'libxi: running under X11')

@@ -48,6 +48,121 @@ pub(crate) fn index_of(name: &str) -> Option<i32> {
         .ok()
 }
 
+/// What an interface does about Energy-Efficient Ethernet and PAUSE, as
+/// its driver reports it. The AVB Lite profile asks endpoints to keep both
+/// off their own link.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LinkPower {
+    /// EEE is enabled, so the interface advertises it and its link may
+    /// sleep between frames.
+    pub eee: bool,
+    /// The interface negotiates PAUSE, or sends or acts on it.
+    pub pause: bool,
+}
+
+/// What the interface named `name` does about EEE and PAUSE, read without
+/// privileges. What the driver does not support reads as off.
+#[cfg(target_os = "linux")]
+pub fn link_power(name: &str) -> std::io::Result<LinkPower> {
+    ethtool::link_power(name)
+}
+
+#[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
+mod ethtool {
+    use std::io;
+    use std::mem::zeroed;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+
+    use super::LinkPower;
+
+    /// The ethtool commands read here (linux/ethtool.h).
+    const GET_PAUSE: u32 = 0x12;
+    const GET_EEE: u32 = 0x44;
+
+    /// `struct ethtool_pauseparam`.
+    #[repr(C)]
+    #[derive(Default)]
+    struct Pause {
+        cmd: u32,
+        autoneg: u32,
+        rx_pause: u32,
+        tx_pause: u32,
+    }
+
+    /// `struct ethtool_eee`.
+    #[repr(C)]
+    #[derive(Default)]
+    struct Eee {
+        cmd: u32,
+        supported: u32,
+        advertised: u32,
+        lp_advertised: u32,
+        eee_active: u32,
+        eee_enabled: u32,
+        tx_lpi_enabled: u32,
+        tx_lpi_timer: u32,
+        reserved: [u32; 2],
+    }
+
+    pub fn link_power(name: &str) -> io::Result<LinkPower> {
+        let bytes = name.as_bytes();
+        if bytes.is_empty() || bytes.len() >= libc::IFNAMSIZ || bytes.contains(&0) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "no such interface name",
+            ));
+        }
+        // SAFETY: socket takes plain integers; the result is checked.
+        let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_CLOEXEC, 0) };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: fd is a new socket nothing else owns.
+        let socket = unsafe { OwnedFd::from_raw_fd(fd) };
+        let mut pause = Pause {
+            cmd: GET_PAUSE,
+            ..Pause::default()
+        };
+        let mut eee = Eee {
+            cmd: GET_EEE,
+            ..Eee::default()
+        };
+        let pause = match ask(&socket, bytes, (&raw mut pause).cast()) {
+            Ok(()) => pause.autoneg != 0 || pause.rx_pause != 0 || pause.tx_pause != 0,
+            Err(error) if unsupported(&error) => false,
+            Err(error) => return Err(error),
+        };
+        let eee = match ask(&socket, bytes, (&raw mut eee).cast()) {
+            Ok(()) => eee.eee_enabled != 0,
+            Err(error) if unsupported(&error) => false,
+            Err(error) => return Err(error),
+        };
+        Ok(LinkPower { eee, pause })
+    }
+
+    fn unsupported(error: &io::Error) -> bool {
+        matches!(error.raw_os_error(), Some(libc::EOPNOTSUPP | libc::EINVAL))
+    }
+
+    /// Hands the interface's driver the ethtool command `data` points to.
+    fn ask(socket: &OwnedFd, name: &[u8], data: *mut libc::c_char) -> io::Result<()> {
+        // SAFETY: ifreq is plain data, valid when zeroed.
+        let mut request: libc::ifreq = unsafe { zeroed() };
+        for (place, &byte) in request.ifr_name.iter_mut().zip(name) {
+            *place = byte as libc::c_char;
+        }
+        request.ifr_ifru.ifru_data = data;
+        // SAFETY: `request` is a valid ifreq whose data points to an ethtool
+        // command struct of the size its command reads, both living through
+        // the call.
+        if unsafe { libc::ioctl(socket.as_raw_fd(), libc::SIOCETHTOOL, &raw mut request) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+}
+
 #[cfg(target_os = "linux")]
 mod platform {
     use std::fs;

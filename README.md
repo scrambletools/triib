@@ -103,6 +103,13 @@ by `systemctl enable --now triib-ptp4l-gptp@enp2s0`, the daemon moves it
 to the AVB Lite profile when its endpoints fall back, and back when the
 link comes up again.
 
+AVB Lite also asks for Energy-Efficient Ethernet and PAUSE off the
+endpoint's link. The `triib-link@<interface>` unit turns them off with
+`ethtool`; the ptp4l units pull it in, or
+`systemctl enable --now triib-link@enp2s0` runs it at every boot. Should
+they come back on, as after the driver starts again, the daemon runs the
+unit once more.
+
 ## Building
 
 ```

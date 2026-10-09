@@ -1,0 +1,18 @@
+[Unit]
+Description=EEE and PAUSE off on %i for triib
+Documentation=man:ethtool(8)
+After=sys-subsystem-net-devices-%i.device
+Before=triib-ptp4l-gptp@%i.service triib-ptp4l-lite@%i.service
+
+# The AVB Lite profile asks an endpoint to keep Energy-Efficient Ethernet
+# and PAUSE off its own link. Once a boot is enough: the interface keeps
+# them until its driver starts again, which triib-endpointd notices and
+# runs this again for. Changing them renegotiates the link.
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=-ethtool --set-eee %i eee off
+ExecStart=-ethtool --pause %i autoneg off rx off tx off
+
+[Install]
+WantedBy=multi-user.target

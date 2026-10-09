@@ -1,6 +1,7 @@
 // Lets the person at the computer start and stop triib's two ptp4l
 // units, as triib-endpointd does when its talkers and listeners fall
-// back to AVB Lite and when the link comes up again.
+// back to AVB Lite and when the link comes up again, and run its link
+// unit again, which keeps EEE and PAUSE off.
 polkit.addRule(function (action, subject) {
     if (action.id !== "org.freedesktop.systemd1.manage-units" ||
         !subject.local || !subject.active) {
@@ -8,7 +9,7 @@ polkit.addRule(function (action, subject) {
     }
     var unit = action.lookup("unit") || "";
     var verb = action.lookup("verb");
-    if (/^triib-ptp4l-(gptp|lite)@[A-Za-z0-9_.-]+\.service$/.test(unit) &&
+    if (/^triib-(ptp4l-gptp|ptp4l-lite|link)@[A-Za-z0-9_.-]+\.service$/.test(unit) &&
         (verb === "start" || verb === "stop" || verb === "restart")) {
         return polkit.Result.YES;
     }

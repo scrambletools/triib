@@ -75,6 +75,11 @@ const FAILURE_RESOURCES: u8 = 2;
 /// The least time between starting one ptp4l unit and the next, so a
 /// profile switch has time to show.
 const SWITCH_AGAIN: Duration = Duration::from_secs(30);
+/// The least time between runs of the link unit, which renegotiates the
+/// link each time.
+const LINK_AGAIN: Duration = Duration::from_secs(600);
+/// How long the link unit has before the daemon looks again.
+const LINK_SETTLE: Duration = Duration::from_secs(5);
 
 /// What the sockets and ptp4l hand the runtime.
 enum Input {
@@ -319,6 +324,8 @@ pub struct Runtime {
     /// daemon last started one.
     link: Option<profile::Link>,
     switched_at: Option<Duration>,
+    /// When the daemon last ran the link unit again.
+    link_fixed_at: Option<Duration>,
     clock: Arc<MediaClock>,
     /// The talker declarations registered, by stream ID.
     talkers: HashMap<u64, TalkerDeclaration>,
@@ -570,6 +577,7 @@ impl Runtime {
             correction: 0,
             link: None,
             switched_at: None,
+            link_fixed_at: None,
             clock,
             talkers: HashMap::new(),
             ready_remotely: HashMap::new(),
@@ -959,6 +967,7 @@ impl Runtime {
                 }
                 self.update_ptp4l();
                 self.steer_profile();
+                self.keep_link_power(last.and_then(|last| last.power));
             }
         }
     }
@@ -1915,6 +1924,59 @@ impl Runtime {
         }
         self.update_lite_status();
         self.steer_profile();
+    }
+
+    /// Keeps EEE and PAUSE off the link, as the AVB Lite profile asks (6):
+    /// should the interface have them on, as after its driver starts
+    /// again, runs the link unit once more, at most every ten minutes;
+    /// and says so when they go off.
+    fn keep_link_power(&mut self, before: Option<avb_net::LinkPower>) {
+        let Some(power) = self.link.and_then(|link| link.power) else {
+            return;
+        };
+        let on = power.eee || power.pause;
+        let was_on = before.is_some_and(|before| before.eee || before.pause);
+        if !on {
+            if was_on {
+                log(format!("{}: EEE and PAUSE are off", self.interface));
+            }
+            return;
+        }
+        if self.config.avb_lite == LiteChoice::Off {
+            return;
+        }
+        let since = self.elapsed();
+        if self.link_fixed_at.is_some_and(|at| since < at + LINK_AGAIN) {
+            return;
+        }
+        self.link_fixed_at = Some(since);
+        let what = match (power.eee, power.pause) {
+            (true, true) => "EEE and PAUSE are",
+            (true, false) => "EEE is",
+            _ => "PAUSE is",
+        };
+        let unit = profile::link_unit(&self.interface);
+        log(format!(
+            "{}: {what} on, which AVB Lite asks to be off; running {unit}",
+            self.interface
+        ));
+        let interface = self.interface.clone();
+        let _ = std::thread::Builder::new()
+            .name("link unit".into())
+            .spawn(move || {
+                if let Err(error) = profile::apply_link(&interface) {
+                    log(format!(
+                        "{interface}: cannot run {unit} ({error}); install triib's units and ethtool, or turn EEE and PAUSE off with ethtool"
+                    ));
+                    return;
+                }
+                std::thread::sleep(LINK_SETTLE);
+                if profile::power(&interface).is_some_and(|power| power.eee || power.pause) {
+                    log(format!(
+                        "{interface}: EEE or PAUSE is still on after {unit}; is ethtool installed, and does the interface let them go off?"
+                    ));
+                }
+            });
     }
 
     /// Tells the fallback what runs PTP on the interface: what ptp4l

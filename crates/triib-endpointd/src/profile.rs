@@ -5,7 +5,9 @@
 //! computer start them, so the daemon moves ptp4l to the AVB Lite profile
 //! when its endpoints fall back, and to gPTP again when the link comes
 //! back up (AVB Lite profile, 2.2). ptp4l run any other way stays as it
-//! is.
+//! is. A third unit, `triib-link@<interface>`, keeps Energy-Efficient
+//! Ethernet and PAUSE off the link, as the profile asks (6); the daemon
+//! runs it again should they come back.
 
 use std::io;
 use std::process::{Command, Stdio};
@@ -49,6 +51,8 @@ pub struct Link {
     pub carrier: Option<bool>,
     /// Which of triib's units runs ptp4l on the interface, if one does.
     pub unit: Option<Profile>,
+    /// What the interface does about EEE and PAUSE, where the system says.
+    pub power: Option<avb_net::LinkPower>,
 }
 
 /// Whether `interface` names a unit as it is: what Linux allows in an
@@ -104,6 +108,47 @@ pub fn start(interface: &str, profile: Profile) -> io::Result<()> {
     }
 }
 
+/// Runs the link unit for `interface` again, putting EEE and PAUSE off
+/// once more; the link renegotiates.
+pub fn apply_link(interface: &str) -> io::Result<()> {
+    if !nameable(interface) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{interface} cannot name a unit"),
+        ));
+    }
+    let output = Command::new("systemctl")
+        .args(["restart", "--no-block", "--no-ask-password"])
+        .arg(link_unit(interface))
+        .stdin(Stdio::null())
+        .output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        ))
+    }
+}
+
+/// The unit keeping EEE and PAUSE off `interface`.
+pub fn link_unit(interface: &str) -> String {
+    format!("triib-link@{interface}.service")
+}
+
+/// What `interface` does about EEE and PAUSE, where the system says.
+pub fn power(interface: &str) -> Option<avb_net::LinkPower> {
+    #[cfg(target_os = "linux")]
+    {
+        avb_net::interfaces::link_power(interface).ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = interface;
+        None
+    }
+}
+
 /// Whether `interface`'s link is up, where the system says.
 pub fn carrier(interface: &str) -> Option<bool> {
     if !nameable(interface) {
@@ -133,6 +178,7 @@ pub fn watch<T: Send + 'static>(
                 let link = Link {
                     carrier: carrier(&interface),
                     unit: running(&interface),
+                    power: power(&interface),
                 };
                 if last != Some(link) {
                     if sender.send(wrap(link)).is_err() {

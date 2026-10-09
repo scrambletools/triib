@@ -52,6 +52,7 @@ overrides:
     recommends:
       - mesa-vulkan-drivers
       - linuxptp
+      - ethtool
   rpm:
     depends:
       - alsa-lib
@@ -62,6 +63,7 @@ overrides:
     recommends:
       - mesa-vulkan-drivers
       - linuxptp
+      - ethtool
 
 rpm:
   group: Applications/Multimedia
