@@ -18,6 +18,7 @@ code! {
     /// The status query's command_type.
     pub struct LiteCommandType(u16) {
         const GET_LITE_STATUS = 0x0000;
+        const SET_LITE_CONFIG = 0x0001;
     }
 }
 
@@ -30,6 +31,16 @@ flags! {
         const ACTIVE = 0x02;
         const OFFSET_VALID = 0x04;
         const EGRESS_VALID = 0x08;
+        /// Talkers on the interface may escalate streams to multicast.
+        const ESCALATION_ALLOWED = 0x10;
+    }
+}
+
+flags! {
+    /// SET_LITE_CONFIG's config_flags (profile 2.4).
+    pub struct LiteConfigFlags(u8) {
+        /// Talkers on the interface may escalate streams to multicast.
+        const ESCALATION_ALLOWED = 0x01;
     }
 }
 
@@ -101,6 +112,34 @@ pub fn encode_get_lite_status(
     let command = LiteCommandType::GET_LITE_STATUS.0.to_be_bytes();
     header.encode(
         &[&STATUS_PROTOCOL_ID, &command, &interface.to_be_bytes()],
+        out,
+    )
+}
+
+/// Encodes a SET_LITE_CONFIG command for an AVB_INTERFACE.
+pub fn encode_set_lite_config(
+    target: EntityId,
+    controller: EntityId,
+    sequence_id: u16,
+    interface: u16,
+    flags: LiteConfigFlags,
+    out: &mut [u8],
+) -> Result<usize, EncodeError> {
+    let header = AecpHeader {
+        message_type: AecpMessageType::VENDOR_UNIQUE_COMMAND,
+        status: 0,
+        target_entity_id: target,
+        controller_entity_id: controller,
+        sequence_id,
+    };
+    let command = LiteCommandType::SET_LITE_CONFIG.0.to_be_bytes();
+    header.encode(
+        &[
+            &STATUS_PROTOCOL_ID,
+            &command,
+            &interface.to_be_bytes(),
+            &[flags.0, 0, 0, 0],
+        ],
         out,
     )
 }

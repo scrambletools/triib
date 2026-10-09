@@ -316,6 +316,120 @@ fn a_controller_reads_an_entitys_avb_lite_status() {
 }
 
 #[test]
+fn a_controller_allows_escalation_with_set_lite_config() {
+    use atdecc::ClockIdentity as Clock;
+    use atdecc::aecp::VendorUniquePdu;
+    use atdecc::lite::{
+        FallbackReason, LiteConfigFlags, LiteFlags, LiteStatus, PtpProfile, encode_set_lite_config,
+    };
+
+    let mut network = Network::new();
+    let status = LiteStatus {
+        interface: 0,
+        flags: LiteFlags::CAPABLE.union(LiteFlags::ACTIVE),
+        fallback_reason: FallbackReason::ENDPOINT_TLV,
+        ptp_profile: PtpProfile::AVB_LITE_PTP,
+        ptp_domain: 0,
+        media_vlan_id: 2,
+        unicast_fanout_limit: 2,
+        link_speed: 1000,
+        committed_egress: 0,
+        grandmaster: Clock(0),
+        offset_from_grandmaster: 0,
+    };
+    network.talker.set_lite_status(status);
+    let now = network.now;
+    let controller = MacAddress([0x02, 0, 0, 0, 0, 1]);
+    let set = |talker: &mut Entity, interface: u16, flags: u8| {
+        let mut out = [0; 64];
+        let length = encode_set_lite_config(
+            TALKER,
+            EntityId(0x0200_00ff_fe00_0001),
+            9,
+            interface,
+            LiteConfigFlags(flags),
+            &mut out,
+        )
+        .unwrap();
+        talker.handle_frame(now, controller, &out[..length]);
+        let (to, response) = talker.poll_transmit().expect("an answer");
+        assert_eq!(to, controller);
+        let response = VendorUniquePdu::decode(&response).unwrap();
+        (response.header.status, response.payload.to_vec())
+    };
+    // Allowed: the status says so, and the daemon hears of it.
+    let (status_code, payload) = set(&mut network.talker, 0, 0x01);
+    assert_eq!(status_code, 0);
+    assert_eq!(payload, [0x00, 0x01, 0x00, 0x00, 0x01, 0, 0, 0]);
+    assert!(
+        network
+            .talker
+            .lite_status()
+            .unwrap()
+            .flags
+            .contains(LiteFlags::ESCALATION_ALLOWED)
+    );
+    assert_eq!(
+        network.talker.poll_event(),
+        Some(EntityEvent::LiteConfigChanged {
+            escalation_allowed: true
+        })
+    );
+    // A reserved bit, or an interface it does not have, changes nothing.
+    assert_eq!(set(&mut network.talker, 0, 0x03).0, 7);
+    assert_eq!(set(&mut network.talker, 1, 0x00).0, 2);
+    assert!(
+        network
+            .talker
+            .lite_status()
+            .unwrap()
+            .flags
+            .contains(LiteFlags::ESCALATION_ALLOWED)
+    );
+    assert_eq!(network.talker.poll_event(), None);
+}
+
+#[test]
+fn a_controller_sets_an_entitys_lite_config() {
+    use atdecc::ClockIdentity as Clock;
+    use atdecc::controller::Outcome;
+    use atdecc::lite::{FallbackReason, LiteFlags, LiteStatus, PtpProfile};
+
+    let mut network = Network::new();
+    network.talker.set_lite_status(LiteStatus {
+        interface: 0,
+        flags: LiteFlags::CAPABLE.union(LiteFlags::ACTIVE),
+        fallback_reason: FallbackReason::ENDPOINT_TLV,
+        ptp_profile: PtpProfile::AVB_LITE_PTP,
+        ptp_domain: 0,
+        media_vlan_id: 2,
+        unicast_fanout_limit: 2,
+        link_speed: 1000,
+        committed_egress: 0,
+        grandmaster: Clock(0),
+        offset_from_grandmaster: 0,
+    });
+    network.controller.discover(None);
+    network.run(3000);
+    let now = network.now;
+    let command = network.controller.set_lite_config(now, TALKER, 0, true);
+    network.run(1000);
+    assert!(
+        network.controller_events.iter().any(
+            |event| matches!(event, Event::CommandFinished(id, Outcome::Done) if *id == command)
+        )
+    );
+    let model = network.controller.model(TALKER).expect("read");
+    assert!(
+        model
+            .lite_status(0)
+            .unwrap()
+            .flags
+            .contains(LiteFlags::ESCALATION_ALLOWED)
+    );
+}
+
+#[test]
 fn the_sampling_rate_and_stream_formats_move_together() {
     use atdecc::descriptor::SamplingRate;
 

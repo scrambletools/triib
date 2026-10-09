@@ -19,6 +19,16 @@ pub struct Config {
     pub ptp4l_socket: String,
     /// Whether the endpoints may fall back to AVB Lite.
     pub avb_lite: LiteChoice,
+    /// Whether, in AVB Lite, a talker with more listeners than it serves
+    /// unicast escalates the stream to multicast rather than refusing
+    /// them: only where the media VLAN is confined (AVB Lite profile, 6).
+    /// Controllers set it with SET_LITE_CONFIG.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub multicast_escalation: bool,
+    /// How many listeners a talker serves a stream to unicast in AVB Lite,
+    /// 2 when not given, as the profile recommends; at least 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unicast_fanout: Option<u8>,
     #[serde(rename = "endpoint")]
     pub endpoints: Vec<EndpointConfig>,
 }

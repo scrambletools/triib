@@ -2,7 +2,7 @@
 //! ptp4l's state, driving each entity and the MSRP and MVRP participants,
 //! and starting and stopping the streams as reservations come and go.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use atdecc::stream_format::{FormatKind, StreamFormat};
 use atdecc::{
     ADP_ACMP_MULTICAST, ClockIdentity, EntityId, EntityModelId, Instant, MacAddress, StreamId,
 };
-use avb_mrp::msrp::{self, Domain, ListenerState, TalkerDeclaration};
+use avb_mrp::msrp::{self, Domain, ListenerState, TalkerDeclaration, TalkerFailure};
 use avb_mrp::{Participant, Registration, mvrp};
 use avb_net::Socket;
 use avb_net::stream::FrameSender;
@@ -56,7 +56,8 @@ const REDECLARE: Duration = Duration::from_secs(2);
 /// address talkers declare to.
 const LITE_PRIORITY: u8 = 5;
 const BROADCAST: MacAddress = MacAddress([0xff; 6]);
-const FANOUT: usize = 2;
+/// The unicast fan-out the profile recommends.
+const FANOUT: u8 = 2;
 /// CVU SRP's timing, MRP's (IEEE 802.1Q-2022, Table 10-7) as the AVB Lite
 /// profile carries it over: a declaration goes out twice, JoinTime
 /// apart; a withdrawn one lasts LeaveTime more; all are sent again every
@@ -66,13 +67,20 @@ const JOIN_TIME: Duration = Duration::from_millis(200);
 const LEAVE_TIME: Duration = Duration::from_millis(800);
 const LEAVE_ALL_TIME: Duration = Duration::from_secs(10);
 const AGE_OUT: Duration = Duration::from_secs(16);
+/// MSRP failure codes a talker refuses a listener with (IEEE 802.1Q-2022,
+/// Table 46-15): its link is full, or it serves as many listeners as it
+/// can.
+const FAILURE_BANDWIDTH: u8 = 1;
+const FAILURE_RESOURCES: u8 = 2;
 /// The least time between starting one ptp4l unit and the next, so a
 /// profile switch has time to show.
 const SWITCH_AGAIN: Duration = Duration::from_secs(30);
 
 /// What the sockets and ptp4l hand the runtime.
 enum Input {
-    Avtp(MacAddress, Vec<u8>),
+    /// From where, whether sent to a group address rather than to this
+    /// computer, and the frame.
+    Avtp(MacAddress, bool, Vec<u8>),
     Ptp(Vec<u8>),
     Msrp(Vec<u8>),
     Mvrp(Vec<u8>),
@@ -183,6 +191,12 @@ struct Endpoint {
     /// talker it tells and what; for a talker, where its copies go.
     cvu_to: Option<(u64, MacAddress, ListenerState)>,
     copies: Vec<MacAddress>,
+    /// For a talker in AVB Lite: whether its stream went multicast, when
+    /// its frames move there, and the listeners it refuses, with the
+    /// failure code each has.
+    escalated: bool,
+    escalate_at: Option<Duration>,
+    refused: HashMap<MacAddress, u8>,
     /// Its place in the configuration's list.
     place: usize,
 }
@@ -262,6 +276,9 @@ impl Endpoint {
             listening_to: None,
             cvu_to: None,
             copies: Vec::new(),
+            escalated: false,
+            escalate_at: None,
+            refused: HashMap::new(),
             place: 0,
         }
     }
@@ -291,6 +308,9 @@ pub struct Runtime {
     own_clock: ClockIdentity,
     link_speed: u32,
     ptp_status: Option<gptp::Status>,
+    /// CVU SRP messages this computer sent its own endpoints, whether to a
+    /// group address, taken once the update that sent them is done.
+    local_cvu: VecDeque<(bool, Vec<u8>)>,
     /// The link and which of triib's ptp4l units runs there, and when the
     /// daemon last started one.
     link: Option<profile::Link>,
@@ -333,6 +353,11 @@ struct LiteMode {
     /// declared again first.
     leaving_talkers: HashMap<u64, Duration>,
     leaving_listeners: HashMap<(u64, MacAddress), Duration>,
+    /// Talker declarations sent to this computer alone, refusing one of
+    /// its listeners (profile 6, item 10): by stream, what, from where and
+    /// when last; and those withdrawn.
+    refusals: HashMap<u64, (TalkerDeclaration, MacAddress, Duration)>,
+    leaving_refusals: HashMap<u64, Duration>,
     /// Draws the refresh interval.
     random: u64,
 }
@@ -385,7 +410,7 @@ fn read_into(
     stop: Arc<AtomicBool>,
     sender: Sender<Input>,
     name: &str,
-    wrap: fn(MacAddress, Vec<u8>) -> Input,
+    wrap: fn(MacAddress, bool, Vec<u8>) -> Input,
 ) -> io::Result<()> {
     std::thread::Builder::new()
         .name(name.into())
@@ -395,7 +420,10 @@ fn read_into(
                 match socket.receive(&mut buffer, Some(Duration::from_millis(200))) {
                     Ok(Some(received)) => {
                         let bytes = buffer[..received.length].to_vec();
-                        if sender.send(wrap(received.source, bytes)).is_err() {
+                        if sender
+                            .send(wrap(received.source, received.group, bytes))
+                            .is_err()
+                        {
                             return;
                         }
                     }
@@ -450,21 +478,21 @@ impl Runtime {
             stop.clone(),
             sender.clone(),
             "msrp",
-            |_, bytes| Input::Msrp(bytes),
+            |_, _, bytes| Input::Msrp(bytes),
         )?;
         read_into(
             mvrp.clone(),
             stop.clone(),
             sender.clone(),
             "mvrp",
-            |_, bytes| Input::Mvrp(bytes),
+            |_, _, bytes| Input::Mvrp(bytes),
         )?;
         read_into(
             ptp.clone(),
             stop.clone(),
             sender.clone(),
             "ptp",
-            |_, bytes| Input::Ptp(bytes),
+            |_, _, bytes| Input::Ptp(bytes),
         )?;
         let socket = if config.ptp4l_socket.is_empty() {
             "/var/run/ptp4lro".to_owned()
@@ -532,6 +560,7 @@ impl Runtime {
             own_clock,
             link_speed,
             ptp_status: None,
+            local_cvu: VecDeque::new(),
             link: None,
             switched_at: None,
             clock,
@@ -706,6 +735,29 @@ impl Runtime {
         self.modified = modified(Some(&path));
     }
 
+    /// Keeps a setting of the whole configuration that a controller gave
+    /// in the configuration file.
+    fn keep_config(&mut self) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        if modified(Some(&path)) != self.modified {
+            // As in keep_settings: into what the file holds now.
+            let Ok(mut now) = triib_store::load::<Config>(&path) else {
+                return;
+            };
+            now.multicast_escalation = self.config.multicast_escalation;
+            if let Err(error) = triib_store::save(&path, &now) {
+                log(format!("endpoints.toml: {error}"));
+            }
+            return;
+        }
+        if let Err(error) = triib_store::save(&path, &self.config) {
+            log(format!("endpoints.toml: {error}"));
+        }
+        self.modified = modified(Some(&path));
+    }
+
     fn write_status(&self) {
         let Some(path) = status_path() else {
             return;
@@ -788,9 +840,14 @@ impl Runtime {
                 lite.leaving_talkers
                     .values()
                     .chain(lite.leaving_listeners.values())
+                    .chain(lite.leaving_refusals.values())
                     .min()
                     .copied()
             }),
+            self.endpoints
+                .iter()
+                .filter_map(|endpoint| endpoint.escalate_at)
+                .min(),
         ]
         .into_iter()
         .flatten()
@@ -807,14 +864,16 @@ impl Runtime {
         let now = self.now();
         let since = self.elapsed();
         match input {
-            Input::Avtp(source, bytes) if bytes.first() == Some(&atdecc::avtp::subtype::MAAP) => {
+            Input::Avtp(source, _, bytes)
+                if bytes.first() == Some(&atdecc::avtp::subtype::MAAP) =>
+            {
                 if let Some(maap) = &mut self.maap {
                     maap.handle_frame(now, source, &bytes);
                 }
             }
-            Input::Avtp(source, bytes) => {
+            Input::Avtp(source, group, bytes) => {
                 if self.lite.is_some() && source != self.mac {
-                    self.cvu_heard(source, &bytes);
+                    self.cvu_heard(source, group, &bytes);
                 }
                 for endpoint in &mut self.endpoints {
                     endpoint.entity.handle_frame(now, source, &bytes);
@@ -917,6 +976,9 @@ impl Runtime {
             self.enter_lite(reason);
         }
         self.lite_turn();
+        while let Some((group, pdu)) = self.local_cvu.pop_front() {
+            self.cvu_heard(self.mac, group, &pdu);
+        }
         while let Some(event) = self.maap.as_mut().and_then(Maap::poll_event) {
             self.maap_event(event);
         }
@@ -1030,7 +1092,9 @@ impl Runtime {
         let Some(declaration) = self.declaration(index) else {
             return;
         };
-        if self.lite.is_some() {
+        if self.lite.is_some()
+            && let Some(declaration) = self.lite_declaration(index)
+        {
             self.declare_cvu(
                 index,
                 BROADCAST,
@@ -1123,14 +1187,27 @@ impl Runtime {
             return;
         };
         if self.lite.is_some()
-            && let Some(declaration) = self.declaration(index)
+            && let Some(declaration) = self.lite_declaration(index)
         {
             self.send_cvu(
                 index,
                 BROADCAST,
                 &lite::talker_message(&declaration, avb_mrp::Event::Lv),
             );
-            self.endpoints[index].copies.clear();
+            let refused = std::mem::take(&mut self.endpoints[index].refused);
+            for (listener, code) in refused {
+                if let Some(refusal) = self.refusal(index, code) {
+                    self.send_cvu(
+                        index,
+                        listener,
+                        &lite::talker_message(&refusal, avb_mrp::Event::Lv),
+                    );
+                }
+            }
+            let endpoint = &mut self.endpoints[index];
+            endpoint.copies.clear();
+            endpoint.escalated = false;
+            endpoint.escalate_at = None;
         }
         let since = self.elapsed();
         self.msrp_participant.withdraw(
@@ -1545,6 +1622,26 @@ impl Runtime {
             EntityEvent::ClockSourceChanged(source) => {
                 log(format!("{name}: clock source {source}"))
             }
+            EntityEvent::LiteConfigChanged { escalation_allowed } => {
+                log(format!(
+                    "AVB Lite: escalating to multicast {}",
+                    if escalation_allowed {
+                        "allowed"
+                    } else {
+                        "not allowed"
+                    }
+                ));
+                self.config.multicast_escalation = escalation_allowed;
+                self.keep_config();
+                self.update_lite_status();
+                if self.lite.is_some() {
+                    for index in 0..self.endpoints.len() {
+                        if self.endpoints[index].config.kind == Kind::Talker {
+                            self.update_talker(index);
+                        }
+                    }
+                }
+            }
             EntityEvent::NameChanged => {
                 log(format!(
                     "{name}: renamed {}",
@@ -1738,6 +1835,8 @@ impl Runtime {
             repeats: Vec::new(),
             leaving_talkers: HashMap::new(),
             leaving_listeners: HashMap::new(),
+            refusals: HashMap::new(),
+            leaving_refusals: HashMap::new(),
             random: u64::from_be_bytes([
                 0,
                 0,
@@ -1893,6 +1992,22 @@ impl Runtime {
                 gone_listeners.push(stream_id);
             }
         }
+        let stale_refusals: Vec<u64> = lite
+            .refusals
+            .iter()
+            .filter(|(stream_id, (_, _, at))| {
+                stale(at)
+                    || lite
+                        .leaving_refusals
+                        .get(*stream_id)
+                        .is_some_and(|at| *at <= since)
+            })
+            .map(|(stream_id, _)| *stream_id)
+            .collect();
+        for stream_id in &stale_refusals {
+            lite.refusals.remove(stream_id);
+            lite.leaving_refusals.remove(stream_id);
+        }
         let repeats = std::mem::take(&mut lite.repeats);
         let (due, later): (Vec<_>, Vec<_>) = repeats.into_iter().partition(|(at, ..)| *at <= since);
         lite.repeats = later;
@@ -1907,6 +2022,17 @@ impl Runtime {
             log(format!("AVB Lite: talker of {stream_id:#018x} is gone"));
             self.lite_talker_changed(stream_id);
         }
+        for stream_id in stale_refusals {
+            self.lite_talker_changed(stream_id);
+        }
+        for index in 0..self.endpoints.len() {
+            if self.endpoints[index]
+                .escalate_at
+                .is_some_and(|at| at <= since)
+            {
+                self.update_talker(index);
+            }
+        }
         for stream_id in gone_listeners {
             if let Some(index) = self.own_talker(stream_id) {
                 self.update_talker(index);
@@ -1917,13 +2043,27 @@ impl Runtime {
                 let endpoint = &self.endpoints[index];
                 if endpoint.config.kind == Kind::Talker {
                     if self.addressed()
-                        && let Some(declaration) = self.declaration(index)
+                        && let Some(declaration) = self.lite_declaration(index)
                     {
                         self.declare_cvu(
                             index,
                             BROADCAST,
                             lite::talker_message(&declaration, avb_mrp::Event::JoinIn),
                         );
+                    }
+                    let refused: Vec<(MacAddress, u8)> = self.endpoints[index]
+                        .refused
+                        .iter()
+                        .map(|(listener, code)| (*listener, *code))
+                        .collect();
+                    for (listener, code) in refused {
+                        if let Some(refusal) = self.refusal(index, code) {
+                            self.declare_cvu(
+                                index,
+                                listener,
+                                lite::talker_message(&refusal, avb_mrp::Event::JoinIn),
+                            );
+                        }
                     }
                 } else if let Some((stream_id, talker, state)) = endpoint.cvu_to {
                     self.declare_cvu(
@@ -1966,8 +2106,10 @@ impl Runtime {
         frame.extend_from_slice(&pdu);
         frame.resize(frame.len().max(64), 0);
         let _ = self.tagged.send(&frame);
+        // Our own endpoints take it too, as the computer never hears what
+        // it sends, but only after the update that sent it.
         if destination == BROADCAST || destination == self.mac {
-            self.cvu_heard(self.mac, &pdu);
+            self.local_cvu.push_back((destination == BROADCAST, pdu));
         }
     }
 
@@ -1986,9 +2128,10 @@ impl Runtime {
         }
     }
 
-    /// Takes the declarations of a CVU SRP command `source` sent. CVU SRP
-    /// commands are not answered (profile 6).
-    fn cvu_heard(&mut self, source: MacAddress, pdu: &[u8]) {
+    /// Takes the declarations of a CVU SRP command `source` sent, to a
+    /// group address or to this computer alone. CVU SRP commands are not
+    /// answered (profile 6).
+    fn cvu_heard(&mut self, source: MacAddress, group: bool, pdu: &[u8]) {
         let Some(declared) = lite::cvu_declarations(pdu) else {
             return;
         };
@@ -1998,6 +2141,29 @@ impl Runtime {
                 return;
             };
             match declaration {
+                // A talker's declaration to this computer alone refuses
+                // one of its listeners, and outranks its broadcast one.
+                Declared::Talker(talker) if !group => {
+                    lite.leaving_refusals.remove(&talker.stream_id);
+                    let changed =
+                        lite.refusals
+                            .get(&talker.stream_id)
+                            .is_none_or(|(known, from, _)| {
+                                known.failure != talker.failure || *from != source
+                            });
+                    lite.refusals
+                        .insert(talker.stream_id, (talker, source, since));
+                    if changed {
+                        self.lite_talker_changed(talker.stream_id);
+                    }
+                }
+                Declared::TalkerGone(stream_id) if !group => {
+                    if lite.refusals.contains_key(&stream_id) {
+                        lite.leaving_refusals
+                            .entry(stream_id)
+                            .or_insert(since + LEAVE_TIME);
+                    }
+                }
                 Declared::Talker(talker) => {
                     lite.leaving_talkers.remove(&talker.stream_id);
                     let changed =
@@ -2061,6 +2227,11 @@ impl Runtime {
         }
     }
 
+    /// How many listeners a talker serves unicast.
+    fn fanout(&self) -> usize {
+        usize::from(self.config.unicast_fanout.unwrap_or(FANOUT).max(1))
+    }
+
     /// The bandwidth our talkers' copies take, but for talker `except`'s,
     /// in bits per second.
     fn committed(&self, except: Option<usize>) -> u64 {
@@ -2074,9 +2245,39 @@ impl Runtime {
             .sum()
     }
 
-    /// Sends a talker's stream to the listeners ready for it: a unicast
-    /// copy each, up to the fan-out, else its multicast address, within
-    /// 75% of the link (profile 6).
+    /// A talker's declaration in AVB Lite, its destination where the
+    /// stream's frames go now: `00:00:00:00:00:00` while unicast, the
+    /// multicast address once escalated (profile 6).
+    fn lite_declaration(&self, index: usize) -> Option<TalkerDeclaration> {
+        let declaration = self.declaration(index)?;
+        Some(TalkerDeclaration {
+            destination: if self.endpoints[index].escalated {
+                declaration.destination
+            } else {
+                MacAddress([0; 6])
+            },
+            ..declaration
+        })
+    }
+
+    /// The Talker Failed a talker sends one listener it refuses (profile
+    /// 6, item 10), naming this computer as the system that failed.
+    fn refusal(&self, index: usize, code: u8) -> Option<TalkerDeclaration> {
+        let declaration = self.lite_declaration(index)?;
+        let [a, b, c, d, e, f] = self.mac.0;
+        Some(TalkerDeclaration {
+            failure: Some(TalkerFailure {
+                bridge_id: u64::from_be_bytes([0, 0, a, b, c, d, e, f]),
+                code,
+            }),
+            ..declaration
+        })
+    }
+
+    /// Sends a talker's stream to the listeners that want it, within its
+    /// unicast fan-out and 75% of the link (profile 6): a unicast copy
+    /// each, or, where escalation is allowed and they are more, its
+    /// multicast address. A listener it cannot serve it refuses alone.
     fn lite_update_talker(&mut self, index: usize) {
         let Some((stream_id, multicast)) = self.endpoints[index].entity.output_stream(0) else {
             return;
@@ -2084,40 +2285,98 @@ impl Runtime {
         let Some(declaration) = self.declaration(index) else {
             return;
         };
-        let mut ready: Vec<MacAddress> = self
+        let since = self.elapsed();
+        let declared: Vec<(MacAddress, ListenerState)> = self
             .lite
             .as_ref()
             .and_then(|lite| lite.listeners.get(&stream_id.0))
             .map(|listeners| {
                 listeners
                     .iter()
-                    .filter(|(_, (state, _))| state.ready())
-                    .map(|(mac, _)| *mac)
+                    .map(|(mac, (state, _))| (*mac, *state))
                     .collect()
             })
             .unwrap_or_default();
-        ready.sort_by_key(|mac| mac.0);
-        let wanted = if ready.len() > FANOUT {
-            vec![multicast]
-        } else {
-            ready.clone()
+        // Those it serves keep their place, then those it refuses, who ask
+        // and fail because of it, then newcomers ready for the stream.
+        let endpoint = &self.endpoints[index];
+        let rank = |mac: &MacAddress| {
+            if endpoint.copies.contains(mac) {
+                0
+            } else if endpoint.refused.contains_key(mac) {
+                1
+            } else {
+                2
+            }
         };
+        let mut wanting: Vec<(MacAddress, ListenerState)> = declared
+            .into_iter()
+            .filter(|(mac, state)| state.ready() || endpoint.refused.contains_key(mac))
+            .collect();
+        wanting.sort_by_key(|(mac, _)| (rank(mac), mac.0));
         let per_copy = declaration.bandwidth(8000).max(1);
-        let allowed = if self.link_speed == 0 {
+        let room = if self.link_speed == 0 {
             usize::MAX
         } else {
             let budget = u64::from(self.link_speed) * 750_000;
             (budget.saturating_sub(self.committed(Some(index))) / per_copy) as usize
         };
-        let copies: Vec<MacAddress> = wanted.iter().copied().take(allowed).collect();
+        let fanout = self.fanout();
+        let go_multicast = self.config.multicast_escalation && wanting.len() > fanout && room >= 1;
+        let limit = if go_multicast {
+            wanting.len()
+        } else {
+            fanout.min(room)
+        };
+        let ready: Vec<MacAddress> = wanting
+            .iter()
+            .take(limit)
+            .filter(|(_, state)| state.ready())
+            .map(|(mac, _)| *mac)
+            .collect();
+        let refused: HashMap<MacAddress, u8> = wanting
+            .iter()
+            .enumerate()
+            .skip(limit)
+            .map(|(place, (mac, _))| {
+                let code = if place < fanout {
+                    FAILURE_BANDWIDTH
+                } else {
+                    FAILURE_RESOURCES
+                };
+                (*mac, code)
+            })
+            .collect();
+        // To escalate, the declaration goes first and the frames JoinTime
+        // later; to go back, the frames go first and the declaration after.
+        let endpoint = &mut self.endpoints[index];
+        let mut announce = false;
+        let copies = if go_multicast {
+            if !endpoint.escalated {
+                endpoint.escalated = true;
+                endpoint.escalate_at = Some(since + JOIN_TIME);
+                announce = true;
+            }
+            match endpoint.escalate_at {
+                Some(at) if since < at => endpoint.copies.clone(),
+                _ => {
+                    endpoint.escalate_at = None;
+                    if ready.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![multicast]
+                    }
+                }
+            }
+        } else {
+            if endpoint.escalated {
+                endpoint.escalated = false;
+                endpoint.escalate_at = None;
+                announce = true;
+            }
+            ready.clone()
+        };
         let name = self.endpoints[index].config.name.clone();
-        if copies.len() < wanted.len() {
-            log(format!(
-                "{name}: AVB Lite keeps the link under 75%, sending {} of {} copies",
-                copies.len(),
-                wanted.len()
-            ));
-        }
         self.endpoints[index].entity.set_output_reservation(
             0,
             OutputReservation {
@@ -2149,6 +2408,59 @@ impl Runtime {
             log(format!("{name}: a listener is ready, streaming"));
             self.start_talker(index);
         }
+        if announce && let Some(declaration) = self.lite_declaration(index) {
+            self.declare_cvu(
+                index,
+                BROADCAST,
+                lite::talker_message(&declaration, avb_mrp::Event::New),
+            );
+        }
+        let before = std::mem::replace(&mut self.endpoints[index].refused, refused.clone());
+        for (listener, code) in &refused {
+            if before.get(listener) != Some(code)
+                && let Some(refusal) = self.refusal(index, *code)
+            {
+                log(format!(
+                    "{name}: AVB Lite refuses {listener}, failure code {code}"
+                ));
+                self.declare_cvu(
+                    index,
+                    *listener,
+                    lite::talker_message(&refusal, avb_mrp::Event::New),
+                );
+            }
+        }
+        for (listener, code) in before {
+            if !refused.contains_key(&listener)
+                && let Some(refusal) = self.refusal(index, code)
+            {
+                self.send_cvu(
+                    index,
+                    listener,
+                    &lite::talker_message(&refusal, avb_mrp::Event::Lv),
+                );
+            }
+        }
+    }
+
+    /// Whether this computer's link takes a stream of `declaration` for
+    /// listener `index` on top of the streams its other listeners are
+    /// ready for from other computers, within 75% (profile 6, item 6).
+    fn ingress_fits(&self, index: usize, declaration: &TalkerDeclaration) -> bool {
+        if self.link_speed == 0 {
+            return true;
+        }
+        let Some(lite) = &self.lite else {
+            return true;
+        };
+        let taken: u64 = (0..self.endpoints.len())
+            .filter(|other| *other != index)
+            .filter_map(|other| self.endpoints[other].cvu_to)
+            .filter(|(_, talker, state)| *talker != self.mac && state.ready())
+            .filter_map(|(stream_id, _, _)| lite.talkers.get(&stream_id))
+            .map(|(declaration, _, _)| declaration.bandwidth(8000))
+            .sum();
+        taken + declaration.bandwidth(8000) <= u64::from(self.link_speed) * 750_000
     }
 
     /// Declares a listener to the talker whose declaration names its
@@ -2158,19 +2470,35 @@ impl Runtime {
         let Some(stream) = self.endpoints[index].entity.input_stream(0) else {
             return;
         };
-        let heard = self
-            .lite
-            .as_ref()
-            .and_then(|lite| lite.talkers.get(&stream.stream_id.0))
-            .map(|(declaration, from, _)| (*declaration, *from));
+        // A Talker Failed sent to this computer alone outranks the
+        // talker's broadcast declaration (profile 6, item 10).
+        let heard = self.lite.as_ref().and_then(|lite| {
+            lite.refusals
+                .get(&stream.stream_id.0)
+                .or_else(|| lite.talkers.get(&stream.stream_id.0))
+                .map(|(declaration, from, _)| (*declaration, *from))
+        });
+        // A stream from another computer the link has no room for is
+        // asked for and failed (profile 6, item 6).
+        let full = heard.is_some_and(|(declaration, from)| {
+            declaration.failure.is_none()
+                && from != self.mac
+                && !self.ingress_fits(index, &declaration)
+        });
         let wanted = heard.map(|(declaration, from)| {
-            let state = if declaration.failure.is_some() {
+            let state = if declaration.failure.is_some() || full {
                 ListenerState::AskingFailed
             } else {
                 ListenerState::Ready
             };
             (stream.stream_id.0, from, state)
         });
+        if full && wanted != self.endpoints[index].cvu_to {
+            log(format!(
+                "{}: AVB Lite, the link has no room for {:#018x}",
+                self.endpoints[index].config.name, stream.stream_id.0
+            ));
+        }
         let before = self.endpoints[index].cvu_to;
         if let Some((stream_id, talker, state)) = before
             && wanted.map(|(id, to, _)| (id, to)) != Some((stream_id, talker))
@@ -2191,12 +2519,15 @@ impl Runtime {
                 lite::listener_message(stream_id, state, avb_mrp::Event::New),
             );
         }
+        let [a, b, c, d, e, f] = self.mac.0;
+        let own = u64::from_be_bytes([0, 0, a, b, c, d, e, f]);
         let reservation = match heard {
             Some((declaration, _)) => InputReservation {
-                talker_registered: declaration.failure.is_none(),
+                talker_registered: declaration.failure.is_none() && !full,
                 failure: declaration
                     .failure
-                    .map(|failure| (failure.code, failure.bridge_id)),
+                    .map(|failure| (failure.code, failure.bridge_id))
+                    .or(full.then_some((FAILURE_BANDWIDTH, own))),
                 accumulated_latency: declaration.accumulated_latency,
                 registering: true,
             },
@@ -2205,11 +2536,15 @@ impl Runtime {
         self.endpoints[index]
             .entity
             .set_input_reservation(0, reservation);
-        let advertised = heard.filter(|(declaration, _)| declaration.failure.is_none());
+        let advertised = heard.filter(|(declaration, _)| declaration.failure.is_none() && !full);
+        // The stream comes to this computer's own address, and to the
+        // multicast address the talker declares once escalated; until
+        // then, to the one probing found, so escalating moves nothing.
+        let declared = advertised
+            .map(|(declaration, _)| declaration.destination)
+            .filter(|destination| destination.0 != [0; 6]);
         let stream = atdecc::entity::ProbedStream {
-            destination: advertised.map_or(stream.destination, |(declaration, _)| {
-                declaration.destination
-            }),
+            destination: declared.unwrap_or(stream.destination),
             ..stream
         };
         let endpoint = &mut self.endpoints[index];
@@ -2223,10 +2558,14 @@ impl Runtime {
             }
             self.start_listener(index, stream, destinations);
         } else if advertised.is_none() && endpoint.listener.take().is_some() {
-            log(format!(
-                "{}: the talker is gone, not listening",
-                endpoint.config.name
-            ));
+            let why = match heard {
+                Some((declaration, _)) => match declaration.failure {
+                    Some(failure) => format!("the talker failed, code {}", failure.code),
+                    None => "the link has no room".to_owned(),
+                },
+                None => "the talker is gone".to_owned(),
+            };
+            log(format!("{}: {why}, not listening", endpoint.config.name));
         }
     }
 
@@ -2238,6 +2577,9 @@ impl Runtime {
         let mut flags = LiteFlags::CAPABLE | LiteFlags::EGRESS_VALID;
         if self.lite.is_some() {
             flags |= LiteFlags::ACTIVE;
+        }
+        if self.config.multicast_escalation {
+            flags |= LiteFlags::ESCALATION_ALLOWED;
         }
         if offset.is_some() {
             flags |= LiteFlags::OFFSET_VALID;
@@ -2267,7 +2609,7 @@ impl Runtime {
                 },
                 ptp_domain: ptp.map_or(0, |status| status.gptp.domain),
                 media_vlan_id: VLAN,
-                unicast_fanout_limit: if talker { FANOUT as u8 } else { 0 },
+                unicast_fanout_limit: if talker { self.fanout() as u8 } else { 0 },
                 link_speed: self.link_speed,
                 committed_egress: egress.min(u64::from(u32::MAX)) as u32,
                 grandmaster: ptp.map_or(ClockIdentity(0), |status| status.gptp.grandmaster),
@@ -2344,6 +2686,8 @@ mod tests {
             repeats: Vec::new(),
             leaving_talkers: HashMap::new(),
             leaving_listeners: HashMap::new(),
+            refusals: HashMap::new(),
+            leaving_refusals: HashMap::new(),
             random: 0xf0a7_31f4_0f14 | 1,
         };
         let since = Duration::from_secs(100);

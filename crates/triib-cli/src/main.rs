@@ -71,6 +71,10 @@ commands:
                                      ID, destination, VLAN, latency, and for
                                      outputs what the talker sends and their
                                      max transit time
+  lite-config <interface> <entity-id> <avb-interface> <on|off>
+                                     allow or disallow an interface's talkers
+                                     escalating streams to multicast in AVB
+                                     Lite (SET_LITE_CONFIG)
   lite <interface> <entity-id> [seconds]
                                      print how each of an entity's interfaces
                                      runs AVB Lite, as its status query
@@ -307,7 +311,7 @@ fn main() -> ExitCode {
             };
             set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
         }
-        Some(command @ ("name" | "format" | "rate" | "clock")) => {
+        Some(command @ ("name" | "format" | "rate" | "clock" | "lite-config")) => {
             let (Some(interface), Some(Ok(entity)), Some(target), Some(value)) = (
                 argument(1),
                 argument(2).map(str::parse::<EntityId>),
@@ -570,6 +574,11 @@ enum Change {
         descriptor_type: DescriptorType,
         index: u16,
     },
+    /// Allow or disallow escalating streams to multicast in AVB Lite.
+    LiteConfig {
+        interface: u16,
+        escalation: bool,
+    },
 }
 
 impl Change {
@@ -601,6 +610,14 @@ impl Change {
                     format: StreamFormat(u64::from_str_radix(hex, 16).ok()?),
                 })
             }
+            "lite-config" => Some(Change::LiteConfig {
+                interface: number(target)?,
+                escalation: match value {
+                    "on" => true,
+                    "off" => false,
+                    _ => return None,
+                },
+            }),
             "rate" => Some(Change::Rate {
                 unit: number(target)?,
                 hertz: value.parse().ok()?,
@@ -815,6 +832,14 @@ fn lite(interface: &str, entity: EntityId, listen: Duration) -> std::io::Result<
             "      media VLAN {}, unicast fan-out {}, link {} Mb/s, egress {egress}",
             status.media_vlan_id, status.unicast_fanout_limit, status.link_speed
         );
+        println!(
+            "      escalation to multicast {}",
+            if status.flags.contains(LiteFlags::ESCALATION_ALLOWED) {
+                "allowed"
+            } else {
+                "not allowed"
+            }
+        );
         print_octets(&status.to_bytes());
     }
     for declaration in model.cvu_talkers() {
@@ -984,6 +1009,10 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
             descriptor_type,
             index,
         } => controller.read_descriptor(now, entity, *descriptor_type, *index),
+        Change::LiteConfig {
+            interface,
+            escalation,
+        } => controller.set_lite_config(now, entity, *interface, *escalation),
     };
     let started = Instant::now();
     let outcome = loop {
@@ -1013,6 +1042,28 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
         Some(Outcome::NoResponse) => println!("no response"),
         Some(Outcome::NotPossible) => println!("not possible"),
         None => println!("no answer in {} seconds", LIMIT.as_secs()),
+    }
+    if let Change::LiteConfig { interface, .. } = change {
+        // The status the controller asks for after the change shows it.
+        let asked = Instant::now();
+        while asked.elapsed() < Duration::from_secs(2) {
+            driver.turn(Duration::from_millis(100))?;
+            while driver.controller_mut().poll_event().is_some() {}
+        }
+        if let Some(status) = driver
+            .controller()
+            .model(entity)
+            .and_then(|model| model.lite_status(interface))
+        {
+            println!(
+                "escalation to multicast now {}",
+                if status.flags.contains(LiteFlags::ESCALATION_ALLOWED) {
+                    "allowed"
+                } else {
+                    "not allowed"
+                }
+            );
+        }
     }
     if let Some(model) = driver.controller().model(entity) {
         match change {
@@ -1105,7 +1156,9 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
                     print_octets(bytes);
                 }
             }
-            Change::DisconnectTalker { .. } | Change::Identify { .. } => {}
+            Change::DisconnectTalker { .. }
+            | Change::Identify { .. }
+            | Change::LiteConfig { .. } => {}
         }
     }
     driver.close()

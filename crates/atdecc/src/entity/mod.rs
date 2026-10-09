@@ -28,7 +28,7 @@ use crate::aem::{AvbInfoFlags, StreamInfoFlags};
 use crate::avtp::{read_u16, read_u32, read_u64};
 use crate::descriptor::DescriptorType;
 use crate::id::{ClockIdentity, EntityId, StreamId};
-use crate::lite::{LiteCommandType, LiteStatus, STATUS_PROTOCOL_ID};
+use crate::lite::{LiteCommandType, LiteConfigFlags, LiteFlags, LiteStatus, STATUS_PROTOCOL_ID};
 use crate::mvu::{MVU_PROTOCOL_ID, MilanFeatures, MvuCommandType, MvuStatus};
 use crate::pdu::{self, Pdu};
 use crate::stream_format::StreamFormat;
@@ -138,6 +138,11 @@ pub enum EntityEvent {
     },
     SamplingRateChanged(u32),
     ClockSourceChanged(u16),
+    /// A controller allowed or disallowed escalating streams to
+    /// multicast in AVB Lite (SET_LITE_CONFIG).
+    LiteConfigChanged {
+        escalation_allowed: bool,
+    },
     MaxTransitTimeChanged {
         index: u16,
         nanoseconds: u32,
@@ -298,7 +303,12 @@ impl Entity {
         self.inputs.get(usize::from(index))?.binding
     }
 
-    /// The stream a bound input's probe found.
+    /// What GET_LITE_STATUS answers now, for an entity that supports AVB
+    /// Lite.
+    pub fn lite_status(&self) -> Option<&LiteStatus> {
+        self.lite.as_ref()
+    }
+
     /// Sets what GET_LITE_STATUS answers for the entity's interface,
     /// telling registered controllers when anything but the offset
     /// changes, or the offset crosses the AVB Lite alarm of 50 us (AVB
@@ -383,6 +393,7 @@ impl Entity {
             .push_back(EntityEvent::InputBound { index, binding });
     }
 
+    /// The stream a bound input's probe found.
     pub fn input_stream(&self, index: u16) -> Option<ProbedStream> {
         match self.inputs.get(usize::from(index))?.probe {
             Some(Probe::Settled(stream)) => Some(stream),
@@ -1494,6 +1505,41 @@ impl Entity {
                     } else {
                         status = AemStatus::NO_SUCH_DESCRIPTOR.0;
                         data.extend_from_slice(&command.payload[2..]);
+                    }
+                }
+                Some(lite) if command_type == LiteCommandType::SET_LITE_CONFIG => {
+                    let flags = command.payload.get(4).copied().map(LiteConfigFlags);
+                    let known = LiteConfigFlags::ESCALATION_ALLOWED.0;
+                    status = if interface != lite.interface {
+                        AemStatus::NO_SUCH_DESCRIPTOR.0
+                    } else if command.payload.len() < 8
+                        || flags.is_none_or(|flags| flags.0 & !known != 0)
+                    {
+                        AemStatus::BAD_ARGUMENTS.0
+                    } else if !self.may_change(command.header.controller_entity_id) {
+                        AemStatus::ENTITY_LOCKED.0
+                    } else {
+                        MvuStatus::SUCCESS.0
+                    };
+                    match flags {
+                        Some(flags) if status == MvuStatus::SUCCESS.0 => {
+                            let allowed = flags.contains(LiteConfigFlags::ESCALATION_ALLOWED);
+                            let mut changed = lite;
+                            changed.flags = if allowed {
+                                changed.flags.union(LiteFlags::ESCALATION_ALLOWED)
+                            } else {
+                                changed.flags.difference(LiteFlags::ESCALATION_ALLOWED)
+                            };
+                            if changed != lite {
+                                self.events.push_back(EntityEvent::LiteConfigChanged {
+                                    escalation_allowed: allowed,
+                                });
+                                self.set_lite_status(changed);
+                            }
+                            data.extend_from_slice(&interface.to_be_bytes());
+                            data.extend_from_slice(&[flags.0, 0, 0, 0]);
+                        }
+                        _ => data.extend_from_slice(&command.payload[2..]),
                     }
                 }
                 _ => data.extend_from_slice(&command.payload[2..]),

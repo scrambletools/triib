@@ -353,6 +353,12 @@ enum Request {
     GetLiteStatus {
         interface: u16,
     },
+    /// How an AVB_INTERFACE runs AVB Lite (SET_LITE_CONFIG).
+    SetLiteConfig {
+        interface: u16,
+        flags: u8,
+        command: CommandId,
+    },
     /// READ_DESCRIPTOR the caller asked for, outside enumeration.
     ReadForCaller {
         descriptor_type: DescriptorType,
@@ -380,7 +386,8 @@ impl Request {
             // Vendor unique commands, numbered apart from AEM.
             Request::GetMilanInfo
             | Request::GetMediaClockReference { .. }
-            | Request::GetLiteStatus { .. } => Channel::Mvu,
+            | Request::GetLiteStatus { .. }
+            | Request::SetLiteConfig { .. } => Channel::Mvu,
             Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. }
@@ -415,6 +422,7 @@ impl Request {
             | Request::DisconnectTx { command, .. }
             | Request::SetMaxTransitTime { command, .. }
             | Request::ReadForCaller { command, .. }
+            | Request::SetLiteConfig { command, .. }
             | Request::ChangeMappings { command, .. } => Some(command),
             Request::Identify { command, .. }
             | Request::GetTxState { command, .. }
@@ -874,6 +882,27 @@ impl Controller {
         let Some(inflight) = self.inflight.get(&key).copied() else {
             return;
         };
+        if let Request::SetLiteConfig {
+            interface, command, ..
+        } = inflight.request
+        {
+            if inflight.entity_id != entity_id {
+                return;
+            }
+            self.complete(key, inflight);
+            let status = AemStatus(pdu.header.status);
+            self.events.push_back(Event::CommandFinished(
+                command,
+                if status.is_success() {
+                    Outcome::Done
+                } else {
+                    Outcome::Refused(Refusal::Aem(status))
+                },
+            ));
+            // The status shows the change.
+            self.queue_query(entity_id, Request::GetLiteStatus { interface });
+            return;
+        }
         let Request::GetLiteStatus { interface } = inflight.request else {
             return;
         };
@@ -1130,6 +1159,7 @@ impl Controller {
             Request::GetMilanInfo
             | Request::GetMediaClockReference { .. }
             | Request::GetLiteStatus { .. }
+            | Request::SetLiteConfig { .. }
             | Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. }
@@ -2044,6 +2074,16 @@ impl Controller {
                 interface,
                 &mut out,
             ),
+            Request::SetLiteConfig {
+                interface, flags, ..
+            } => lite::encode_set_lite_config(
+                addressing.target,
+                addressing.controller,
+                sequence_id,
+                interface,
+                lite::LiteConfigFlags(flags),
+                &mut out,
+            ),
             Request::GetMilanInfo => mvu::encode_get_milan_info(
                 addressing.target,
                 addressing.controller,
@@ -2323,6 +2363,30 @@ impl Controller {
             rate,
         };
         let request = Request::SetSamplingRate { set, command };
+        self.queue_command(now, entity_id, command, request);
+        command
+    }
+
+    /// Allows or disallows an AVB_INTERFACE's talkers escalating streams to
+    /// multicast in AVB Lite (SET_LITE_CONFIG, AVB Lite profile 2.4).
+    pub fn set_lite_config(
+        &mut self,
+        now: Instant,
+        entity_id: EntityId,
+        interface: u16,
+        escalation_allowed: bool,
+    ) -> CommandId {
+        let command = self.next_command();
+        let flags = if escalation_allowed {
+            lite::LiteConfigFlags::ESCALATION_ALLOWED.0
+        } else {
+            0
+        };
+        let request = Request::SetLiteConfig {
+            interface,
+            flags,
+            command,
+        };
         self.queue_command(now, entity_id, command, request);
         command
     }
@@ -2919,6 +2983,7 @@ fn command_type_of(request: Request) -> AemCommandType {
         Request::GetMilanInfo
         | Request::GetMediaClockReference { .. }
         | Request::GetLiteStatus { .. }
+        | Request::SetLiteConfig { .. }
         | Request::GetRxState { .. }
         | Request::Bind { .. }
         | Request::Unbind { .. }
