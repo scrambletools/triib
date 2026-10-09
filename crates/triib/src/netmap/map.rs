@@ -1694,7 +1694,7 @@ mod tests {
                 };
                 let (icon, name) = match node.kind {
                     Kind::Bridge => (Icon::Hub, node.name.clone()),
-                    Kind::Host => (Icon::Computer, "This computer".to_owned()),
+                    Kind::Host => (Icon::Computer, crate::fl!("netmap-this-computer")),
                     Kind::Entity { .. } => (Icon::GraphicEq, node.name.clone()),
                     Kind::Clock => (Icon::Schedule, node.name.clone()),
                 };
@@ -1710,12 +1710,12 @@ mod tests {
                     .iter()
                     .any(|bound| Some(bound.1) == entity && bound.2 == Status::Failed);
                 let (subtitle, paint) = match (clock, node.kind, node.apart) {
-                    (_, _, Some(_)) => ("Not on the gPTP tree".to_owned(), Paint::Failed),
+                    (_, _, Some(_)) => (crate::fl!("netmap-off-tree"), Paint::Failed),
                     (true, _, _) if node.parent.is_none() => {
-                        ("Grandmaster".to_owned(), Paint::Clock)
+                        (crate::fl!("avb-interface-grandmaster"), Paint::Clock)
                     }
-                    (true, _, _) if node.link.synced => ("Synced".to_owned(), Paint::Muted),
-                    (true, _, _) => ("Not synced".to_owned(), Paint::Failed),
+                    (true, _, _) if node.link.synced => (crate::fl!("netmap-synced"), Paint::Muted),
+                    (true, _, _) => (crate::fl!("netmap-not-synced"), Paint::Failed),
                     (false, Kind::Entity { .. }, _) if node.children.is_empty() => {
                         let mut text = [(sending, "out"), (receiving, "in")]
                             .iter()
