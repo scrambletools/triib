@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Installs a built triib, triib-cli and triib-endpointd and their data
 # files into a system layout, for packages: the binaries, desktop entry,
-# icons when there are any, AppStream metadata and licenses.
+# icons when there are any, AppStream metadata and licenses, and the
+# ptp4l configurations, systemd units and polkit rule triib-endpointd
+# switches PTP profiles with.
 #
 #   scripts/dist-install.sh BINARY_DIR [DESTDIR] [PREFIX]
 #
@@ -36,3 +38,12 @@ for font_license in OFL.txt LICENSE-MaterialSymbols.txt; do
         "$share/licenses/triib/fonts/$font_license"
 done
 install -Dm644 "$root/README.md" "$share/doc/triib/README.md"
+# The units name the configurations in /etc, wherever PREFIX is.
+ptp4l="$root/packaging/linux/ptp4l"
+for config in ptp4l-gptp.cfg ptp4l-lite.cfg; do
+    install -Dm644 "$ptp4l/$config" "$destdir/etc/triib/$config"
+done
+for unit in triib-ptp4l-gptp@.service triib-ptp4l-lite@.service; do
+    install -Dm644 "$ptp4l/$unit" "$destdir$prefix/lib/systemd/system/$unit"
+done
+install -Dm644 "$ptp4l/50-triib-ptp4l.rules" "$share/polkit-1/rules.d/50-triib-ptp4l.rules"

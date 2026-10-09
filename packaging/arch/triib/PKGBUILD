@@ -13,6 +13,7 @@ optdepends=('linuxptp: gPTP for talkers and listeners on this computer'
             'libxcursor: running under X11'
             'libxi: running under X11')
 install=triib.install
+backup=('etc/triib/ptp4l-gptp.cfg' 'etc/triib/ptp4l-lite.cfg')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 

@@ -32,6 +32,7 @@ use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 use crate::config::{Config, EndpointConfig, Kind, LiteChoice, binding_text};
 use crate::gptp;
 use crate::lite::{self, Declared, Fallback};
+use crate::profile::{self, Profile};
 use crate::status::{DaemonStatus, EndpointStatus, status_path};
 
 /// Entity model IDs under Scramble Tools' MA-S `8C-1F-64-36-C`.
@@ -57,6 +58,9 @@ const BROADCAST: MacAddress = MacAddress([0xff; 6]);
 const FANOUT: usize = 2;
 const CVU_REFRESH: Duration = Duration::from_secs(1);
 const CVU_STALE: Duration = Duration::from_secs(30);
+/// The least time between starting one ptp4l unit and the next, so a
+/// profile switch has time to show.
+const SWITCH_AGAIN: Duration = Duration::from_secs(30);
 
 /// What the sockets and ptp4l hand the runtime.
 enum Input {
@@ -65,6 +69,7 @@ enum Input {
     Msrp(Vec<u8>),
     Mvrp(Vec<u8>),
     Gptp(Option<gptp::Status>),
+    Link(profile::Link),
 }
 
 /// The rates this computer's endpoints offer: those class A's 8000
@@ -278,6 +283,10 @@ pub struct Runtime {
     own_clock: ClockIdentity,
     link_speed: u32,
     ptp_status: Option<gptp::Status>,
+    /// The link and which of triib's ptp4l units runs there, and when the
+    /// daemon last started one.
+    link: Option<profile::Link>,
+    switched_at: Option<Duration>,
     clock: Arc<MediaClock>,
     /// The talker declarations registered, by stream ID.
     talkers: HashMap<u64, TalkerDeclaration>,
@@ -419,7 +428,8 @@ impl Runtime {
         } else {
             config.ptp4l_socket.clone()
         };
-        gptp::watch(socket, stop.clone(), sender, Input::Gptp);
+        gptp::watch(socket, stop.clone(), sender.clone(), Input::Gptp);
+        profile::watch(interface.clone(), stop.clone(), sender, Input::Link);
 
         let mac = avtp.mac();
         let own_clock = ClockIdentity(u64::from_be_bytes([
@@ -479,6 +489,8 @@ impl Runtime {
             own_clock,
             link_speed,
             ptp_status: None,
+            link: None,
+            switched_at: None,
             clock,
             talkers: HashMap::new(),
             ready_remotely: HashMap::new(),
@@ -762,8 +774,15 @@ impl Runtime {
                 // ptp4l on another interface says nothing of this one: its
                 // clock identity comes from that interface's address.
                 let status = status.filter(|status| status.own_clock == self.own_clock);
-                self.fallback
-                    .set_ptp4l(since, status.as_ref().map(|status| status.gptp.as_capable));
+                // ptp4l's word on the gPTP peer counts only while it runs
+                // gPTP.
+                self.fallback.set_ptp4l(
+                    since,
+                    status
+                        .as_ref()
+                        .filter(|status| !status.end_to_end)
+                        .map(|status| status.gptp.as_capable),
+                );
                 if status.is_none() && self.ptp_status.is_none() && !self.gptp_text.ends_with("yet")
                 {
                     return;
@@ -798,6 +817,28 @@ impl Runtime {
                 for endpoint in &mut self.endpoints {
                     endpoint.entity.set_gptp(now, gptp.clone());
                 }
+            }
+            Input::Link(link) => {
+                let last = self.link.replace(link);
+                let unit = last.and_then(|last| last.unit);
+                if unit != link.unit {
+                    match link.unit {
+                        Some(profile) => log(format!(
+                            "ptp4l: {} runs {profile}",
+                            profile.unit(&self.interface)
+                        )),
+                        None if unit.is_some() => log("ptp4l: triib's units stopped"),
+                        None => {}
+                    }
+                }
+                // AVB Lite holds until the link comes up again (profile
+                // 2.2).
+                let came_up = link.carrier == Some(true)
+                    && last.is_some_and(|last| last.carrier == Some(false));
+                if came_up && self.lite.is_some() && self.config.avb_lite == LiteChoice::Auto {
+                    self.leave_lite();
+                }
+                self.steer_profile();
             }
         }
     }
@@ -1650,6 +1691,84 @@ impl Runtime {
             }
         }
         self.update_lite_status();
+        self.steer_profile();
+    }
+
+    /// Leaves AVB Lite as the link comes up again (profile 2.2): CVU SRP's
+    /// declarations go, the endpoints declare with MSRP and MVRP as at the
+    /// start, and the fallback is armed again.
+    fn leave_lite(&mut self) {
+        log("AVB Lite: the link came up again, trying AVB");
+        let since = self.elapsed();
+        for index in 0..self.endpoints.len() {
+            if self.endpoints[index].config.kind == Kind::Talker {
+                self.withdraw_talker(index);
+            } else if let Some((stream_id, talker, state)) = self.endpoints[index].cvu_to.take() {
+                self.send_cvu(
+                    index,
+                    talker,
+                    &lite::listener_message(stream_id, state, avb_mrp::Event::Lv),
+                );
+            }
+            let endpoint = &mut self.endpoints[index];
+            endpoint.talker = None;
+            endpoint.listener = None;
+            endpoint.copies.clear();
+        }
+        self.lite = None;
+        self.talkers.clear();
+        self.ready_remotely.clear();
+        self.fallback = Fallback::new(self.own_clock.0, false, since);
+        self.mvrp_participant
+            .declare(since, mvrp::VID, mvrp::value(VLAN), None);
+        self.msrp_participant.declare(
+            since,
+            msrp::attribute::DOMAIN,
+            Domain::CLASS_A.value(),
+            None,
+        );
+        for index in 0..self.endpoints.len() {
+            match self.endpoints[index].config.kind {
+                Kind::Talker if self.addressed() => self.declare_talker(index),
+                Kind::Talker => {}
+                Kind::Listener => self.update_listener(index),
+            }
+        }
+        self.update_lite_status();
+        self.steer_profile();
+    }
+
+    /// Starts the ptp4l unit for the profile the endpoints run, where one
+    /// of triib's units runs ptp4l on the interface.
+    fn steer_profile(&mut self) {
+        if self.config.avb_lite == LiteChoice::Off {
+            return;
+        }
+        let Some(unit) = self.link.and_then(|link| link.unit) else {
+            return;
+        };
+        let wanted = if self.lite.is_some() || self.fallback.reason().is_some() {
+            Profile::Lite
+        } else {
+            Profile::Gptp
+        };
+        let since = self.elapsed();
+        if unit == wanted || self.switched_at.is_some_and(|at| since < at + SWITCH_AGAIN) {
+            return;
+        }
+        self.switched_at = Some(since);
+        log(format!("ptp4l: moving to {wanted}"));
+        let interface = self.interface.clone();
+        let _ = std::thread::Builder::new()
+            .name("ptp4l unit".into())
+            .spawn(move || {
+                if let Err(error) = profile::start(&interface, wanted) {
+                    log(format!(
+                        "ptp4l: cannot start {}: {error}",
+                        wanted.unit(&interface)
+                    ));
+                }
+            });
     }
 
     /// Ages out declarations not refreshed, and refreshes ours.
@@ -1990,6 +2109,7 @@ impl Runtime {
     fn update_lite_status(&mut self) {
         let ptp = self.ptp_status.as_ref();
         let offset = ptp.and_then(|status| status.offset);
+        let gptp_runs = ptp.is_some_and(|status| !status.end_to_end);
         let mut flags = LiteFlags::CAPABLE | LiteFlags::EGRESS_VALID;
         if self.lite.is_some() {
             flags |= LiteFlags::ACTIVE;
@@ -2013,7 +2133,9 @@ impl Runtime {
                     .lite
                     .as_ref()
                     .map_or(FallbackReason::NONE, |lite| lite.reason),
-                ptp_profile: if self.lite.is_some() {
+                // ptp4l still in gPTP keeps the profile gPTP, fallen
+                // back or not.
+                ptp_profile: if self.lite.is_some() && !gptp_runs {
                     PtpProfile::AVB_LITE_PTP
                 } else {
                     PtpProfile::GPTP

@@ -1,5 +1,6 @@
 //! gPTP as ptp4l runs it: asked through its read-only management socket
-//! with linuxptp's pmc every few seconds.
+//! with linuxptp's pmc every few seconds. ptp4l running the AVB Lite PTP
+//! profile answers too, end to end and without gPTP's transportSpecific.
 
 use std::process::Command;
 use std::sync::Arc;
@@ -21,6 +22,9 @@ pub struct Status {
     pub own_clock: ClockIdentity,
     /// The servo's last offset from the grandmaster, in nanoseconds.
     pub offset: Option<i64>,
+    /// ptp4l measures delay end to end, as the AVB Lite PTP profile does,
+    /// not peer to peer as gPTP does.
+    pub end_to_end: bool,
 }
 
 /// A clock identity as linuxptp prints it, such as `0001f2.fffe.ff3b14`.
@@ -57,6 +61,8 @@ pub fn parse(output: &str) -> Option<Status> {
         .and_then(|text| text.parse().ok())
         .unwrap_or(0);
     let offset = value("master_offset").and_then(|text| text.parse().ok());
+    // PORT_DATA_SET's delayMechanism: 1 end to end, 2 peer to peer.
+    let end_to_end = value("delayMechanism") == Some("1");
     let mut path = Vec::new();
     if present {
         path.push(grandmaster);
@@ -76,13 +82,19 @@ pub fn parse(output: &str) -> Option<Status> {
         },
         own_clock,
         offset,
+        end_to_end,
     })
 }
 
-/// Asks ptp4l once.
+/// Asks ptp4l once, as gPTP, then as standard PTP: ptp4l ignores
+/// management messages whose transportSpecific is not its own.
 fn ask(socket: &str, client: &str) -> Option<Status> {
+    ask_as(socket, client, "1").or_else(|| ask_as(socket, client, "0"))
+}
+
+fn ask_as(socket: &str, client: &str, transport: &str) -> Option<Status> {
     let output = Command::new("pmc")
-        .args(["-u", "-b", "0", "-t", "1", "-s", socket, "-i", client])
+        .args(["-u", "-b", "0", "-t", transport, "-s", socket, "-i", client])
         .args([
             "GET TIME_STATUS_NP",
             "GET PORT_DATA_SET",
@@ -152,6 +164,9 @@ mod tests {
         assert_eq!(status.gptp.propagation_delay, 305);
         assert_eq!(status.offset, Some(-12));
         assert!(status.gptp.as_capable);
+        assert!(!status.end_to_end);
+        let lite = ANSWER.replace("asCapable", "delayMechanism 1\n asCapable");
+        assert!(parse(&lite).unwrap().end_to_end);
         assert_eq!(
             status.gptp.path,
             [

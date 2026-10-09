@@ -1,0 +1,10 @@
+[Unit]
+Description=ptp4l running the AVB Lite PTP profile on %i for triib
+Documentation=man:ptp4l(8)
+After=network.target
+Conflicts=triib-ptp4l-gptp@%i.service
+
+[Service]
+ExecStart=ptp4l -f /etc/triib/ptp4l-lite.cfg -i %i
+Restart=on-failure
+RestartSec=2
