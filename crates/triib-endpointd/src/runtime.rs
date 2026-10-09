@@ -1073,7 +1073,11 @@ impl Runtime {
         Some(TalkerDeclaration {
             stream_id: stream_id.0,
             destination,
-            vlan_id: VLAN,
+            vlan_id: if self.lite.is_some() {
+                self.media_vlan()
+            } else {
+                VLAN
+            },
             max_frame_size: media.pdu_length() as u16,
             max_interval_frames: 1,
             priority: if self.lite.is_some() {
@@ -1354,7 +1358,7 @@ impl Runtime {
             } else {
                 vec![destination]
             },
-            vlan_id: VLAN,
+            vlan_id: if lite { self.media_vlan() } else { VLAN },
             priority: if lite { LITE_PRIORITY } else { PRIORITY },
             format: stream.current_format,
             max_transit_time: Duration::from_nanos(u64::from(transit)),
@@ -2101,7 +2105,9 @@ impl Runtime {
         frame.extend_from_slice(&destination.0);
         frame.extend_from_slice(&self.mac.0);
         frame.extend_from_slice(&0x8100u16.to_be_bytes());
-        frame.extend_from_slice(&((u16::from(LITE_PRIORITY) << 13) | VLAN).to_be_bytes());
+        frame.extend_from_slice(
+            &((u16::from(LITE_PRIORITY) << 13) | self.media_vlan()).to_be_bytes(),
+        );
         frame.extend_from_slice(&atdecc::ETHERTYPE_AVTP.to_be_bytes());
         frame.extend_from_slice(&pdu);
         frame.resize(frame.len().max(64), 0);
@@ -2225,6 +2231,12 @@ impl Runtime {
                 self.update_listener(index);
             }
         }
+    }
+
+    /// The VLAN of AVB Lite's streams and CVU SRP: the configured one, 2
+    /// when none is, or 0 for a priority tag only.
+    fn media_vlan(&self) -> u16 {
+        self.config.media_vlan.unwrap_or(VLAN) & 0x0fff
     }
 
     /// How many listeners a talker serves unicast.
@@ -2608,7 +2620,7 @@ impl Runtime {
                     PtpProfile::GPTP
                 },
                 ptp_domain: ptp.map_or(0, |status| status.gptp.domain),
-                media_vlan_id: VLAN,
+                media_vlan_id: self.media_vlan(),
                 unicast_fanout_limit: if talker { self.fanout() as u8 } else { 0 },
                 link_speed: self.link_speed,
                 committed_egress: egress.min(u64::from(u32::MAX)) as u32,

@@ -29,6 +29,11 @@ pub struct Config {
     /// 2 when not given, as the profile recommends; at least 1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unicast_fanout: Option<u8>,
+    /// The VLAN AVB Lite's streams and CVU SRP go in, 2 when not given,
+    /// as in AVB; 0 tags them with their priority only, for switches
+    /// whose VLANs cannot be set up (AVB Lite profile, 7).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_vlan: Option<u16>,
     #[serde(rename = "endpoint")]
     pub endpoints: Vec<EndpointConfig>,
 }
