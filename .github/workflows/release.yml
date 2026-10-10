@@ -23,7 +23,8 @@ jobs:
     # Built on an older system so the packages run on newer ones too. The
     # Debian and RPM packages grant the programs CAP_NET_RAW as they
     # install; a plain archive cannot, so it says how in the README. No
-    # AppImage or Flatpak, which cannot carry the capability.
+    # AppImage or Flatpak, which cannot carry the capability. GitHub has
+    # no RISC-V runners, so that build is cross-compiled.
     if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'linux' }}
     strategy:
       fail-fast: false
@@ -35,10 +36,24 @@ jobs:
           - arch: aarch64
             runner: ubuntu-22.04-arm
             deb: arm64
+          - arch: riscv64
+            runner: ubuntu-22.04
+            deb: riscv64
+            target: riscv64gc-unknown-linux-gnu
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install ALSA's headers for audio
+        if: ${{ !matrix.target }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils libasound2-dev
+      - name: Install the cross toolchain and libraries
+        if: ${{ matrix.target }}
+        run: scripts/cross-setup.sh ${{ matrix.arch }}
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.arch }}
@@ -51,22 +66,32 @@ jobs:
             exit 1
           fi
           echo "version=$version" >>"$GITHUB_OUTPUT"
-      - name: Check the desktop entry, and ALSA's headers for audio
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils libasound2-dev
-          desktop-file-validate data/*.desktop
+      - name: Check the desktop entry
+        run: desktop-file-validate data/*.desktop
       - name: Build
-        run: cargo build --release --locked -p triib -p triib-cli -p triib-endpointd
+        id: build
+        run: |
+          if [ -n "$TARGET" ]; then
+            cargo build --release --locked -p triib -p triib-cli -p triib-endpointd --target "$TARGET"
+            echo "binaries=target/$TARGET/release" >>"$GITHUB_OUTPUT"
+          else
+            cargo build --release --locked -p triib -p triib-cli -p triib-endpointd
+            echo "binaries=target/release" >>"$GITHUB_OUTPUT"
+          fi
         env:
           TRIIB_PRODUCTION: '1'
+          TARGET: ${{ matrix.target }}
       - name: Check that they run
         run: |
-          target/release/triib --version
-          target/release/triib-cli --version
-          target/release/triib-endpointd --version
+          run=""
+          [ -n "$TARGET" ] && run="qemu-${{ matrix.arch }}-static -L /"
+          for program in triib triib-cli triib-endpointd; do
+            $run ${{ steps.build.outputs.binaries }}/$program --version
+          done
+        env:
+          TARGET: ${{ matrix.target }}
       - name: Stage
-        run: scripts/dist-install.sh target/release stage /usr
+        run: scripts/dist-install.sh ${{ steps.build.outputs.binaries }} stage /usr
       - name: Debian and RPM packages
         run: |
           curl -sSLf -o nfpm.deb \

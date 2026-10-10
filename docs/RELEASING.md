@@ -8,6 +8,7 @@ Everything a release ships is built from this repository:
 | `data/io.github.scrambletools.triib.metainfo.xml` | AppStream metadata, with the release history |
 | `data/icons/hicolor/` | App icon, which every package picks up |
 | `packaging/licenses/` | The licenses of the fonts triib carries, from scramble-ui |
+| `scripts/cross-setup.sh` | Sets up an x86_64 Ubuntu to cross-compile for RISC-V |
 | `scripts/dist-install.sh` | Installs a build of triib, triib-cli and triib-endpointd and the files above into a system layout; the Linux packages use it |
 | `packaging/nfpm.yaml`, `packaging/linux/postinstall.sh` | Debian and RPM packages, made with nfpm, which grant the programs `CAP_NET_RAW` as they install |
 | `packaging/arch/triib/` | AUR package, whose install script grants the same |
@@ -18,7 +19,9 @@ Everything a release ships is built from this repository:
 | `scripts/site-screenshots.sh` | Renders the website's screenshots into `docs/screenshots` from the test bench |
 
 Each package is built for x86_64 and ARM64 on GitHub's runners of that
-architecture; the macOS package is built for Apple Silicon only.
+architecture, and the Linux packages also for RISC-V, cross-compiled by
+`scripts/cross-setup.sh` and checked under QEMU; the macOS package is
+built for Apple Silicon only.
 
 Packages are built with `TRIIB_PRODUCTION=1`, which makes the installed
 copy: settings in `triib.toml` (`~/.config` on Linux, `%APPDATA%\triib`
