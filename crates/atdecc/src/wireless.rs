@@ -492,6 +492,57 @@ mod tests {
         );
     }
 
+    /// An ESP32 Wi-Fi station's answer, Mode A over FTM, unlocked, its FTM
+    /// failing as it sits too close to the access point.
+    #[test]
+    fn decodes_an_esp_stations_answer() {
+        const ANSWER: [u8; 70] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x06, 0x00, 0x14, 0x04, 0xc8, 0x00, 0x00,
+            0x00, 0x01, 0xff, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x08, 0xff, 0xff, 0x00, 0x00, 0xd8, 0x85, 0xac, 0xfa, 0x2c, 0x59,
+            0x80, 0xf1, 0xb2, 0xff, 0xfe, 0xd2, 0xca, 0xa9, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        assert_eq!(
+            read_u16(&ANSWER, 0),
+            WirelessCommandType::GET_WIRELESS_STATUS.0
+        );
+        let status = WirelessStatus::decode(&ANSWER[2..]).unwrap();
+        assert_eq!(status.interface, 0);
+        assert!(!status.access_point());
+        assert!(!status.flags.contains(WirelessFlags::LOCKED));
+        assert_eq!(status.time_mode, TimeMode::MODE_A_FTM);
+        assert_eq!(
+            (status.band, status.channel, status.channel_width),
+            (Band::GHZ_2_4, 6, 20)
+        );
+        assert_eq!(status.phy_generation, 4);
+        assert_eq!(status.signal(), Some(-56));
+        assert_eq!(status.phy_rate, 0);
+        assert_eq!(status.ftm_success, 0);
+        assert_eq!(status.as_capable_reason, AsCapableReason::BURST_FRAMES);
+        assert_eq!(
+            (
+                status.ftm_burst_frames,
+                status.ftm_burst_duration,
+                status.ftm_min_delta
+            ),
+            (0xff, 0xff, 0xff)
+        );
+        assert_eq!((status.rtt(), status.servo()), (None, None));
+        assert_eq!(status.association_age, 8);
+        assert_eq!(status.time_age, 0xffff);
+        assert_eq!(
+            status.bssid,
+            MacAddress([0xd8, 0x85, 0xac, 0xfa, 0x2c, 0x59])
+        );
+        assert_eq!(status.ap_clock, ClockIdentity(0x80f1_b2ff_fed2_caa9));
+        assert_eq!(status.ap_port, 2);
+        assert_eq!(status.station_count, 0);
+        assert_eq!(status.stations(&ANSWER[2..]).count(), 0);
+        assert_eq!(status.to_bytes(), ANSWER[2..]);
+    }
+
     #[test]
     fn queries_carry_the_wireless_protocol() {
         let mut out = [0; 64];
