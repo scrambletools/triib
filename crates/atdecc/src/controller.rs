@@ -32,11 +32,12 @@ use crate::descriptor::{
 use crate::error::{DecodeError, EncodeError};
 use crate::id::{EntityId, EntityModelId};
 use crate::lite::{self, CvuMessage, LiteCommandType, LiteMessage, LiteStatus};
-use crate::model::{Binding, EntityModel, EnumerationFailure, EnumerationState, TxState};
+use crate::model::{Binding, EntityModel, EnumerationFailure, EnumerationState, TxState, Wireless};
 use crate::mvu::{self, MediaClockReference, MilanInfo, MvuCommandType, MvuMessage};
 use crate::pdu::{self, Pdu};
 use crate::stream_format::StreamFormat;
 use crate::time::Instant;
+use crate::wireless::{self, WirelessCommandType, WirelessMessage, WirelessStatus};
 
 /// How long a command waits for its response before its one retry
 /// (IEEE 1722.1-2021, 9.3.2.6).
@@ -122,6 +123,11 @@ pub struct Config {
     /// follow their PTP offset.
     pub lite_status: bool,
     pub lite_poll: Duration,
+    /// Ask each entity's AVB interfaces for their AVB Wireless status once
+    /// it is read, and keep asking the wireless ones every
+    /// `wireless_poll`, zero for never, to follow their link and time.
+    pub wireless_status: bool,
+    pub wireless_poll: Duration,
     /// The controller's own MAC address, where entities advertised from
     /// it are out of its reach: it does not read them.
     pub own_mac: Option<MacAddress>,
@@ -146,6 +152,8 @@ impl Config {
             read_transit_times: true,
             lite_status: true,
             lite_poll: Duration::from_secs(5),
+            wireless_status: true,
+            wireless_poll: Duration::from_secs(5),
             own_mac: None,
             advertise: None,
             first_sequence_id: 0,
@@ -359,6 +367,17 @@ enum Request {
         flags: u8,
         command: CommandId,
     },
+    /// The AVB Wireless status of an AVB_INTERFACE (AVB Wireless profile,
+    /// 5.1).
+    GetWirelessStatus {
+        interface: u16,
+    },
+    /// An AVB_INTERFACE's AVB Wireless configuration (SET_WIRELESS_CONFIG).
+    SetWirelessConfig {
+        interface: u16,
+        flags: u8,
+        command: CommandId,
+    },
     /// READ_DESCRIPTOR the caller asked for, outside enumeration.
     ReadForCaller {
         descriptor_type: DescriptorType,
@@ -387,7 +406,9 @@ impl Request {
             Request::GetMilanInfo
             | Request::GetMediaClockReference { .. }
             | Request::GetLiteStatus { .. }
-            | Request::SetLiteConfig { .. } => Channel::Mvu,
+            | Request::SetLiteConfig { .. }
+            | Request::GetWirelessStatus { .. }
+            | Request::SetWirelessConfig { .. } => Channel::Mvu,
             Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. }
@@ -423,6 +444,7 @@ impl Request {
             | Request::SetMaxTransitTime { command, .. }
             | Request::ReadForCaller { command, .. }
             | Request::SetLiteConfig { command, .. }
+            | Request::SetWirelessConfig { command, .. }
             | Request::ChangeMappings { command, .. } => Some(command),
             Request::Identify { command, .. }
             | Request::GetTxState { command, .. }
@@ -509,6 +531,9 @@ pub struct Controller {
     /// When to ask the entities that answer it for their AVB Lite status
     /// again.
     next_lite_poll: Option<Instant>,
+    /// When to ask the wireless interfaces for their AVB Wireless status
+    /// again.
+    next_wireless_poll: Option<Instant>,
     /// Entity models read before, by what they are for.
     cache: BTreeMap<ModelKey, CachedModel>,
     /// The mappings of each mapping change queued or in flight.
@@ -536,6 +561,7 @@ impl Controller {
             next_command: 0,
             identify_off: BTreeMap::new(),
             next_lite_poll: None,
+            next_wireless_poll: None,
             cache: BTreeMap::new(),
             mapping_changes: BTreeMap::new(),
             control_values: BTreeMap::new(),
@@ -816,6 +842,10 @@ impl Controller {
             self.handle_lite(now, pdu, &message);
             return;
         }
+        if let Ok(message) = WirelessMessage::from_pdu(pdu) {
+            self.handle_wireless(now, pdu, &message);
+            return;
+        }
         let Ok(message) = MvuMessage::from_pdu(pdu) else {
             return;
         };
@@ -938,6 +968,98 @@ impl Controller {
         if let Some(model) = self.models.get_mut(&entity_id)
             && model.has(DescriptorType::AVB_INTERFACE, status.interface)
             && model.set_lite_status(status)
+            && model.state == EnumerationState::Complete
+        {
+            self.events.push_back(Event::EntityModelChanged(entity_id));
+        }
+    }
+
+    /// An AVB Wireless status response, or one an entity sent unsolicited.
+    fn handle_wireless(
+        &mut self,
+        now: Instant,
+        pdu: &VendorUniquePdu<'_>,
+        message: &WirelessMessage<'_>,
+    ) {
+        let entity_id = pdu.header.target_entity_id;
+        let wireless = (pdu.header.status == 0
+            && message.command_type == WirelessCommandType::GET_WIRELESS_STATUS)
+            .then(|| WirelessStatus::decode(message.data).ok())
+            .flatten()
+            .map(|status| Wireless {
+                status,
+                stations: status.stations(message.data).collect(),
+            });
+        if message.unsolicited {
+            if let Some(wireless) = wireless {
+                self.store_wireless(entity_id, wireless);
+            }
+            return;
+        }
+        let key = (Channel::Mvu, pdu.header.sequence_id);
+        let Some(inflight) = self.inflight.get(&key).copied() else {
+            return;
+        };
+        if inflight.entity_id != entity_id {
+            return;
+        }
+        if let Request::SetWirelessConfig {
+            interface, command, ..
+        } = inflight.request
+        {
+            self.complete(key, inflight);
+            let status = AemStatus(pdu.header.status);
+            self.events.push_back(Event::CommandFinished(
+                command,
+                if status.is_success() {
+                    Outcome::Done
+                } else {
+                    Outcome::Refused(Refusal::Aem(status))
+                },
+            ));
+            // The status shows the change.
+            self.queue_query(entity_id, Request::GetWirelessStatus { interface });
+            return;
+        }
+        let Request::GetWirelessStatus { interface } = inflight.request else {
+            return;
+        };
+        self.complete(key, inflight);
+        let status = AemStatus(pdu.header.status);
+        match wireless {
+            Some(wireless) if wireless.status.interface == interface => {
+                if let Some(model) = self.models.get_mut(&entity_id) {
+                    model.wireless_supported = Some(true);
+                }
+                // Asked again from here on, to follow its link and time.
+                if !self.config.wireless_poll.is_zero() {
+                    self.next_wireless_poll
+                        .get_or_insert(now + self.config.wireless_poll);
+                }
+                self.store_wireless(entity_id, wireless);
+            }
+            // The entity answers the query, but the interface is wired.
+            _ if status == AemStatus::NOT_SUPPORTED => {
+                if let Some(model) = self.models.get_mut(&entity_id) {
+                    model.wireless_supported = Some(true);
+                }
+            }
+            // An entity without AVB Wireless says it does not implement
+            // the query; it is not asked again.
+            _ if status == AemStatus::NOT_IMPLEMENTED => {
+                if let Some(model) = self.models.get_mut(&entity_id) {
+                    model.wireless_supported = Some(false);
+                }
+            }
+            _ => {}
+        }
+        self.check_complete(entity_id);
+    }
+
+    fn store_wireless(&mut self, entity_id: EntityId, wireless: Wireless) {
+        if let Some(model) = self.models.get_mut(&entity_id)
+            && model.has(DescriptorType::AVB_INTERFACE, wireless.status.interface)
+            && model.set_wireless(wireless)
             && model.state == EnumerationState::Complete
         {
             self.events.push_back(Event::EntityModelChanged(entity_id));
@@ -1160,6 +1282,8 @@ impl Controller {
             | Request::GetMediaClockReference { .. }
             | Request::GetLiteStatus { .. }
             | Request::SetLiteConfig { .. }
+            | Request::GetWirelessStatus { .. }
+            | Request::SetWirelessConfig { .. }
             | Request::GetRxState { .. }
             | Request::Bind { .. }
             | Request::Unbind { .. }
@@ -1880,6 +2004,15 @@ impl Controller {
                     .push_back(Request::GetLiteStatus { interface });
             }
         }
+        // Which interfaces are wireless, and how their link and time hold,
+        // from entities that answer the query.
+        if self.config.wireless_status && model.wireless_supported != Some(false) {
+            for (interface, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+                session
+                    .queue
+                    .push_back(Request::GetWirelessStatus { interface });
+            }
+        }
         // How each clock domain stands in media clock management.
         if self.config.media_clock_info && model.milan.is_some() {
             for (domain, _) in model.descriptors(DescriptorType::CLOCK_DOMAIN) {
@@ -2082,6 +2215,23 @@ impl Controller {
                 sequence_id,
                 interface,
                 lite::LiteConfigFlags(flags),
+                &mut out,
+            ),
+            Request::GetWirelessStatus { interface } => wireless::encode_get_wireless_status(
+                addressing.target,
+                addressing.controller,
+                sequence_id,
+                interface,
+                &mut out,
+            ),
+            Request::SetWirelessConfig {
+                interface, flags, ..
+            } => wireless::encode_set_wireless_config(
+                addressing.target,
+                addressing.controller,
+                sequence_id,
+                interface,
+                wireless::WirelessConfigFlags(flags),
                 &mut out,
             ),
             Request::GetMilanInfo => mvu::encode_get_milan_info(
@@ -2383,6 +2533,31 @@ impl Controller {
             0
         };
         let request = Request::SetLiteConfig {
+            interface,
+            flags,
+            command,
+        };
+        self.queue_command(now, entity_id, command, request);
+        command
+    }
+
+    /// Allows or disallows an access point admitting Class A toward its
+    /// wireless port, the AVB Wireless bench-test opt-in
+    /// (SET_WIRELESS_CONFIG, AVB Wireless profile 5.2).
+    pub fn set_wireless_config(
+        &mut self,
+        now: Instant,
+        entity_id: EntityId,
+        interface: u16,
+        class_a_allowed: bool,
+    ) -> CommandId {
+        let command = self.next_command();
+        let flags = if class_a_allowed {
+            wireless::WirelessConfigFlags::CLASS_A_ALLOWED.0
+        } else {
+            0
+        };
+        let request = Request::SetWirelessConfig {
             interface,
             flags,
             command,
@@ -2739,6 +2914,12 @@ impl Controller {
             {
                 model.lite_supported = Some(false);
             }
+            if let Request::GetWirelessStatus { .. } = inflight.request
+                && let Some(model) = self.models.get_mut(&inflight.entity_id)
+                && model.wireless_supported.is_none()
+            {
+                model.wireless_supported = Some(false);
+            }
             if let Request::GetDynamicInfo { queries, count } = inflight.request {
                 self.dynamic_info_answered(
                     inflight.entity_id,
@@ -2773,6 +2954,7 @@ impl Controller {
         }
 
         self.poll_lite(now);
+        self.poll_wireless(now);
         self.age_cvu_talkers(now);
 
         if let Some(advertiser) = &mut self.advertiser
@@ -2807,6 +2989,28 @@ impl Controller {
         self.next_lite_poll = (!asked.is_empty()).then(|| now + self.config.lite_poll);
         for (entity_id, interface) in asked {
             self.queue_query(entity_id, Request::GetLiteStatus { interface });
+        }
+    }
+
+    /// Asks each wireless interface for its AVB Wireless status again,
+    /// every `wireless_poll`.
+    fn poll_wireless(&mut self, now: Instant) {
+        if self.next_wireless_poll.is_none_or(|next| next > now) {
+            return;
+        }
+        let asked: Vec<(EntityId, u16)> = self
+            .models
+            .iter()
+            .flat_map(|(&entity_id, model)| {
+                model
+                    .wireless_interfaces()
+                    .map(move |(interface, _)| (entity_id, interface))
+            })
+            .collect();
+        // The timer stops once no interface is wireless.
+        self.next_wireless_poll = (!asked.is_empty()).then(|| now + self.config.wireless_poll);
+        for (entity_id, interface) in asked {
+            self.queue_query(entity_id, Request::GetWirelessStatus { interface });
         }
     }
 
@@ -2872,6 +3076,7 @@ impl Controller {
             .and_then(|advertiser| advertiser.next);
         let identify = self.identify_off.values().map(|(when, _)| *when);
         let lite = self.next_lite_poll;
+        let wireless = self.next_wireless_poll;
         let declarations = self
             .models
             .values()
@@ -2882,6 +3087,7 @@ impl Controller {
             .chain(advertise)
             .chain(identify)
             .chain(lite)
+            .chain(wireless)
             .chain(declarations)
             .min()
     }
@@ -2984,6 +3190,8 @@ fn command_type_of(request: Request) -> AemCommandType {
         | Request::GetMediaClockReference { .. }
         | Request::GetLiteStatus { .. }
         | Request::SetLiteConfig { .. }
+        | Request::GetWirelessStatus { .. }
+        | Request::SetWirelessConfig { .. }
         | Request::GetRxState { .. }
         | Request::Bind { .. }
         | Request::Unbind { .. }

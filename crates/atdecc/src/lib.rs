@@ -47,6 +47,7 @@ pub mod mvu;
 pub mod pdu;
 pub mod stream_format;
 pub mod time;
+pub mod wireless;
 
 #[cfg(feature = "std")]
 pub mod blocking;

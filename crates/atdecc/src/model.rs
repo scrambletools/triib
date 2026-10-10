@@ -26,6 +26,7 @@ use crate::id::{ClockIdentity, EntityId, StreamId};
 use crate::lite::LiteStatus;
 use crate::mvu::{MediaClockReference, MilanInfo};
 use crate::time::Instant;
+use crate::wireless::{Station, WirelessStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EnumerationState {
@@ -93,6 +94,15 @@ struct DynamicMap {
     reading: BTreeSet<AudioMapping>,
 }
 
+/// What an entity reports of a wireless AVB_INTERFACE (AVB Wireless
+/// profile, 5.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Wireless {
+    pub status: WirelessStatus,
+    /// An access point's associated stations.
+    pub stations: Vec<Station>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EntityModel {
     pub state: EnumerationState,
@@ -122,6 +132,10 @@ pub struct EntityModel {
     /// Whether it answers the AVB Lite status query; `None` until asked.
     pub lite_supported: Option<bool>,
     lite_status: BTreeMap<u16, LiteStatus>,
+    /// Whether it answers the AVB Wireless status query; `None` until
+    /// asked.
+    pub wireless_supported: Option<bool>,
+    wireless: BTreeMap<u16, Wireless>,
     /// The streams it declares over CVU SRP, by stream ID, with when each
     /// was last heard.
     cvu_talkers: BTreeMap<u64, (TalkerDeclaration, Instant)>,
@@ -250,6 +264,17 @@ impl EntityModel {
     /// returning whether it changed.
     pub(crate) fn set_lite_status(&mut self, status: LiteStatus) -> bool {
         self.lite_status.insert(status.interface, status) != Some(status)
+    }
+
+    /// Records what the entity reports of a wireless interface, returning
+    /// whether it changed.
+    pub(crate) fn set_wireless(&mut self, wireless: Wireless) -> bool {
+        let interface = wireless.status.interface;
+        if self.wireless.get(&interface) == Some(&wireless) {
+            return false;
+        }
+        self.wireless.insert(interface, wireless);
+        true
     }
 
     /// Records a stream the entity declares over CVU SRP, heard `now`,
@@ -386,6 +411,18 @@ impl EntityModel {
     /// What the entity reports of AVB Lite on an AVB_INTERFACE.
     pub fn lite_status(&self, interface: u16) -> Option<&LiteStatus> {
         self.lite_status.get(&interface)
+    }
+
+    /// What the entity reports of a wireless AVB_INTERFACE.
+    pub fn wireless(&self, interface: u16) -> Option<&Wireless> {
+        self.wireless.get(&interface)
+    }
+
+    /// Each wireless AVB_INTERFACE the entity reports, by index.
+    pub fn wireless_interfaces(&self) -> impl Iterator<Item = (u16, &Wireless)> {
+        self.wireless
+            .iter()
+            .map(|(&interface, wireless)| (interface, wireless))
     }
 
     /// The streams the entity declares over CVU SRP.

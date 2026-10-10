@@ -5,6 +5,7 @@ use super::*;
 use crate::acmp::{AcmpFlags, AcmpMessageType, AcmpStatus, Acmpdu};
 use crate::aecp::AecpHeader;
 use crate::aem::{AudioMapping, StreamInfoFlags};
+use crate::avtp::read_u16;
 use crate::cache::CachedModel;
 use crate::descriptor::SamplingRate;
 use crate::id::ClockIdentity;
@@ -96,6 +97,9 @@ struct FakeEntity {
     tx_disconnects: Vec<(u16, EntityId, u16)>,
     /// What it reports of AVB Lite, when it has it.
     lite: Option<crate::lite::LiteStatus>,
+    /// What it reports of its wireless interface, when it has AVB
+    /// Wireless; its other interfaces are wired.
+    wireless: Option<Wireless>,
 }
 
 fn descriptor(descriptor_type: DescriptorType, index: u16, length: usize) -> Vec<u8> {
@@ -227,6 +231,7 @@ impl FakeEntity {
             transit: 2_000_000,
             tx_disconnects: Vec::new(),
             lite: None,
+            wireless: None,
         }
     }
 
@@ -636,6 +641,9 @@ impl FakeEntity {
             let length = response.encode(&mut out).unwrap();
             return Some(out[..length].to_vec());
         }
+        if let Ok(asked) = WirelessMessage::from_pdu(&command) {
+            return Some(self.respond_wireless(&command, &asked));
+        }
         let asked = crate::mvu::MvuMessage::from_pdu(&command).ok()?;
         let data = match asked.command_type {
             crate::mvu::MvuCommandType::GET_MEDIA_CLOCK_REFERENCE_INFO => {
@@ -667,6 +675,57 @@ impl FakeEntity {
         };
         let length = response.encode(&mut out).unwrap();
         Some(out[..length].to_vec())
+    }
+}
+
+impl FakeEntity {
+    /// Answers the AVB Wireless status query and configuration: for its
+    /// wireless interface when it has AVB Wireless, NOT_SUPPORTED for its
+    /// wired ones, and NOT_IMPLEMENTED without AVB Wireless.
+    fn respond_wireless(
+        &mut self,
+        command: &VendorUniquePdu<'_>,
+        asked: &WirelessMessage<'_>,
+    ) -> Vec<u8> {
+        let interface = read_u16(asked.data, 0);
+        let mut data = asked.command_type.0.to_be_bytes().to_vec();
+        let status = match &mut self.wireless {
+            None => AemStatus::NOT_IMPLEMENTED,
+            Some(wireless) if wireless.status.interface != interface => AemStatus::NOT_SUPPORTED,
+            Some(wireless) => {
+                if asked.command_type == WirelessCommandType::SET_WIRELESS_CONFIG {
+                    let allowed = asked.data[2] & 0x01 != 0;
+                    let flag = crate::wireless::WirelessFlags::CLASS_A_ALLOWED;
+                    wireless.status.flags = if allowed {
+                        wireless.status.flags | flag
+                    } else {
+                        crate::wireless::WirelessFlags(wireless.status.flags.0 & !flag.0)
+                    };
+                    data.extend_from_slice(&asked.data[..6]);
+                } else {
+                    data.extend_from_slice(&wireless.status.to_bytes());
+                    for station in &wireless.stations {
+                        data.extend_from_slice(&station.to_bytes());
+                    }
+                }
+                AemStatus::SUCCESS
+            }
+        };
+        if status != AemStatus::SUCCESS {
+            data.extend_from_slice(asked.data);
+        }
+        let response = VendorUniquePdu {
+            header: AecpHeader {
+                message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+                status: status.0,
+                ..command.header
+            },
+            protocol_id: crate::wireless::WIRELESS_PROTOCOL_ID,
+            payload: &data,
+        };
+        let mut out = [0; 1500];
+        let length = response.encode(&mut out).unwrap();
+        out[..length].to_vec()
     }
 }
 
@@ -1812,6 +1871,190 @@ fn unsolicited_lite_status_updates_the_model() {
     assert_eq!(
         controller.model(TALKER).unwrap().lite_status(0),
         Some(&changed)
+    );
+}
+
+fn wireless_station() -> Wireless {
+    use crate::wireless::{AsCapableReason, Band, TimeMode, WirelessFlags};
+    Wireless {
+        status: WirelessStatus {
+            interface: 0,
+            flags: WirelessFlags::LOCKED | WirelessFlags::RTT_VALID,
+            time_mode: TimeMode::MODE_A_FTM,
+            band: Band::GHZ_5,
+            channel: 36,
+            channel_width: 80,
+            phy_generation: 6,
+            rssi: -52,
+            phy_rate: 866,
+            ftm_success: 98,
+            as_capable_reason: AsCapableReason::NONE,
+            ftm_burst_frames: 3,
+            listeners_unserved: 0,
+            ftm_burst_duration: 7,
+            ftm_min_delta: 100,
+            ftm_rtt: 42,
+            servo_error: 0,
+            association_age: 60,
+            time_age: 50,
+            ap_resets: 0,
+            bssid: MacAddress([0x30, 0xed, 0xa0, 0x11, 0x22, 0x33]),
+            ap_clock: BRIDGE,
+            ap_port: 2,
+            downlink_readdressed: 0,
+            downlink_unmapped: 0,
+            downlink_dropped: 0,
+            uplink_restored: 0,
+            station_count: 0,
+        },
+        stations: Vec::new(),
+    }
+}
+
+/// An access point's wireless port, with one station associated.
+fn wireless_access_point() -> Wireless {
+    use crate::wireless::{Station, StationFlags, WirelessFlags};
+    let station = wireless_station().status;
+    Wireless {
+        status: WirelessStatus {
+            flags: WirelessFlags::ACCESS_POINT,
+            rssi: 0x7f,
+            listeners_unserved: 1,
+            downlink_readdressed: 40_000,
+            station_count: 1,
+            ..station
+        },
+        stations: vec![Station {
+            mac: MacAddress([0xfc, 0x01, 0x2c, 0xfd, 0x80, 0x00]),
+            rssi: -48,
+            flags: StationFlags::FTM_INITIATOR | StationFlags::FTM_KNOWN,
+        }],
+    }
+}
+
+/// Reads the fake entity, with AVB Wireless on interface 0 when
+/// `wireless` says what it reports.
+fn read_wireless(wireless: Option<Wireless>) -> (Controller, FakeEntity) {
+    let mut controller = controller();
+    let mut entity = FakeEntity::new();
+    entity.wireless = wireless;
+    controller.handle_adpdu(at(0), TALKER_MAC, &aem_available(1));
+    controller.pump(at(0));
+    exchange(&mut controller, &mut entity, at(0));
+    events(&mut controller);
+    (controller, entity)
+}
+
+#[test]
+fn wireless_stations_report_their_link_and_are_asked_again() {
+    let (mut controller, mut entity) = read_wireless(Some(wireless_station()));
+    let model = controller.model(TALKER).unwrap();
+    assert_eq!(model.wireless_supported, Some(true));
+    assert_eq!(model.wireless(0), Some(&wireless_station()));
+    assert_eq!(model.wireless_interfaces().count(), 1);
+    // Asked again every 5 s, to follow the link and the time.
+    let next = controller.poll_timeout().unwrap();
+    assert!(next <= at(5), "{next:?}");
+    entity.wireless.as_mut().unwrap().status.flags = crate::wireless::WirelessFlags::HOLDOVER;
+    controller.handle_timeout(next);
+    exchange(&mut controller, &mut entity, next);
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    let status = controller
+        .model(TALKER)
+        .unwrap()
+        .wireless(0)
+        .unwrap()
+        .status;
+    assert!(
+        !status
+            .flags
+            .contains(crate::wireless::WirelessFlags::LOCKED)
+    );
+}
+
+#[test]
+fn entities_without_wireless_are_asked_once() {
+    let (controller, _) = read_wireless(None);
+    let model = controller.model(TALKER).unwrap();
+    assert_eq!(model.wireless_supported, Some(false));
+    assert!(model.wireless(0).is_none());
+    // Nothing to poll: the entity's advertisement expiry comes first.
+    assert_eq!(controller.poll_timeout(), Some(at(20)));
+}
+
+#[test]
+fn wired_interfaces_are_not_asked_again() {
+    // The entity has AVB Wireless, but its interface 0 is wired.
+    let mut elsewhere = wireless_station();
+    elsewhere.status.interface = 1;
+    let (controller, _) = read_wireless(Some(elsewhere));
+    let model = controller.model(TALKER).unwrap();
+    assert_eq!(model.wireless_supported, Some(true));
+    assert_eq!(model.wireless_interfaces().count(), 0);
+    assert_eq!(controller.poll_timeout(), Some(at(20)));
+}
+
+#[test]
+fn an_access_point_reports_its_stations_and_unsolicited_changes() {
+    let (mut controller, _) = read_wireless(Some(wireless_access_point()));
+    let wireless = controller
+        .model(TALKER)
+        .unwrap()
+        .wireless(0)
+        .unwrap()
+        .clone();
+    assert_eq!(wireless, wireless_access_point());
+    assert_eq!(wireless.status.unserved(), Some(1));
+    // A station leaves: the access point says so unsolicited.
+    let mut changed = wireless_access_point();
+    changed.status.station_count = 0;
+    changed.stations.clear();
+    let mut payload = 0x8000u16.to_be_bytes().to_vec();
+    payload.extend_from_slice(&changed.status.to_bytes());
+    let notification = VendorUniquePdu {
+        header: AecpHeader {
+            message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+            status: 0,
+            target_entity_id: TALKER,
+            controller_entity_id: CONTROLLER,
+            sequence_id: 41,
+        },
+        protocol_id: crate::wireless::WIRELESS_PROTOCOL_ID,
+        payload: &payload,
+    };
+    let mut out = [0; 128];
+    let length = notification.encode(&mut out).unwrap();
+    controller
+        .handle_frame(at(1), TALKER_MAC, &out[..length])
+        .unwrap();
+    assert_eq!(events(&mut controller), [Event::EntityModelChanged(TALKER)]);
+    assert_eq!(
+        controller.model(TALKER).unwrap().wireless(0),
+        Some(&changed)
+    );
+}
+
+#[test]
+fn class_a_is_allowed_over_the_wireless_port() {
+    let (mut controller, mut entity) = read_wireless(Some(wireless_access_point()));
+    let command = controller.set_wireless_config(at(1), TALKER, 0, true);
+    exchange(&mut controller, &mut entity, at(1));
+    let events = events(&mut controller);
+    assert!(
+        events.contains(&Event::CommandFinished(command, Outcome::Done)),
+        "{events:?}"
+    );
+    // The status, read again, shows it.
+    let status = controller
+        .model(TALKER)
+        .unwrap()
+        .wireless(0)
+        .unwrap()
+        .status;
+    assert!(
+        status
+            .flags
+            .contains(crate::wireless::WirelessFlags::CLASS_A_ALLOWED)
     );
 }
 
