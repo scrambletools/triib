@@ -328,6 +328,8 @@ pub struct Runtime {
     /// daemon last started one.
     link: Option<profile::Link>,
     switched_at: Option<Duration>,
+    /// A ptp4l unit switch put off until `SWITCH_AGAIN` has passed.
+    steer_pending: bool,
     /// When the daemon last ran the link unit again.
     link_fixed_at: Option<Duration>,
     /// Until when the link coming up is the link unit's doing, where AVB
@@ -584,6 +586,7 @@ impl Runtime {
             correction: 0,
             link: None,
             switched_at: None,
+            steer_pending: false,
             link_fixed_at: None,
             link_own_until: None,
             clock,
@@ -996,6 +999,13 @@ impl Runtime {
             maap.handle_timeout(now);
         }
         self.fallback.handle_timeout(since);
+        if self.steer_pending
+            && self
+                .switched_at
+                .is_some_and(|at| since >= at + SWITCH_AGAIN)
+        {
+            self.steer_profile();
+        }
         if self.lite.is_none()
             && self.config.avb_lite != LiteChoice::Off
             && let Some(reason) = self.fallback.reason()
@@ -2020,7 +2030,14 @@ impl Runtime {
             Profile::Gptp
         };
         let since = self.elapsed();
-        if unit == wanted || self.switched_at.is_some_and(|at| since < at + SWITCH_AGAIN) {
+        self.steer_pending = false;
+        if unit == wanted {
+            return;
+        }
+        // Too soon after the last switch: the turn makes this one once the
+        // wait is over.
+        if self.switched_at.is_some_and(|at| since < at + SWITCH_AGAIN) {
+            self.steer_pending = true;
             return;
         }
         self.switched_at = Some(since);
