@@ -337,8 +337,8 @@ endpoint through a non-AVB switch.
 The AVB Wireless profile (avbcommunity/profiles, `avb_wireless.md`)
 extends AVB and AVB Lite over one 802.11 hop: an access point that is a
 bridge on its wired port, and Wi-Fi stations as talkers and listeners,
-timed by the 802.1AS §12.7 element in beacons with a TSF mapping and FTM,
-and streamed unicast on the air.
+timed by 802.1AS over FTM or, in the interim, by the grandmaster's time
+in the access point's beacons, and streamed unicast on the air.
 
 - **The profile** (1.1-draft): done. Two time modes that never combine,
   the beacon carrier with FTM for link delay only and 802.1AS over FTM,
