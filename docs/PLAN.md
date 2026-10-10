@@ -340,23 +340,20 @@ bridge on its wired port, and Wi-Fi stations as talkers and listeners,
 timed by the 802.1AS §12.7 element in beacons with a TSF mapping and FTM,
 and streamed unicast on the air.
 
-- **The profile:**
-  - Revised with what the ESP's gPTP-to-FTM clock discipline work showed:
-    FTM burst parameters, the timestamp conversions, invalid
-    measurements, how beacons and FTM combine, the accuracy and time to
-    lock of each mode, and behaviour while unlocked or roaming.
-  - A first-pass discovery and status mechanism: a vendor unique AECP
-    query per AVB interface under the AVB Lite MA-S (sub-id `0x005`),
-    answered by wireless stations and by access points that run an
-    ATDECC entity. It reports the role (station, or access point
-    bridging to the wired side), the PHY (band, channel, width,
-    standard), the link (RSSI, PHY rates), the time carrier in use and
-    how well it holds (offset, FTM round trip and success), and on an
-    access point the unicast copies per stream against its fan-out
-    limit. A station names its access point (BSSID and gPTP clock
-    identity) so a controller can place it, with an unsolicited response
-    on change. Configuration stays minimal, such as the access point's
-    fan-out limit; nothing that needs the Wi-Fi stack reconfigured.
+- **The profile** (1.1-draft): done. Two time modes that never combine,
+  the beacon carrier with FTM for link delay only and 802.1AS over FTM,
+  with what the ESP's work measured; the beacon time element identified
+  by the full MA-S and sub-ID `0x006`; and a first-pass discovery and
+  status query, GET_WIRELESS_STATUS under sub-protocol `0x005`, answered
+  per wireless interface by stations and by access points that run an
+  ATDECC entity. It reports the role, PHY, link, time mode and how well
+  it holds, the access point a station follows (BSSID and gPTP port
+  identity), and on an access point its stream translation counters,
+  the listeners it cannot serve and its stations, with an unsolicited
+  response on change. SET_WIRELESS_CONFIG only sets the Class A bench
+  opt-in.
+- **The ESP:** the beacon element's new identifier, and answering the
+  status query.
 - **triib, as a controller:** asks the query; marks wireless interfaces
   in the entity list and inspector with their status; draws each station
   under its access point in the network view, with the wireless hop's
