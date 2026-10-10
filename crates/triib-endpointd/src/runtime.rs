@@ -81,6 +81,9 @@ const LINK_AGAIN: Duration = Duration::from_secs(600);
 /// How long the link unit has before the daemon looks again, the link
 /// having gone down and up.
 const LINK_SETTLE: Duration = Duration::from_secs(15);
+/// How many PTP frames in a row from others carrying the driver's time
+/// stamp make the daemon restart the interface: 2 s of Sync and Follow_Up.
+const STAMPED_RUN: u32 = 16;
 /// How long after running the link unit, where AVB Lite held, the link
 /// coming up is its doing, not a new link.
 const LINK_OWN: Duration = Duration::from_secs(30);
@@ -90,7 +93,7 @@ enum Input {
     /// From where, whether sent to a group address rather than to this
     /// computer, and the frame.
     Avtp(MacAddress, bool, Vec<u8>),
-    Ptp(Vec<u8>),
+    Ptp(MacAddress, Vec<u8>),
     Msrp(Vec<u8>),
     Mvrp(Vec<u8>),
     Gptp(Option<gptp::Status>),
@@ -330,6 +333,10 @@ pub struct Runtime {
     switched_at: Option<Duration>,
     /// A ptp4l unit switch put off until `SWITCH_AGAIN` has passed.
     steer_pending: bool,
+    /// PTP frames from others in a row that carried the driver's time
+    /// stamp, and when the daemon last restarted the interface for them.
+    stamped_run: u32,
+    link_reset_at: Option<Duration>,
     /// When the daemon last ran the link unit again.
     link_fixed_at: Option<Duration>,
     /// Until when the link coming up is the link unit's doing, where AVB
@@ -513,7 +520,7 @@ impl Runtime {
             stop.clone(),
             sender.clone(),
             "ptp",
-            |_, _, bytes| Input::Ptp(bytes),
+            |source, _, bytes| Input::Ptp(source, bytes),
         )?;
         let socket = if config.ptp4l_socket.is_empty() {
             "/var/run/ptp4lro".to_owned()
@@ -587,6 +594,8 @@ impl Runtime {
             link: None,
             switched_at: None,
             steer_pending: false,
+            stamped_run: 0,
+            link_reset_at: None,
             link_fixed_at: None,
             link_own_until: None,
             clock,
@@ -905,7 +914,10 @@ impl Runtime {
                     endpoint.entity.handle_frame(now, source, &bytes);
                 }
             }
-            Input::Ptp(bytes) => {
+            Input::Ptp(source, bytes) => {
+                if source != self.mac {
+                    self.watch_stamps(&bytes);
+                }
                 self.fallback.handle_ptp(since, &bytes);
                 if let Some((grandmaster, speed)) = lite::grandmaster_link(&bytes)
                     && self.grandmaster_links.insert(grandmaster, speed) != Some(speed)
@@ -969,9 +981,14 @@ impl Runtime {
                         None => {}
                     }
                 }
-                // AVB Lite holds until the link comes up again (profile
-                // 2.2), though not from the link unit taking it down.
+                // The fallback waits while the link is down, as nothing can
+                // answer, and weighs afresh as it comes up (profile 2.2).
                 let since = self.elapsed();
+                if let Some(carrier) = link.carrier {
+                    self.fallback.set_link(since, carrier);
+                }
+                // AVB Lite holds until the link comes up again, though not
+                // from a link unit taking it down.
                 let came_up = link.carrier == Some(true)
                     && last.is_some_and(|last| last.carrier == Some(false))
                     && !self.link_own_until.is_some_and(|until| since < until);
@@ -1995,6 +2012,43 @@ impl Runtime {
                 if profile::power(&interface).is_some_and(|power| power.eee || power.pause) {
                     log(format!(
                         "{interface}: EEE or PAUSE is still on after {unit}; is ethtool installed, and does the interface let them go off?"
+                    ));
+                }
+            });
+    }
+
+    /// Restarts the interface when the PTP frames others send keep the
+    /// driver's receive time stamp, as atlantic's do after the link
+    /// renegotiates, until the interface goes down and up: ptp4l drops
+    /// every one of them. At most every ten minutes, should a restart not
+    /// help.
+    fn watch_stamps(&mut self, message: &[u8]) {
+        if !lite::stamped(message) {
+            self.stamped_run = 0;
+            return;
+        }
+        self.stamped_run += 1;
+        if self.stamped_run != STAMPED_RUN {
+            return;
+        }
+        let since = self.elapsed();
+        if self.link_reset_at.is_some_and(|at| since < at + LINK_AGAIN) {
+            return;
+        }
+        self.link_reset_at = Some(since);
+        self.link_own_until = self.lite.is_some().then_some(since + LINK_OWN);
+        let unit = profile::reset_unit(&self.interface);
+        log(format!(
+            "{}: PTP frames arrive with the driver's time stamps on them, which ptp4l drops; running {unit}",
+            self.interface
+        ));
+        let interface = self.interface.clone();
+        let _ = std::thread::Builder::new()
+            .name("link reset".into())
+            .spawn(move || {
+                if let Err(error) = profile::reset_link(&interface) {
+                    log(format!(
+                        "{interface}: cannot run {unit} ({error}); install triib's units, or take {interface} down and up"
                     ));
                 }
             });

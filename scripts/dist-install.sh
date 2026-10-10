@@ -43,7 +43,8 @@ ptp4l="$root/packaging/linux/ptp4l"
 for config in ptp4l-gptp.cfg ptp4l-lite.cfg; do
     install -Dm644 "$ptp4l/$config" "$destdir/etc/triib/$config"
 done
-for unit in triib-ptp4l-gptp@.service triib-ptp4l-lite@.service triib-link@.service; do
+for unit in triib-ptp4l-gptp@.service triib-ptp4l-lite@.service triib-link@.service \
+    triib-link-reset@.service; do
     install -Dm644 "$ptp4l/$unit" "$destdir$prefix/lib/systemd/system/$unit"
 done
 install -Dm644 "$ptp4l/50-triib-ptp4l.rules" "$share/polkit-1/rules.d/50-triib-ptp4l.rules"

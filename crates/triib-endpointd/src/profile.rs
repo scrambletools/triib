@@ -7,7 +7,9 @@
 //! back up (AVB Lite profile, 2.2). ptp4l run any other way stays as it
 //! is. A third unit, `triib-link@<interface>`, keeps Energy-Efficient
 //! Ethernet and PAUSE off the link, as the profile asks (6); the daemon
-//! runs it again should they come back.
+//! runs it again should they come back. A fourth,
+//! `triib-link-reset@<interface>`, takes the interface down and up for a
+//! driver that keeps its time stamps on received PTP frames.
 
 use std::io;
 use std::process::{Command, Stdio};
@@ -111,6 +113,17 @@ pub fn start(interface: &str, profile: Profile) -> io::Result<()> {
 /// Runs the link unit for `interface` again, putting EEE and PAUSE off
 /// once more; the link renegotiates.
 pub fn apply_link(interface: &str) -> io::Result<()> {
+    restart(interface, &link_unit(interface))
+}
+
+/// Takes `interface` down and up again through its unit, for a driver
+/// that keeps its time stamps on received PTP frames until then.
+pub fn reset_link(interface: &str) -> io::Result<()> {
+    restart(interface, &reset_unit(interface))
+}
+
+/// Runs `unit`, one of `interface`'s, again.
+fn restart(interface: &str, unit: &str) -> io::Result<()> {
     if !nameable(interface) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -119,7 +132,7 @@ pub fn apply_link(interface: &str) -> io::Result<()> {
     }
     let output = Command::new("systemctl")
         .args(["restart", "--no-block", "--no-ask-password"])
-        .arg(link_unit(interface))
+        .arg(unit)
         .stdin(Stdio::null())
         .output()?;
     if output.status.success() {
@@ -134,6 +147,11 @@ pub fn apply_link(interface: &str) -> io::Result<()> {
 /// The unit keeping EEE and PAUSE off `interface`.
 pub fn link_unit(interface: &str) -> String {
     format!("triib-link@{interface}.service")
+}
+
+/// The unit taking `interface` down and up again.
+pub fn reset_unit(interface: &str) -> String {
+    format!("triib-link-reset@{interface}.service")
 }
 
 /// What `interface` does about EEE and PAUSE, where the system says.

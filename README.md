@@ -114,7 +114,11 @@ endpoint's link. The `triib-link@<interface>` unit turns them off with
 it changes them on an interface that is up, it takes the interface down
 and up again, as some drivers keep PTP from working after the change
 otherwise. Should they come back on, as after the driver starts again,
-the daemon runs the unit once more.
+the daemon runs the unit once more. Some drivers, atlantic's among them
+(Aquantia cards), also keep their time stamps on received PTP frames
+after the link renegotiates, as when a cable goes back in, and ptp4l
+drops every frame until the interface goes down and up; the daemon sees
+them and restarts the interface through `triib-link-reset@<interface>`.
 
 ## Building
 

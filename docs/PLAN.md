@@ -756,16 +756,21 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     12 octets from received unicast PTP frames, so ptp4l drops every
     answer; triib's AVB Lite configuration keeps delay requests
     multicast.
-- To do:
-  - The TX401's atlantic driver leaves its timestamp on received PTP
+  - The TX401's atlantic driver leaves its time stamp on received PTP
     frames after the link renegotiates, from a cable unplugged as well
-    as a PAUSE change, until the interface goes down and up; ptp4l
-    drops them all. Decide whether the daemon notices and restarts the
-    interface, and report it to the driver's maintainers.
-  - The fallback runs while the link is down, so an unplugged cable
-    puts the endpoints in AVB Lite until it comes back, which can hold
-    ptp4l off gPTP for the 30 s wait; arm it at link-up only, as the
-    profile's 2.2 says.
+    as a PAUSE change, until the interface goes down and up, and ptp4l
+    drops them all: the daemon sees 16 such frames in a row and
+    restarts the interface through `triib-link-reset@`, at most every
+    ten minutes (checked 2026-10-09 with the cable unplugged and back).
+  - The fallback weighs nothing while the link is down, and starts
+    afresh as it comes up (profile 2.2).
+- To do:
+  - Report the atlantic driver's time stamps to its maintainers: left
+    on multicast PTP frames after a renegotiation, and 12 octets cut
+    from unicast ones.
+  - At start the daemon moves ptp4l to gPTP before the fallback has had
+    its few seconds, so on an AVB Lite network it comes back only after
+    the 30 s wait.
   - For the ESP: its Delay_Resp asks for one delay request every 16 s
     (logMessageInterval 4), where the profile counts one a second, and
     its Announce does not claim the PTP timescale.

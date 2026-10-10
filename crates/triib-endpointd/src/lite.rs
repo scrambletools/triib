@@ -76,6 +76,20 @@ pub fn pdelay_request(identity: u64, sequence: u16) -> Vec<u8> {
     message
 }
 
+/// The octets a driver's receive time stamp takes at the end of a frame,
+/// as atlantic's does.
+const STAMP_LEN: usize = 12;
+
+/// Whether a PTP message heard on the interface, after the ethertype,
+/// runs a time stamp's length past its messageLength: the driver left its
+/// receive time stamp on the frame, which Ethernet's padding, at most 2
+/// octets for the shortest PTP message, cannot explain, and which ptp4l
+/// takes for a broken TLV.
+pub fn stamped(message: &[u8]) -> bool {
+    message.len() >= 4
+        && message.len() >= usize::from(u16::from_be_bytes([message[2], message[3]])) + STAMP_LEN
+}
+
 /// The grandmaster an Announce names and the link speed in Mb/s its
 /// Grandmaster Link TLV gives (profile 5), when it carries one.
 pub fn grandmaster_link(message: &[u8]) -> Option<(u64, u32)> {
@@ -176,6 +190,8 @@ pub struct Fallback {
     answered_at: Option<Duration>,
     ptp4l_request: Option<(u16, Vec<[u8; 10]>)>,
     reason: Option<FallbackReason>,
+    /// The link is down, so nothing can answer and nothing is weighed.
+    link_down: bool,
     next: Duration,
     outgoing: VecDeque<Vec<u8>>,
 }
@@ -195,6 +211,7 @@ impl Fallback {
             answered_at: None,
             ptp4l_request: None,
             reason: configured.then_some(FallbackReason::CONFIGURED),
+            link_down: false,
             next: now + START_GRACE,
             outgoing: VecDeque::new(),
         }
@@ -218,6 +235,24 @@ impl Fallback {
         }
     }
 
+    /// Whether the link is up. While it is down nothing is weighed, and
+    /// as it comes up the weighing starts afresh (profile 2.2), a fallback
+    /// already made holding.
+    pub fn set_link(&mut self, now: Duration, up: bool) {
+        if up && self.link_down {
+            self.waiting = None;
+            self.responders.clear();
+            self.unanswered = 0;
+            self.answered_at = None;
+            self.ptp4l_request = None;
+            if self.ptp4l_since.is_some() {
+                self.ptp4l_since = Some(now);
+            }
+            self.next = now + START_GRACE;
+        }
+        self.link_down = !up;
+    }
+
     fn fall_back(&mut self, reason: FallbackReason) {
         if self.reason.is_none() {
             self.reason = Some(reason);
@@ -227,6 +262,9 @@ impl Fallback {
     /// Hands it a PTP message heard on the interface, after the
     /// ethertype.
     pub fn handle_ptp(&mut self, now: Duration, message: &[u8]) {
+        if self.link_down {
+            return;
+        }
         let Some(&first) = message.first() else {
             return;
         };
@@ -271,6 +309,10 @@ impl Fallback {
     }
 
     pub fn handle_timeout(&mut self, now: Duration) {
+        if self.link_down {
+            self.next = now + PROBE_INTERVAL;
+            return;
+        }
         // Where ptp4l asks, nine requests unanswered are 10 s without an
         // answer to it, counted from when ptp4l was first seen.
         if let Some(since) = self.ptp4l_since {
@@ -581,6 +623,64 @@ mod tests {
         // Another endpoint's request, heard through a plain switch.
         fallback.handle_ptp(Duration::ZERO, &pdelay_request(0x3333_33ff_fe33_3333, 1));
         assert_eq!(fallback.reason(), Some(FallbackReason::ENDPOINT_TLV));
+    }
+
+    /// A Sync padded to Ethernet's least frame is as it should be; one
+    /// carrying the driver's 12-octet time stamp is not.
+    #[test]
+    fn a_time_stamp_left_on_a_frame_shows() {
+        let mut sync = vec![0u8; 44];
+        sync[2..4].copy_from_slice(&44u16.to_be_bytes());
+        assert!(!stamped(&sync));
+        sync.extend([0; 2]);
+        assert!(!stamped(&sync));
+        sync.extend([0xa5; 12]);
+        assert!(stamped(&sync));
+        assert!(!stamped(&[0x0b, 0x02]));
+    }
+
+    /// With the cable out nothing answers, which is no reason to fall back:
+    /// nothing is weighed until the link comes up, and then afresh.
+    #[test]
+    fn nothing_is_weighed_while_the_link_is_down() {
+        const BRIDGE: u64 = 0x0001_f2ff_feff_3b14;
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Gptp);
+        for second in 0..10u16 {
+            let now = Duration::from_secs(u64::from(second));
+            fallback.handle_timeout(now);
+            fallback.handle_ptp(now, &response(BRIDGE, IDENTITY, second, false));
+        }
+        fallback.set_link(Duration::from_secs(10), false);
+        for second in 10..70 {
+            fallback.handle_timeout(Duration::from_secs(second));
+            assert!(fallback.poll_timeout() > Duration::from_secs(second));
+        }
+        assert_eq!(fallback.reason(), None);
+        // Up again: the bridge answers from 72 s, within the 10 s ptp4l
+        // has from the link coming up.
+        fallback.set_link(Duration::from_secs(70), true);
+        for second in 70..90u16 {
+            let now = Duration::from_secs(u64::from(second));
+            fallback.handle_timeout(now);
+            if second >= 72 {
+                fallback.handle_ptp(now, &response(BRIDGE, IDENTITY, second, false));
+            }
+        }
+        assert_eq!(fallback.reason(), None);
+
+        // Nothing running PTP: requests unanswered while the link is down
+        // do not count either.
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Absent);
+        fallback.set_link(Duration::ZERO, false);
+        run(&mut fallback, 0, 30, |_| Vec::new());
+        assert_eq!(fallback.reason(), None);
+        fallback.set_link(Duration::from_secs(30), true);
+        run(&mut fallback, 30, 36, |_| Vec::new());
+        assert_eq!(fallback.reason(), None);
+        run(&mut fallback, 36, 45, |_| Vec::new());
+        assert_eq!(fallback.reason(), Some(FallbackReason::PDELAY_UNANSWERED));
     }
 
     /// Where ptp4l runs, this sends nothing of its own and goes by the
