@@ -181,6 +181,9 @@ jobs:
           exclude-environment-credential: true
           exclude-workload-identity-credential: true
           exclude-managed-identity-credential: true
+          # Its cache of the signing module, shared by both architectures,
+          # has come back without the module; downloading costs a minute.
+          cache-dependencies: false
       - name: Installer and zip
         shell: pwsh
         run: |
@@ -201,6 +204,9 @@ jobs:
           exclude-environment-credential: true
           exclude-workload-identity-credential: true
           exclude-managed-identity-credential: true
+          # Its cache of the signing module, shared by both architectures,
+          # has come back without the module; downloading costs a minute.
+          cache-dependencies: false
       # The signatures, checked: an unsigned file must not go out as a
       # signed release.
       - if: env.SIGNING == 'true'
