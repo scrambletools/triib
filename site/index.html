@@ -89,22 +89,22 @@
 
   <section id="download" class="download">
     <h2>Download</h2>
-    <p>triib has not had its first release yet. Releases will have packages for Linux on x86_64 and ARM64, Windows on x64 and ARM64, and macOS on Apple Silicon, each setting up what triib needs to send and receive raw Ethernet. Until then, build it from source with Rust:</p>
-    <pre><code>git clone https://github.com/scrambletoolsllc/triib
-cd triib
-cargo run -p triib</code></pre>
-    <p class="small">The <a href="https://github.com/scrambletoolsllc/triib#building">building notes</a> say what each system needs first. Watch the repository's <a href="https://github.com/scrambletoolsllc/triib/releases">releases</a> to hear of the first one.</p>
+    <p>triib 0.9.0 for Linux and Windows on x86_64 and ARM64, Linux on RISC-V, and macOS on Apple Silicon, each package setting up what triib needs to send and receive raw Ethernet. Every file is on the <a href="https://github.com/scrambletoolsllc/triib/releases/latest">release page</a>, with checksums.</p>
     <div class="table">
       <table>
-        <thead><tr><th>System</th><th>Packages</th><th>What they set up</th></tr></thead>
+        <thead><tr><th>System</th><th>Download</th><th>Install</th></tr></thead>
         <tbody>
-          <tr><td>Linux</td><td>.deb, .rpm, PKGBUILD for Arch</td><td>Raw Ethernet for <code>triib</code>, <code>triib-cli</code> and <code>triib-endpointd</code> (<code>CAP_NET_RAW</code>)</td></tr>
-          <tr><td>Linux</td><td>.tar.gz</td><td>Nothing: run <code>sudo setcap cap_net_raw+ep</code> on the three programs</td></tr>
-          <tr><td>Windows</td><td>Installer (.msi), portable .zip</td><td>Install <a href="https://npcap.com">Npcap</a> first; the installer and triib point to it when it is missing</td></tr>
-          <tr><td>macOS, Apple Silicon</td><td>Installer package (.pkg)</td><td>Raw Ethernet (<code>/dev/bpf*</code>) for the user installing it, at every start, as Wireshark's ChmodBPF gives</td></tr>
+          <tr><td>Windows 10 and 11</td><td>Installer (.msi): <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-x64.msi">x64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-arm64.msi">ARM64</a></td><td>Install <a href="https://npcap.com">Npcap</a> first, then open it: it installs for you alone, with no administrator prompt</td></tr>
+          <tr><td>Windows, portable</td><td>.zip: <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-x64-windows.zip">x64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-arm64-windows.zip">ARM64</a></td><td>With Npcap installed, unpack it anywhere and run <code>triib.exe</code></td></tr>
+          <tr><td>macOS 11 and later, Apple Silicon</td><td>Installer package (.pkg): <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-arm64.pkg">Apple Silicon</a></td><td>Open it: it installs triib and gives you raw Ethernet (<code>/dev/bpf*</code>) from your next login, as Wireshark's ChmodBPF does. Until it is notarized, choose Open Anyway in System Settings, Privacy &amp; Security first</td></tr>
+          <tr><td>Debian, Ubuntu</td><td>.deb: <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib_0.9.0-1_amd64.deb">x86_64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib_0.9.0-1_arm64.deb">ARM64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib_0.9.0-1_riscv64.deb">RISC-V</a></td><td><code>sudo apt install ./triib_0.9.0-1_*.deb</code></td></tr>
+          <tr><td>Fedora</td><td>.rpm: <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-1.x86_64.rpm">x86_64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-1.aarch64.rpm">ARM64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-1.riscv64.rpm">RISC-V</a></td><td><code>sudo dnf install ./triib-0.9.0-1.*.rpm</code></td></tr>
+          <tr><td>Arch</td><td><a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/PKGBUILD">PKGBUILD</a> and <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib.install">triib.install</a></td><td><code>makepkg -si</code> in a folder with both</td></tr>
+          <tr><td>Any distribution</td><td>.tar.gz: <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-x86_64-linux.tar.gz">x86_64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-aarch64-linux.tar.gz">ARM64</a> · <a href="https://github.com/scrambletoolsllc/triib/releases/download/v0.9.0/triib-0.9.0-riscv64-linux.tar.gz">RISC-V</a></td><td><code>sudo tar -C / -xzf triib-0.9.0-*-linux.tar.gz</code>, then <code>sudo setcap cap_net_raw+ep</code> on <code>/usr/bin/triib</code>, <code>triib-cli</code> and <code>triib-endpointd</code></td></tr>
         </tbody>
       </table>
     </div>
+    <p class="small">The Linux packages set <code>CAP_NET_RAW</code> on the three programs as they install, and recommend linuxptp for this computer's talkers and listeners. The Windows installer and programs are signed by Scramble Tools LLC. See the <a href="https://github.com/scrambletoolsllc/triib#installing">install notes</a> for what differs between packages, or build it from source with Rust: <code>cargo run -p triib</code> in a clone of the repository.</p>
   </section>
 
   <section id="code-signing" class="policy">
