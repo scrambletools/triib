@@ -53,6 +53,9 @@ pub struct Triib {
     keyboard_rtl: Option<bool>,
     pub interfaces: Vec<Interface>,
     pub search: String,
+    /// Shift is held, which turns asking every entity to announce itself
+    /// into clearing and rescanning them all.
+    pub shift: bool,
     network: Option<Network>,
     generation: u64,
     pub network_state: NetworkState,
@@ -154,6 +157,11 @@ pub enum Message {
     /// The slider being dragged was let go: its value is sent.
     ControlReleased,
     Rediscover,
+    /// Forgets every entity and the entity models kept between runs, and
+    /// reads them all again.
+    Rescan,
+    /// Shift was pressed or let go, or the window lost the keyboard.
+    ShiftHeld(bool),
     RetryNetwork,
     Copy(String),
     /// Opens a link in the browser.
@@ -249,6 +257,7 @@ impl Triib {
             keyboard_rtl: None,
             interfaces: vec![interface],
             search: String::new(),
+            shift: false,
             network: None,
             generation: 0,
             network_state: NetworkState::Running {
@@ -299,6 +308,7 @@ impl Triib {
             keyboard_rtl: None,
             interfaces: avb_net::interfaces(),
             search: String::new(),
+            shift: false,
             network: None,
             generation: 0,
             network_state: NetworkState::Idle,
@@ -334,7 +344,7 @@ impl Triib {
         triib.reload_omarchy();
         triib.apply_motion();
         triib.apply_input_direction();
-        triib.start_network();
+        triib.start_network(false);
         let system = iced::system::theme().map(Message::SystemTheme);
         // The portal's own answer, in case it came after iced stopped
         // waiting for it.
@@ -466,7 +476,7 @@ impl Triib {
                 if self.settings.interface.as_deref() != Some(name.as_str()) {
                     self.settings.interface = Some(name);
                     self.save_settings();
-                    self.start_network();
+                    self.start_network(false);
                 }
             }
             Message::ViewPicked(view) => {
@@ -548,7 +558,12 @@ impl Triib {
                     network.discover();
                 }
             }
-            Message::RetryNetwork => self.start_network(),
+            Message::Rescan => {
+                self.shift = false;
+                self.start_network(true);
+            }
+            Message::ShiftHeld(held) => self.shift = held,
+            Message::RetryNetwork => self.start_network(false),
             Message::Act(action) => {
                 if let Some(network) = &self.network {
                     self.notice = None;
@@ -861,6 +876,15 @@ impl Triib {
             Subscription::run(desktop::accent_changes).map(Message::SystemAccent),
             Subscription::run(crate::external_events).map(Message::External),
             Subscription::run(scramble_ui::input::keyboard_changes).map(Message::KeyboardDirection),
+            iced::event::listen_with(|event, _, _| match event {
+                iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => {
+                    Some(Message::ShiftHeld(modifiers.shift()))
+                }
+                iced::Event::Window(iced::window::Event::Unfocused) => {
+                    Some(Message::ShiftHeld(false))
+                }
+                _ => None,
+            }),
         ])
     }
 
@@ -869,8 +893,9 @@ impl Triib {
     }
 
     /// Stops the network thread of the previous interface and starts one
-    /// for the chosen interface, forgetting the entities seen before.
-    fn start_network(&mut self) {
+    /// for the chosen interface, forgetting the entities seen before, and
+    /// when `fresh` the entity models kept between runs too.
+    fn start_network(&mut self, fresh: bool) {
         self.network = None;
         self.entities.clear();
         self.models.clear();
@@ -886,7 +911,7 @@ impl Triib {
         };
         self.generation += 1;
         self.network_state = NetworkState::Starting;
-        self.network = Some(Network::start(interface, self.generation));
+        self.network = Some(Network::start(interface, self.generation, fresh));
     }
 
     fn network_report(&mut self, report: Report) {

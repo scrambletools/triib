@@ -262,13 +262,15 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn start(interface: String, generation: u64) -> Self {
+    /// Starts reading `interface`, first forgetting the entity models kept
+    /// between runs when `fresh`.
+    pub fn start(interface: String, generation: u64, fresh: bool) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let (commands, received) = mpsc::channel();
         let stopping = stop.clone();
         let spawned = std::thread::Builder::new()
             .name(format!("atdecc-{interface}"))
-            .spawn(move || run(&interface, generation, &stopping, &received));
+            .spawn(move || run(&interface, generation, fresh, &stopping, &received));
         if let Err(error) = spawned {
             report(generation, ReportKind::Failed(Failure::from_io(&error)));
         }
@@ -300,7 +302,13 @@ fn report(generation: u64, kind: ReportKind) {
     crate::post(External::Network(Report { generation, kind }));
 }
 
-fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<Command>) {
+fn run(
+    interface: &str,
+    generation: u64,
+    fresh: bool,
+    stop: &AtomicBool,
+    commands: &Receiver<Command>,
+) {
     let opened = Driver::open_with(interface, |config| {
         config.advertise = Some(Advertise {
             entity_model_id: ENTITY_MODEL_ID,
@@ -321,6 +329,9 @@ fn run(interface: &str, generation: u64, stop: &AtomicBool, commands: &Receiver<
             controller: driver.controller().entity_id(),
         },
     );
+    if fresh {
+        models::clear();
+    }
     for model in models::load() {
         driver.controller_mut().remember_model(model);
     }
@@ -498,6 +509,21 @@ mod models {
             .filter_map(|entry| std::fs::read(entry.path()).ok())
             .filter_map(|bytes| CachedModel::decode(&bytes).ok())
             .collect()
+    }
+
+    /// Forgets every model kept.
+    pub fn clear() {
+        let Some(entries) = folder().and_then(|folder| std::fs::read_dir(folder).ok()) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|extension| extension == "aem")
+                && let Err(error) = std::fs::remove_file(&path)
+            {
+                eprintln!("triib: could not forget {}: {error}", path.display());
+            }
+        }
     }
 
     /// Keeps a model, replacing one kept for the same entities.

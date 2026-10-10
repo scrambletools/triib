@@ -92,6 +92,9 @@ toolbar-connections = Connections
 toolbar-network = Network
 toolbar-entities = Entities
 toolbar-rediscover = Ask every entity to announce itself
+# The same button with Shift held: forgets every entity and what was kept
+# of each, and reads them all again.
+toolbar-rescan = Clear and rescan all entities
 toolbar-search = Search entities and streams
 toolbar-presets = Presets
 toolbar-log = Log

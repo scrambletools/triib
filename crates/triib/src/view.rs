@@ -223,12 +223,23 @@ fn toolbar_at(triib: &Triib, width: f32) -> Element<'_, Message> {
             true,
         ),
         (
-            component::tool(
-                Icon::Refresh,
-                fl!("toolbar-rediscover"),
-                matches!(triib.network_state, NetworkState::Running { .. })
-                    .then_some(Message::Rediscover),
-            ),
+            {
+                // With Shift held, it clears and rescans instead.
+                let running = matches!(triib.network_state, NetworkState::Running { .. });
+                if triib.shift {
+                    component::tool(
+                        Icon::ResetAll,
+                        fl!("toolbar-rescan"),
+                        running.then_some(Message::Rescan),
+                    )
+                } else {
+                    component::tool(
+                        Icon::Refresh,
+                        fl!("toolbar-rediscover"),
+                        running.then_some(Message::Rediscover),
+                    )
+                }
+            },
             DIVIDER_WIDTH + TOOLBAR_GAP + TOOL_WIDTH,
             Some(1),
             true,
