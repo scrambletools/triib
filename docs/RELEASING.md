@@ -93,8 +93,10 @@ Artifact Signing once the repository variables `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_SIGNING_ENDPOINT`,
 `AZURE_SIGNING_ACCOUNT` and `AZURE_CERTIFICATE_PROFILE` are set, signing
 in with GitHub's OpenID Connect token as the environment `release`. The
-account, identity validation, certificate profile and app registration
-are prev's, and the variables hold the same values as prev's. The app
+signing account, identity validation and certificate profile are shared
+with prev; the app registration, whose ID is `AZURE_CLIENT_ID`, is
+triib's own, and triib.run is its publisher domain, verified by
+`site/.well-known/microsoft-identity-association.json`. The app
 registration has a federated credential for this repository with the
 issuer `https://token.actions.githubusercontent.com`, the audience
 `api://AzureADTokenExchange` and the subject
