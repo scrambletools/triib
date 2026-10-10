@@ -363,8 +363,8 @@ and streamed unicast on the air.
   link and sync; alarms for a station not locked and listeners an access
   point cannot serve; `triib-cli` prints it.
 - Checked against the ESP wireless station and access point.
-- Not in P3.1: this computer as a wireless station, as Linux Wi-Fi drivers
-  give no PHC; a later phase if that changes.
+- Not in P3.1: this computer as a wireless station, which needs its Wi-Fi
+  card's own PTP clock and timing support; a later phase.
 
 ### P4: virtual endpoints on Windows, then macOS
 
