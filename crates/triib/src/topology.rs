@@ -178,27 +178,33 @@ pub struct Route {
 impl Topology {
     pub fn build(entities: &[EntityReport<'_>], host: Option<HostReport>) -> Self {
         let mut topology = Topology::default();
-        let owners: HashMap<ClockIdentity, (EntityId, u16, &str)> = entities
-            .iter()
-            .flat_map(|entity| {
-                entity.interfaces.iter().map(|interface| {
-                    (
-                        interface.clock,
-                        (entity.entity_id, interface.index, entity.name),
-                    )
-                })
-            })
-            .collect();
+        // The entity interface each clock identity is, the first where
+        // several share one, as this computer's endpoints share its clock.
+        let mut owners: HashMap<ClockIdentity, (EntityId, u16, &str)> = HashMap::new();
+        for entity in entities {
+            for interface in &entity.interfaces {
+                owners.entry(interface.clock).or_insert((
+                    entity.entity_id,
+                    interface.index,
+                    entity.name,
+                ));
+            }
+        }
+        // A node for each clock a path names, and one for each entity
+        // interface, so entities sharing a clock each have their own.
         let mut by_clock: HashMap<ClockIdentity, NodeId> = HashMap::new();
+        let mut by_entity: HashMap<(EntityId, u16), NodeId> = HashMap::new();
         let node_for = |topology: &mut Topology,
                         by_clock: &mut HashMap<ClockIdentity, NodeId>,
+                        by_entity: &mut HashMap<(EntityId, u16), NodeId>,
                         clock: ClockIdentity|
          -> NodeId {
             if let Some(&node) = by_clock.get(&clock) {
                 return node;
             }
-            let (kind, name) = match owners.get(&clock) {
-                Some(&(entity_id, interface, name)) => (
+            let owner = owners.get(&clock).copied();
+            let (kind, name) = match owner {
+                Some((entity_id, interface, name)) => (
                     Kind::Entity {
                         entity_id,
                         interface,
@@ -221,6 +227,9 @@ impl Topology {
                 access_point: false,
             });
             by_clock.insert(clock, node);
+            if let Some((entity_id, interface, _)) = owner {
+                by_entity.insert((entity_id, interface), node);
+            }
             node
         };
 
@@ -260,16 +269,42 @@ impl Topology {
                 if path.last() == Some(&interface.clock) {
                     path.pop();
                 }
-                path.push(interface.clock);
                 let mut parent = None;
                 for clock in path {
-                    let node = node_for(&mut topology, &mut by_clock, clock);
+                    let node = node_for(&mut topology, &mut by_clock, &mut by_entity, clock);
                     if let Some(parent) = parent {
                         topology.attach(node, parent);
                     }
                     parent = Some(node);
                 }
-                let node = node_for(&mut topology, &mut by_clock, interface.clock);
+                let key = (entity.entity_id, interface.index);
+                let node = match by_entity.get(&key) {
+                    Some(&node) => node,
+                    None => {
+                        let node = topology.push(Node {
+                            kind: Kind::Entity {
+                                entity_id: entity.entity_id,
+                                interface: interface.index,
+                            },
+                            clock: Some(interface.clock),
+                            name: entity.name.to_owned(),
+                            parent: None,
+                            children: Vec::new(),
+                            link: Link {
+                                synced: true,
+                                ..Link::default()
+                            },
+                            apart: None,
+                            access_point: false,
+                        });
+                        by_entity.insert(key, node);
+                        by_clock.entry(interface.clock).or_insert(node);
+                        node
+                    }
+                };
+                if let Some(parent) = parent {
+                    topology.attach(node, parent);
+                }
                 topology.nodes[node].link.delay = interface.info.map(|info| info.propagation_delay);
                 topology.wireless_hop(node, interface);
             }
@@ -292,7 +327,29 @@ impl Topology {
         // Entities that did not report a path are placed when another's
         // path names them, and set apart otherwise.
         for (entity, interface) in unplaced {
-            if let Some(&node) = by_clock.get(&interface.clock) {
+            let own = by_entity.get(&(entity.entity_id, interface.index)).copied();
+            if let Some(node) = own.or_else(|| by_clock.get(&interface.clock).copied()) {
+                // Beside another entity on the same clock that is placed.
+                let node = match (own, topology.nodes[node].parent) {
+                    (None, Some(parent)) => {
+                        let beside = topology.push(Node {
+                            kind: Kind::Entity {
+                                entity_id: entity.entity_id,
+                                interface: interface.index,
+                            },
+                            clock: Some(interface.clock),
+                            name: entity.name.to_owned(),
+                            parent: None,
+                            children: Vec::new(),
+                            link: topology.nodes[node].link,
+                            apart: None,
+                            access_point: false,
+                        });
+                        topology.attach(beside, parent);
+                        beside
+                    }
+                    _ => node,
+                };
                 topology.nodes[node].link.delay = interface.info.map(|info| info.propagation_delay);
                 topology.wireless_hop(node, interface);
                 continue;
@@ -377,7 +434,7 @@ impl Topology {
                         port: Some(port),
                         ..Link::default()
                     };
-                    let bridge = node_for(&mut topology, &mut by_clock, clock);
+                    let bridge = node_for(&mut topology, &mut by_clock, &mut by_entity, clock);
                     let host = topology.push(node);
                     topology.attach(host, bridge);
                     if topology.nodes[bridge].parent.is_none() && !topology.roots.contains(&bridge)
@@ -427,26 +484,22 @@ impl Topology {
                     continue;
                 };
                 running = true;
-                let node = match by_clock.get(&clock) {
-                    Some(&node) => node,
-                    None => {
-                        let node = topology.push(Node {
-                            kind: Kind::Entity {
-                                entity_id: entity.entity_id,
-                                interface,
-                            },
-                            clock: Some(clock),
-                            name: entity.name.to_owned(),
-                            parent: None,
-                            children: Vec::new(),
-                            link: Link::default(),
-                            apart: None,
-                            access_point: false,
-                        });
-                        by_clock.insert(clock, node);
-                        node
-                    }
-                };
+                // Its own node, even where it shares a clock with another,
+                // as this computer's endpoints share its clock.
+                let node = topology.push(Node {
+                    kind: Kind::Entity {
+                        entity_id: entity.entity_id,
+                        interface,
+                    },
+                    clock: Some(clock),
+                    name: entity.name.to_owned(),
+                    parent: None,
+                    children: Vec::new(),
+                    link: Link::default(),
+                    apart: None,
+                    access_point: false,
+                });
+                by_clock.entry(clock).or_insert(node);
                 // An endpoint alone names no grandmaster, or itself.
                 let grandmaster = if status.grandmaster.0 == 0 {
                     clock
@@ -940,6 +993,51 @@ mod tests {
             topology.route(WIFI, BEACONS).hops,
             [(talker, true), (listener, false)]
         );
+    }
+
+    /// Entities on one gPTP port, as this computer's talker and listener
+    /// share its clock, each have their own node, whether or not they
+    /// report a path.
+    #[test]
+    fn entities_sharing_a_clock_each_show() {
+        const HOST_CLOCK: ClockIdentity = ClockIdentity(0xf0a7_31ff_fef4_0f14);
+        const TALKER: EntityId = EntityId(0xf0a7_31ff_00f4_0f14);
+        const LISTENER: EntityId = EntityId(0xf0a7_31ff_01f4_0f14);
+        const QUIET: EntityId = EntityId(0xf0a7_31ff_02f4_0f14);
+        let path = [SWITCH, HOST_CLOCK];
+        let info = info(SWITCH, 327);
+        let report = |entity_id, name, path| EntityReport {
+            entity_id,
+            name,
+            interfaces: vec![InterfaceReport {
+                index: 0,
+                clock: HOST_CLOCK,
+                path,
+                info: Some(&info),
+                wireless: None,
+            }],
+        };
+        let entities = [
+            report(TALKER, "Host talker 1", Some(&path[..])),
+            report(LISTENER, "Host listener 1", Some(&path[..])),
+            report(QUIET, "Host listener 2", None),
+        ];
+        let topology = Topology::build(&entities, None);
+        let nodes: Vec<NodeId> = [TALKER, LISTENER, QUIET]
+            .iter()
+            .map(|&entity| topology.placed(entity).unwrap())
+            .collect();
+        assert_eq!(
+            nodes.iter().collect::<std::collections::HashSet<_>>().len(),
+            3
+        );
+        let root = topology.roots[0];
+        assert_eq!(topology.nodes[root].clock, Some(SWITCH));
+        for node in nodes {
+            assert_eq!(topology.nodes[node].parent, Some(root));
+            assert_eq!(topology.nodes[node].link.delay, Some(327));
+        }
+        assert!(topology.apart.is_empty());
     }
 
     #[test]
