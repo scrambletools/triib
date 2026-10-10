@@ -755,7 +755,11 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     delay requests (hybrid_e2e), but the TX401's atlantic driver trims
     12 octets from received unicast PTP frames, so ptp4l drops every
     answer; triib's AVB Lite configuration keeps delay requests
-    multicast.
+    multicast. The ESP's tap showed each Delay_Resp leaving whole, 72
+    octets with its VLAN 0 priority tag, which the TX401 strips before
+    trimming the 12. The ESP since asks for a delay request every
+    second and claims the PTP timescale (esp_ptp 1.4.4, not yet
+    published).
   - The TX401's atlantic driver leaves its time stamp on received PTP
     frames after the link renegotiates, from a cable unplugged as well
     as a PAUSE change, until the interface goes down and up, and ptp4l
@@ -771,9 +775,6 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   - At start the daemon moves ptp4l to gPTP before the fallback has had
     its few seconds, so on an AVB Lite network it comes back only after
     the 30 s wait.
-  - For the ESP: its Delay_Resp asks for one delay request every 16 s
-    (logMessageInterval 4), where the profile counts one a second, and
-    its Announce does not claim the PTP timescale.
   - The linuxptp organization TLV tables (v2 of the series, a table
     or a built-in option as Erez prefers; replies sent 2026-10-09),
     then the Endpoint Declaration TLV from ptp4l in gPTP mode.
