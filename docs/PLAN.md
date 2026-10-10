@@ -342,8 +342,9 @@ timed by 802.1AS over FTM or, in the interim, by the grandmaster's time
 in the access point's beacons, and streamed unicast on the air.
 
 - **The profile** (1.1-draft): done. Two time modes that never combine,
-  the beacon carrier with FTM for link delay only and 802.1AS over FTM,
-  with what the ESP's work measured; the beacon time element identified
+  Mode A, 802.1AS over FTM or TM, preferred, and Mode B, the beacon
+  carrier with FTM for link delay only, where a platform cannot run
+  Mode A, with what the ESP's work measured; the beacon time element identified
   by the full MA-S and sub-ID `0x006`; and a first-pass discovery and
   status query, GET_WIRELESS_STATUS under sub-protocol `0x005`, answered
   per wireless interface by stations and by access points that run an
