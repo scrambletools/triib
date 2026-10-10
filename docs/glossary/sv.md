@@ -40,6 +40,11 @@ How `i18n/sv/triib.ftl` renders the terms in `docs/GLOSSARY.md`.
 | counter | räknare | |
 | locked | låst | |
 | lost lock | låsning förlorad | |
+| holding over | i holdover | Kept, as telecom writing does: Wi-Fi-tid i holdover |
+| station | station | Plural stationer; the IEEE 802.11 term |
+| access point | åtkomstpunkt | åtkomstpunkten, as on router settings pages |
+| beacon | beacon | beacon-ramar |
+| signal | signal | As in signalstyrka |
 | interrupted | avbruten | |
 | timestamp | tidsstämpel | |
 | advertise, advertised | annonsera, annonserad | Also for "announce itself": annonsera sig |
@@ -58,3 +63,5 @@ Frames are ramar; discovery is upptäcka ("Upptäcker som …").
 - **reglage** for control.
 - **reservering** rather than reservation.
 - **låst / låsning förlorad** for locked and lost lock.
+- **åtkomstpunkt** rather than accesspunkt, and **i holdover** kept in
+  English for holding over.

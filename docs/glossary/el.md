@@ -39,6 +39,11 @@ percent sign follows the number with no space (80%).
 | identify | αναγνώριση | The button is «Αναγνώριση». |
 | counter | μετρητής | |
 | locked, lost lock | κλείδωσε, έχασε το κλείδωμα | PLL lock: «κλείδωσε στο ρολόι πολυμέσων». |
+| holding over | σε holdover | Kept in Latin script, as Greek telecom and PTP writing does, like peer delay: «Σε holdover», «Σταθμός, σε holdover». |
+| station | σταθμός | The IEEE 802.11 term: «Σταθμός, κλειδωμένος», «3 σταθμοί». |
+| access point | σημείο πρόσβασης | As on a router's settings page. |
+| beacon | beacon | Kept in Latin script: «Mode B, από πλαίσια beacon». |
+| signal | σήμα | The label is «Ισχύς σήματος» (signal strength), as phones show it. |
 | interrupted | διακόπηκε | |
 | timestamp | χρονοσφραγίδα | |
 | advertise, advertised | ανακοινώνω, ανακοινωμένη | Also for an entity announcing itself: «ανακοινώνει την παρουσία της». The ADP section is «Ανακοίνωση». |
@@ -62,3 +67,5 @@ inspector «Επιθεωρητής», log «Αρχείο καταγραφής».
   which may be too long for the inspector's labels.
 - The map's band label is `netmap-off-tree` uppercased by the code, which
   keeps the tonos (ΕΚΤΌΣ ΔΈΝΤΡΟΥ gPTP); Greek capitals normally drop it.
+- «σε holdover» kept in Latin script; «σε κατάσταση διατήρησης» is the
+  Greek phrase. The station's *Time* label is «Χρονισμός».

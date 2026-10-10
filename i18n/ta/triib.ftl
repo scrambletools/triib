@@ -277,6 +277,7 @@ column-talker-streams = Talker streams
 column-listener-streams = Listener streams
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Wireless
 
 ## Settings file
 
@@ -309,6 +310,7 @@ netmap-show-map = வரைபடத்தைக் காட்டு
 netmap-show-details = விவரங்களைக் காட்டு
 stream-numbered = Stream { $index }
 netmap-bridge = Bridge
+netmap-access-point = Access point
 netmap-device = சாதனம்
 netmap-this-computer = இந்தக் கணினி
 netmap-connected = இணைக்கப்பட்டது
@@ -552,6 +554,63 @@ lite-egress-reported = Entity தானே எண்ணும் ஏற்கப
 lite-egress-worked-out = இதன் இணைக்கப்பட்ட stream outputs-இன் formats-இலிருந்து கணக்கிடப்பட்டது.
 lite-alarm-offset = PTP offset { $offset }, AVB Lite அனுமதிக்கும் 50 µs-ஐத் தாண்டியது
 lite-alarm-egress = Egress link-இன் { $share }, streams-க்கு அனுமதிக்கப்பட்ட { $limit }-ஐத் தாண்டியது
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = பங்கு
+wireless-mode = பயன்முறை
+wireless-time = நேரம்
+wireless-mode-a-ftm = Mode A, FTM வழியாக 802.1AS
+wireless-mode-a-tm = Mode A, TM வழியாக 802.1AS
+wireless-mode-b = Mode B, beacons-இலிருந்து
+wireless-no-time = நேரம் இல்லை
+wireless-other-mode = profile குறிப்பிடாத ஒரு பயன்முறை
+wireless-locked = Lock ஆனது
+wireless-holdover = Holdover-இல்
+wireless-not-locked = Lock ஆகவில்லை
+wireless-row-locked = Station, lock ஆனது
+wireless-row-holdover = Station, holdover-இல்
+wireless-row-not-locked = Station, lock ஆகவில்லை
+wireless-row-access-point = { $count ->
+    [one] Access point, { $count } station
+   *[other] Access point, { $count } stations
+}
+wireless-link = Link
+wireless-channel = சேனல் { $channel }
+wireless-not-known = தெரியவில்லை
+wireless-signal = சிக்னல்
+wireless-rate = Rate
+wireless-ftm-valid = { $share } செல்லுபடி
+wireless-rtt = round trip { $rtt }
+wireless-bursts = { $count ->
+    [one] { $count } frame கொண்ட bursts
+   *[other] { $count } frames கொண்ட bursts
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = access point மூன்று அல்லது இரண்டு அல்லாத எண்ணிக்கையில் frames கொண்ட FTM bursts-ஐ வழங்குகிறது
+wireless-reason-measurement = access point-உடன் FTM-உம் இல்லை, TM-உம் இல்லை
+wireless-reason-signaling = access point-இலிருந்து gPTP-capable Signaling வரவில்லை
+wireless-reason-other = profile குறிப்பிடாத ஒரு காரணம்
+wireless-servo = Servo பிழை
+wireless-stations = Stations
+wireless-station-count = { $count ->
+    [one] { $count } station
+   *[other] { $count } stations
+}
+wireless-no-ftm = FTM இல்லாமல்
+wireless-unserved = சேவை பெறாத Listeners
+wireless-stream-frames = Stream frames
+wireless-frames-of = { $readdressed } stations-க்கு, { $unmapped } Listener இல்லாமல், { $dropped } கைவிடப்பட்டன, { $restored } stations-இலிருந்து
+wireless-class-a-allowed = அனுமதிக்கப்பட்டது, bench tests-க்காக
+wireless-class-a-not-allowed = அனுமதிக்கப்படவில்லை
+wireless-alarm-not-locked = Wi-Fi நேரம் access point-உடன் lock ஆகவில்லை
+wireless-alarm-holdover = Wi-Fi நேரம் holdover-இல், access point-உடன் lock இழந்தது
+wireless-alarm-unserved = { $count ->
+    [one] Wi-Fi port-இல் { $count } Listener-க்குச் சேவை இல்லை, unicast வரம்பைத் தாண்டியது
+   *[other] Wi-Fi port-இல் { $count } Listeners-க்குச் சேவை இல்லை, unicast வரம்பைத் தாண்டியது
+}
 
 ## Log
 

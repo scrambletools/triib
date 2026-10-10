@@ -45,6 +45,11 @@ marks Arabic uses alongside ASCII digits).
 | identify | تعريف | |
 | counter | عدّاد، عدادات | |
 | locked, lost lock | تم القفل، فُقد القفل | Not locked لم يتم القفل. |
+| holding over | في وضع الاحتفاظ | The clock keeping time on its own: محطة، في وضع الاحتفاظ. |
+| station | محطة، محطات | The IEEE 802.11 term; feminine: محطة واحدة، محطتان، 5 محطات، 21 محطةً. |
+| access point | نقطة وصول | |
+| beacon | المنارة | Beacon frames are إطارات المنارة. |
+| signal | الإشارة | The label is قوة الإشارة (signal strength). |
 | interrupted | انقطع | |
 | timestamp | طابع زمني، طوابع زمنية | |
 | advertise, advertised | الإعلان، مُعلَن | Announce itself is يعلن عن نفسه. An MSRP declaration is تصريح, kept apart. |
@@ -63,3 +68,5 @@ marks Arabic uses alongside ASCII digits).
   written; معرّف الكيان would be the native term.
 - "," and "." as separators beside ASCII digits, rather than ٬ and ٫.
 - ساعة عتادية for hardware clock, and زمن الانتقال for latency.
+- وضع الاحتفاظ for holdover (الاستبقاء is another rendering), إطارات
+  المنارة for beacons, رشقات for FTM bursts and المؤازر for the servo.

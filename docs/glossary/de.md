@@ -40,6 +40,11 @@ How `i18n/de/triib.ftl` renders the terms in `docs/GLOSSARY.md`.
 | counter | Zähler | |
 | locked | eingerastet | As a PLL rastet ein |
 | lost lock | Einrastung verloren | |
+| holding over | im Holdover | Holdover as in telecom and PTP clocks: "Wi-Fi-Zeit im Holdover" |
+| station | Station | Plural Stationen; the IEEE 802.11 term, rather than Client |
+| access point | Access Point | der Access Point; Zugangspunkt is rare in practice |
+| beacon | Beacon | Plural Beacons: "Mode B, aus Beacons" |
+| signal | Signal | The inspector label, in dBm |
 | interrupted | unterbrochen | |
 | timestamp | Zeitstempel | |
 | advertise, advertised | ankündigen, angekündigt | Also for "announce itself": sich ankündigen |
@@ -61,3 +66,8 @@ Instructions avoid both Sie and du: buttons and hints use the infinitive
 - **Bedienelement** for control, rather than Regler or Steuerelement.
 - **eingerastet / Einrastung verloren** for locked and lost lock.
 - **Frame** (der Frame) rather than Rahmen.
+- **WLAN** for the Wireless column and inspector section, while messages
+  keep "Wi-Fi" as written ("Wi-Fi-Zeit", "Wi-Fi-Port").
+- **im Holdover** for holding over, rather than Freilauf or Haltemodus.
+- **Keine Zeitsynchronisation** for the time mode "No time", since
+  "Keine Zeit" reads as "no time to spare".

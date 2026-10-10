@@ -265,6 +265,7 @@ column-talker-streams = Luồng Talker
 column-listener-streams = Luồng Listener
 column-avb-lite = AVB Lite
 column-egress = Lưu lượng ra
+column-wireless = Không dây
 
 ## Settings file
 
@@ -291,6 +292,7 @@ netmap-show-map = Hiện sơ đồ
 netmap-show-details = Hiện chi tiết
 stream-numbered = Luồng { $index }
 netmap-bridge = Switch
+netmap-access-point = Điểm truy cập
 netmap-device = Thiết bị
 netmap-this-computer = Máy tính này
 netmap-connected = Đã kết nối
@@ -482,6 +484,51 @@ lite-egress-reported = Theo số luồng được chấp nhận mà thực thể
 lite-egress-worked-out = Tính từ định dạng của các đầu ra luồng đã kết nối.
 lite-alarm-offset = Độ lệch PTP { $offset }, vượt mức 50 µs mà AVB Lite cho phép
 lite-alarm-egress = Lưu lượng ra chiếm { $share } liên kết, vượt mức { $limit } mà các luồng được phép dùng
+
+## AVB Wireless
+
+wireless-station = Trạm
+wireless-access-point = Điểm truy cập
+wireless-role = Vai trò
+wireless-mode = Chế độ
+wireless-time = Thời gian
+wireless-mode-a-ftm = Mode A, 802.1AS qua FTM
+wireless-mode-a-tm = Mode A, 802.1AS qua TM
+wireless-mode-b = Mode B, từ beacon
+wireless-no-time = Không nhận thời gian
+wireless-other-mode = Chế độ mà profile không nêu tên
+wireless-locked = Đã khóa
+wireless-holdover = Đang holdover
+wireless-not-locked = Chưa khóa
+wireless-row-locked = Trạm, đã khóa
+wireless-row-holdover = Trạm, đang holdover
+wireless-row-not-locked = Trạm, chưa khóa
+wireless-row-access-point = Điểm truy cập, { $count } trạm
+wireless-link = Liên kết
+wireless-channel = kênh { $channel }
+wireless-not-known = Không rõ
+wireless-signal = Tín hiệu
+wireless-rate = Tốc độ
+wireless-ftm-valid = { $share } hợp lệ
+wireless-rtt = khứ hồi { $rtt }
+wireless-bursts = mỗi burst { $count } khung
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = điểm truy cập cấp burst FTM có số khung khác ba hoặc hai
+wireless-reason-measurement = không có cả FTM lẫn TM với điểm truy cập
+wireless-reason-signaling = không có bản tin Signaling gPTP-capable từ điểm truy cập
+wireless-reason-other = lý do mà profile không nêu tên
+wireless-servo = Sai số servo
+wireless-stations = Các trạm
+wireless-station-count = { $count } trạm
+wireless-no-ftm = không có FTM
+wireless-unserved = Listener không được phục vụ
+wireless-stream-frames = Khung luồng
+wireless-frames-of = { $readdressed } tới các trạm, { $unmapped } không có Listener, { $dropped } bị hủy, { $restored } từ các trạm
+wireless-class-a-allowed = Cho phép, để thử nghiệm trong phòng lab
+wireless-class-a-not-allowed = Không cho phép
+wireless-alarm-not-locked = Thời gian Wi-Fi chưa khóa với điểm truy cập
+wireless-alarm-holdover = Thời gian Wi-Fi đang holdover, mất khóa với điểm truy cập
+wireless-alarm-unserved = { $count } Listener trên cổng Wi-Fi không được phục vụ, vượt giới hạn unicast
 
 ## Log
 

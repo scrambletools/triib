@@ -265,6 +265,7 @@ column-talker-streams = 发送端流
 column-listener-streams = 接收端流
 column-avb-lite = AVB Lite
 column-egress = 出口流量
+column-wireless = 无线
 
 ## Settings file
 
@@ -291,6 +292,7 @@ netmap-show-map = 显示拓扑图
 netmap-show-details = 显示详情
 stream-numbered = 流 { $index }
 netmap-bridge = 交换机
+netmap-access-point = 接入点
 netmap-device = 设备
 netmap-this-computer = 本机
 netmap-connected = 已连接
@@ -482,6 +484,51 @@ lite-egress-reported = 根据实体统计的已准入流。
 lite-egress-worked-out = 根据已连接流输出的格式推算。
 lite-alarm-offset = PTP 偏移 { $offset }，超出 AVB Lite 允许的 50 µs
 lite-alarm-egress = 出口流量达到链路的 { $share }，超出流可占用的 { $limit }
+
+## AVB Wireless
+
+wireless-station = 站点
+wireless-access-point = 接入点
+wireless-role = 角色
+wireless-mode = 模式
+wireless-time = 时间
+wireless-mode-a-ftm = Mode A，基于 FTM 的 802.1AS
+wireless-mode-a-tm = Mode A，基于 TM 的 802.1AS
+wireless-mode-b = Mode B，基于信标
+wireless-no-time = 无时间同步
+wireless-other-mode = 该规范未定义的模式
+wireless-locked = 已锁定
+wireless-holdover = 保持中
+wireless-not-locked = 未锁定
+wireless-row-locked = 站点，已锁定
+wireless-row-holdover = 站点，保持中
+wireless-row-not-locked = 站点，未锁定
+wireless-row-access-point = 接入点，{ $count } 个站点
+wireless-link = 链路
+wireless-channel = 信道 { $channel }
+wireless-not-known = 未知
+wireless-signal = 信号强度
+wireless-rate = 发送速率
+wireless-ftm-valid = 有效率 { $share }
+wireless-rtt = 往返时间 { $rtt }
+wireless-bursts = 每次突发 { $count } 帧
+wireless-not-as-capable = FALSE，{ $reason }
+wireless-reason-bursts = 接入点分配的 FTM 突发既非 3 帧也非 2 帧
+wireless-reason-measurement = 与接入点之间既无 FTM 也无 TM
+wireless-reason-signaling = 接入点未发出支持 gPTP 的 Signaling 消息
+wireless-reason-other = 该规范未定义的原因
+wireless-servo = 伺服误差
+wireless-stations = 站点
+wireless-station-count = { $count } 个站点
+wireless-no-ftm = 不支持 FTM
+wireless-unserved = 未获服务的接收端
+wireless-stream-frames = 流数据帧
+wireless-frames-of = 发往站点 { $readdressed }，无接收端 { $unmapped }，丢弃 { $dropped }，来自站点 { $restored }
+wireless-class-a-allowed = 允许，仅用于实验室测试
+wireless-class-a-not-allowed = 不允许
+wireless-alarm-not-locked = Wi-Fi 时间未锁定到接入点
+wireless-alarm-holdover = Wi-Fi 时间处于保持状态，已与接入点失锁
+wireless-alarm-unserved = Wi-Fi 端口上有 { $count } 个接收端未获服务，超出单播上限
 
 ## Log
 

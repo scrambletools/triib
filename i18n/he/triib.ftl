@@ -282,6 +282,7 @@ column-talker-streams = זרמי Talker
 column-listener-streams = זרמי Listener
 column-avb-lite = AVB Lite
 column-egress = תעבורה יוצאת
+column-wireless = אלחוטי
 
 ## Settings file
 
@@ -316,6 +317,7 @@ netmap-show-map = הצגת המפה
 netmap-show-details = הצגת הפרטים
 stream-numbered = זרם { $index }
 netmap-bridge = גשר
+netmap-access-point = נקודת גישה
 netmap-device = התקן
 netmap-this-computer = המחשב הזה
 netmap-connected = מחובר
@@ -582,6 +584,67 @@ lite-egress-reported = כפי שהישות סופרת את הזרמים שאוש
 lite-egress-worked-out = מחושב מהפורמטים של יציאות הזרם המחוברות שלה.
 lite-alarm-offset = היסט PTP { $offset }, מעבר ל-50 µs ש-AVB Lite מתיר
 lite-alarm-egress = תעבורה יוצאת ב-{ $share } מהקישור, מעבר ל-{ $limit } שזרמים רשאים לתפוס
+
+## AVB Wireless
+
+wireless-station = תחנה
+wireless-access-point = נקודת גישה
+wireless-role = תפקיד
+wireless-mode = מצב
+wireless-time = זמן
+wireless-mode-a-ftm = Mode A, 802.1AS על גבי FTM
+wireless-mode-a-tm = Mode A, 802.1AS על גבי TM
+wireless-mode-b = Mode B, ממסגרות beacon
+wireless-no-time = ללא זמן
+wireless-other-mode = מצב שהפרופיל לא מגדיר
+wireless-locked = נעול
+wireless-holdover = ב-holdover
+wireless-not-locked = לא נעול
+wireless-row-locked = תחנה, נעולה
+wireless-row-holdover = תחנה, ב-holdover
+wireless-row-not-locked = תחנה, לא נעולה
+wireless-row-access-point = { $count ->
+    [one] נקודת גישה, תחנה אחת
+    [two] נקודת גישה, { $count } תחנות
+   *[other] נקודת גישה, { $count } תחנות
+}
+wireless-link = קישור
+wireless-channel = ערוץ { $channel }
+wireless-not-known = לא ידוע
+wireless-signal = עוצמת אות
+wireless-rate = קצב שידור
+wireless-ftm-valid = { $share } תקפות
+wireless-rtt = זמן הלוך ושוב { $rtt }
+wireless-bursts = { $count ->
+    [one] פרצים של מסגרת אחת
+    [two] פרצים של { $count } מסגרות
+   *[other] פרצים של { $count } מסגרות
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = נקודת הגישה מקצה פרצי FTM שאינם של שלוש או שתי מסגרות
+wireless-reason-measurement = אין FTM ואין TM מול נקודת הגישה
+wireless-reason-signaling = אין הודעת Signaling מסוג gPTP-capable מנקודת הגישה
+wireless-reason-other = סיבה שהפרופיל לא מגדיר
+wireless-servo = שגיאת סרוו
+wireless-stations = תחנות
+wireless-station-count = { $count ->
+    [one] תחנה אחת
+    [two] { $count } תחנות
+   *[other] { $count } תחנות
+}
+wireless-no-ftm = ללא FTM
+wireless-unserved = Listener ללא שירות
+wireless-stream-frames = מסגרות זרם
+wireless-frames-of = { $readdressed } לתחנות, { $unmapped } ללא Listener, { $dropped } נזרקו, { $restored } מתחנות
+wireless-class-a-allowed = מותר, לבדיקות מעבדה
+wireless-class-a-not-allowed = לא מותר
+wireless-alarm-not-locked = זמן ה-Wi-Fi לא נעול על נקודת הגישה
+wireless-alarm-holdover = זמן ה-Wi-Fi ב-holdover, איבד נעילה על נקודת הגישה
+wireless-alarm-unserved = { $count ->
+    [one] Listener אחד בפורט ה-Wi-Fi לא מקבל שירות, מעבר למגבלת היוניקאסט
+    [two] { $count } Listener בפורט ה-Wi-Fi לא מקבלים שירות, מעבר למגבלת היוניקאסט
+   *[other] { $count } Listener בפורט ה-Wi-Fi לא מקבלים שירות, מעבר למגבלת היוניקאסט
+}
 
 ## Log
 

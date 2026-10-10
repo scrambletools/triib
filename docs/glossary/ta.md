@@ -40,6 +40,11 @@ software writes them (அமைப்புகள், மூடு, சாதன
 | identify | Identify, identify செய் | அடையாளம் காண் would read as "recognize". |
 | counter | counter | |
 | locked, lost lock | lock ஆனது, lock இழந்தது | |
+| holding over | holdover | Latin script, as telecom and PTP engineers say it: Holdover-இல், Station, holdover-இல். |
+| station | station, stations | Latin script, as Wi-Fi engineers say it. Access point, 3 stations. |
+| access point | access point | Latin script: access point-உடன், access point-இலிருந்து. |
+| beacon | beacon, beacons | Latin script: Mode B, beacons-இலிருந்து. |
+| signal | சிக்னல் | The Tamil-script spelling phones and software use for signal strength. |
 | interrupted | தடைபட்டது | |
 | timestamp | timestamp | |
 | advertise, advertised | advertise செய், Advertise செய்யப்பட்டது | Also for an entity announcing itself (தன்னை advertise செய்). |

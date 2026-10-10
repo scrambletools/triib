@@ -279,6 +279,7 @@ column-talker-streams = Talker-streamar
 column-listener-streams = Listener-streamar
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Trådlöst
 
 ## Settings file
 
@@ -311,6 +312,7 @@ netmap-show-map = Visa kartan
 netmap-show-details = Visa detaljerna
 stream-numbered = Stream { $index }
 netmap-bridge = Switch
+netmap-access-point = Åtkomstpunkt
 netmap-device = Enhet
 netmap-this-computer = Den här datorn
 netmap-connected = Ansluten
@@ -572,6 +574,63 @@ lite-egress-worked-out = Utifrån formaten på dess anslutna stream-utgångar.
 lite-alarm-offset = PTP-offset { $offset }, över de 50 µs som AVB Lite tillåter
 lite-alarm-egress = Egress på { $share } av länken, över de { $limit } som streamar får ta
 
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Åtkomstpunkt
+wireless-role = Roll
+wireless-mode = Läge
+wireless-time = Tid
+wireless-mode-a-ftm = Mode A, 802.1AS över FTM
+wireless-mode-a-tm = Mode A, 802.1AS över TM
+wireless-mode-b = Mode B, från beacon-ramar
+wireless-no-time = Ingen tid
+wireless-other-mode = Ett läge som profilen inte anger
+wireless-locked = Låst
+wireless-holdover = I holdover
+wireless-not-locked = Inte låst
+wireless-row-locked = Station, låst
+wireless-row-holdover = Station, i holdover
+wireless-row-not-locked = Station, inte låst
+wireless-row-access-point = { $count ->
+    [one] Åtkomstpunkt, { $count } station
+   *[other] Åtkomstpunkt, { $count } stationer
+}
+wireless-link = Länk
+wireless-channel = kanal { $channel }
+wireless-not-known = Okänd
+wireless-signal = Signal
+wireless-rate = Sändhastighet
+wireless-ftm-valid = { $share } giltiga
+wireless-rtt = tur och retur { $rtt }
+wireless-bursts = { $count ->
+    [one] burstar om { $count } ram
+   *[other] burstar om { $count } ramar
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = åtkomstpunkten beviljar FTM-burstar med ett annat antal ramar än tre eller två
+wireless-reason-measurement = varken FTM eller TM med åtkomstpunkten
+wireless-reason-signaling = ingen gPTP-capable Signaling från åtkomstpunkten
+wireless-reason-other = en orsak som profilen inte anger
+wireless-servo = Servofel
+wireless-stations = Stationer
+wireless-station-count = { $count ->
+    [one] { $count } station
+   *[other] { $count } stationer
+}
+wireless-no-ftm = utan FTM
+wireless-unserved = Ej betjänade listeners
+wireless-stream-frames = Streamramar
+wireless-frames-of = { $readdressed } till stationer, { $unmapped } utan listener, { $dropped } kastade, { $restored } från stationer
+wireless-class-a-allowed = Tillåten, för labbtester
+wireless-class-a-not-allowed = Inte tillåten
+wireless-alarm-not-locked = Wi-Fi-tid inte låst till åtkomstpunkten
+wireless-alarm-holdover = Wi-Fi-tid i holdover, låsning till åtkomstpunkten förlorad
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener på Wi-Fi-porten betjänas inte, över unicastgränsen
+   *[other] { $count } listeners på Wi-Fi-porten betjänas inte, över unicastgränsen
+}
+
 ## Log
 
 log-all = Alla
@@ -661,7 +720,7 @@ host-new-talker = Värd-talker { $number }
 host-new-listener = Värd-listener { $number }
 host-failed = Kunde inte lägga till den på den här datorn: { $reason }
 host-needs-clock = Den här datorns egna talkers och listeners behöver ett trådbundet gränssnitt med en PTP-maskinvaruklocka
-host-no-ptp4l = ptp4l svarar inte, så den här datorns strömmar kan inte hålla gPTP-tid
+host-no-ptp4l = ptp4l svarar inte, så den här datorns streamar kan inte hålla gPTP-tid
 host-state = Läge
 host-streaming = Strömmar
 host-waiting = Väntar på en listener

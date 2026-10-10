@@ -277,6 +277,7 @@ column-talker-streams = جریان‌های Talker
 column-listener-streams = جریان‌های Listener
 column-avb-lite = AVB Lite
 column-egress = ترافیک خروجی
+column-wireless = بی‌سیم
 
 ## Settings file
 
@@ -309,6 +310,7 @@ netmap-show-map = نمایش نقشه
 netmap-show-details = نمایش جزئیات
 stream-numbered = جریان { $index }
 netmap-bridge = پل
+netmap-access-point = نقطه دسترسی
 netmap-device = دستگاه
 netmap-this-computer = این رایانه
 netmap-connected = متصل
@@ -552,6 +554,63 @@ lite-egress-reported = بر اساس شمارش خود موجودیت از جر�
 lite-egress-worked-out = محاسبه‌شده از قالب‌های خروجی‌های جریان متصل آن.
 lite-alarm-offset = آفست PTP { $offset }، فراتر از 50 µs مجاز در AVB Lite
 lite-alarm-egress = ترافیک خروجی در { $share } از لینک، فراتر از { $limit } مجاز برای جریان‌ها
+
+## AVB Wireless
+
+wireless-station = ایستگاه
+wireless-access-point = نقطه دسترسی
+wireless-role = نقش
+wireless-mode = حالت
+wireless-time = زمان
+wireless-mode-a-ftm = Mode A، 802.1AS روی FTM
+wireless-mode-a-tm = Mode A، 802.1AS روی TM
+wireless-mode-b = Mode B، از فریم‌های بیکن
+wireless-no-time = بدون زمان
+wireless-other-mode = حالتی که پروفایل نام نمی‌برد
+wireless-locked = قفل‌شده
+wireless-holdover = در حالت هولداور
+wireless-not-locked = قفل‌نشده
+wireless-row-locked = ایستگاه، قفل‌شده
+wireless-row-holdover = ایستگاه، در حالت هولداور
+wireless-row-not-locked = ایستگاه، قفل‌نشده
+wireless-row-access-point = { $count ->
+    [one] نقطه دسترسی، { $count } ایستگاه
+   *[other] نقطه دسترسی، { $count } ایستگاه
+}
+wireless-link = لینک
+wireless-channel = کانال { $channel }
+wireless-not-known = نامشخص
+wireless-signal = قدرت سیگنال
+wireless-rate = نرخ ارسال
+wireless-ftm-valid = { $share } معتبر
+wireless-rtt = زمان رفت‌وبرگشت { $rtt }
+wireless-bursts = { $count ->
+    [one] برست‌های { $count } فریمی
+   *[other] برست‌های { $count } فریمی
+}
+wireless-not-as-capable = FALSE، { $reason }
+wireless-reason-bursts = نقطه دسترسی برست‌های FTM با تعداد فریمی غیر از سه یا دو تخصیص می‌دهد
+wireless-reason-measurement = نه FTM و نه TM با نقطه دسترسی
+wireless-reason-signaling = پیام Signaling از نوع gPTP-capable از نقطه دسترسی نمی‌رسد
+wireless-reason-other = علتی که پروفایل نام نمی‌برد
+wireless-servo = خطای سروو
+wireless-stations = ایستگاه‌ها
+wireless-station-count = { $count ->
+    [one] { $count } ایستگاه
+   *[other] { $count } ایستگاه
+}
+wireless-no-ftm = بدون FTM
+wireless-unserved = Listenerهای بدون سرویس
+wireless-stream-frames = فریم‌های جریان
+wireless-frames-of = { $readdressed } به ایستگاه‌ها، { $unmapped } بدون Listener، { $dropped } دورریخته‌شده، { $restored } از ایستگاه‌ها
+wireless-class-a-allowed = مجاز، برای آزمایش‌های آزمایشگاهی
+wireless-class-a-not-allowed = غیرمجاز
+wireless-alarm-not-locked = زمان Wi-Fi روی نقطه دسترسی قفل نشده
+wireless-alarm-holdover = زمان Wi-Fi در حالت هولداور، قفل روی نقطه دسترسی از دست رفته
+wireless-alarm-unserved = { $count ->
+    [one] { $count } Listener روی پورت Wi-Fi بدون سرویس، فراتر از حد تک‌پخشی
+   *[other] { $count } Listener روی پورت Wi-Fi بدون سرویس، فراتر از حد تک‌پخشی
+}
 
 ## Log
 

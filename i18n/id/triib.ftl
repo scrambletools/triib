@@ -262,6 +262,7 @@ column-talker-streams = Stream talker
 column-listener-streams = Stream listener
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Wireless
 
 ## Settings file
 
@@ -288,6 +289,7 @@ netmap-show-map = Tampilkan peta
 netmap-show-details = Tampilkan detail
 stream-numbered = Stream { $index }
 netmap-bridge = Switch
+netmap-access-point = Access point
 netmap-device = Perangkat
 netmap-this-computer = Komputer ini
 netmap-connected = Terhubung
@@ -487,6 +489,51 @@ lite-egress-reported = Menurut hitungan entitas atas stream yang diterimanya.
 lite-egress-worked-out = Dihitung dari format output stream yang terhubung.
 lite-alarm-offset = Offset PTP { $offset }, melewati 50 µs yang diizinkan AVB Lite
 lite-alarm-egress = Egress { $share } dari link, melewati batas { $limit } untuk stream
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = Peran
+wireless-mode = Mode
+wireless-time = Waktu
+wireless-mode-a-ftm = Mode A, 802.1AS melalui FTM
+wireless-mode-a-tm = Mode A, 802.1AS melalui TM
+wireless-mode-b = Mode B, dari beacon
+wireless-no-time = Tanpa waktu
+wireless-other-mode = Mode yang tidak disebutkan profil
+wireless-locked = Terkunci
+wireless-holdover = Holdover
+wireless-not-locked = Tidak terkunci
+wireless-row-locked = Station, terkunci
+wireless-row-holdover = Station, holdover
+wireless-row-not-locked = Station, tidak terkunci
+wireless-row-access-point = Access point, { $count } station
+wireless-link = Link
+wireless-channel = kanal { $channel }
+wireless-not-known = Tidak diketahui
+wireless-signal = Sinyal
+wireless-rate = Kecepatan
+wireless-ftm-valid = { $share } valid
+wireless-rtt = round trip { $rtt }
+wireless-bursts = burst { $count } frame
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = access point memberikan burst FTM dengan jumlah frame selain tiga atau dua
+wireless-reason-measurement = tidak ada FTM maupun TM dengan access point
+wireless-reason-signaling = tidak ada Signaling gPTP-capable dari access point
+wireless-reason-other = alasan yang tidak disebutkan profil
+wireless-servo = Galat servo
+wireless-stations = Station
+wireless-station-count = { $count } station
+wireless-no-ftm = tanpa FTM
+wireless-unserved = Listener tidak dilayani
+wireless-stream-frames = Frame stream
+wireless-frames-of = { $readdressed } ke station, { $unmapped } tanpa listener, { $dropped } dibuang, { $restored } dari station
+wireless-class-a-allowed = Diizinkan, untuk pengujian di lab
+wireless-class-a-not-allowed = Tidak diizinkan
+wireless-alarm-not-locked = Waktu Wi-Fi tidak terkunci ke access point
+wireless-alarm-holdover = Waktu Wi-Fi dalam holdover, lepas kunci dari access point
+wireless-alarm-unserved = { $count } listener di port Wi-Fi tidak dilayani, melewati batas unicast
 
 ## Log
 

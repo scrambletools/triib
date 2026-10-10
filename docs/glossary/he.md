@@ -43,6 +43,11 @@ percent "80%".
 | identify | זיהוי | |
 | counter | מונה, מונים | |
 | locked, lost lock | ננעל, איבד נעילה | |
+| holding over | holdover | Latin script with a hyphenated prefix: ב-holdover, תחנה, ב-holdover. |
+| station | תחנה, תחנות | Feminine: תחנה, נעולה; תחנה אחת, 3 תחנות. |
+| access point | נקודת גישה | |
+| beacon | beacon | Latin script: ממסגרות beacon. |
+| signal | אות | The label is עוצמת אות (signal strength). |
 | interrupted | נקטע | |
 | timestamp | חותמת זמן, חותמות זמן | |
 | advertise, advertised | הכרזה, מוכרז | Announce itself is להכריז על עצמה. An MSRP declaration is הצהרה, kept apart. |
@@ -61,3 +66,5 @@ percent "80%".
 - ID stays in Latin (ID ישות, ה-ID של הזרם) because the tests keep it as
   written; מזהה ישות would be the native term.
 - עצירה for Pause in the log, to keep השהיה for delay and latency.
+- ב-holdover in Latin script; במצב החזקה would be the Hebrew phrase. An
+  FTM burst is פרץ.

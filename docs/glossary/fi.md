@@ -44,6 +44,11 @@ head noun that takes the case instead: «Entiteettiä X ei voitu tunnistaa»,
 | identify | tunnistaa | The button is «Tunnista». |
 | counter | laskuri | |
 | locked, lost lock | lukittui, menetti lukituksen | Media lock: «lukittui mediakelloon», «mediakellon lukitus». |
+| holding over | holdover-tilassa | Kept, as telecom writing does: «Wi-Fi-aika holdover-tilassa». The state itself is «Lukittu» / «Ei lukittu». |
+| station | asema | The IEEE 802.11 term, paired with «tukiasema»; «3 asemaa». |
+| access point | tukiasema | As in «langaton tukiasema». |
+| beacon | majakkakehys | «Mode B, majakkakehyksistä». An FTM burst is «purske». |
+| signal | signaali | As in «signaalin voimakkuus». |
 | interrupted | keskeytyi | |
 | timestamp | aikaleima | |
 | advertise, advertised | mainostaa, mainostettu | Also for an entity announcing itself: «mainostaa itseään». The ADP section is «Mainostus». |
@@ -64,3 +69,5 @@ heard «havaittu» (in the map) and «Vastaanotettu» (in the log), format
 - «sidottu» for *bound*.
 - «kelloalue» for *clock domain* and «toimialue» for the gPTP domain.
 - «Tarkastelu» for the Inspector panel and «etsintä» for ADP discovery.
+- «asema» for a Wi-Fi *station*; «päätelaite» or «asiakaslaite» are
+  what many users say. Also «holdover-tilassa» and «majakkakehys».

@@ -39,6 +39,11 @@ thousands separator.
 | identify | identificar | |
 | counter | contador | |
 | locked, lost lock | entrar em lock, perder o lock | |
+| holding over | em holdover | Kept in English, as telecom and PTP writing does; pairs with «em lock». |
+| station | estação | The IEEE 802.11 term: «Estação, em lock». |
+| access point | ponto de acesso | |
+| beacon | beacon (m.), beacons | «Mode B, a partir dos beacons». |
+| signal | sinal | The inspector label, in dBm. |
 | interrupted | interrompido | |
 | timestamp | timestamp (m.) | |
 | advertise, advertised | anunciar, anunciado | The ADP section is «Anúncio». |
@@ -61,3 +66,6 @@ desktop «ambiente de trabalho».
   shorter for the inspector's labels.
 - «timestamp» kept, rather than «marca temporal».
 - «sem etiqueta» and «etiquetagem VLAN» for VLAN tagging.
+- «em holdover» for *holding over*, kept in English like «lock».
+- «rajadas» for FTM *bursts*, rather than «bursts».
+- «Sem sincronização» for the time mode «No time».

@@ -293,6 +293,7 @@ column-talker-streams = Flux talker
 column-listener-streams = Flux listener
 column-avb-lite = AVB Lite
 column-egress = Trafic sortant
+column-wireless = Sans fil
 
 ## Settings file
 
@@ -327,6 +328,7 @@ netmap-show-map = Afficher la carte
 netmap-show-details = Afficher les détails
 stream-numbered = Flux { $index }
 netmap-bridge = Commutateur
+netmap-access-point = Point d’accès
 netmap-device = Appareil
 netmap-this-computer = Cet ordinateur
 netmap-connected = Connecté
@@ -606,6 +608,67 @@ lite-egress-reported = Selon le décompte que fait l’entité de ses flux admis
 lite-egress-worked-out = D’après les formats de ses sorties de flux connectées.
 lite-alarm-offset = Décalage PTP de { $offset }, au-delà des 50 µs permis par AVB Lite
 lite-alarm-egress = Trafic sortant à { $share } de la liaison, au-delà des { $limit } permis aux flux
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Point d’accès
+wireless-role = Rôle
+wireless-mode = Mode
+wireless-time = Temps
+wireless-mode-a-ftm = Mode A, 802.1AS sur FTM
+wireless-mode-a-tm = Mode A, 802.1AS sur TM
+wireless-mode-b = Mode B, par les balises
+wireless-no-time = Aucune synchronisation
+wireless-other-mode = Un mode non prévu par le profil
+wireless-locked = Verrouillé
+wireless-holdover = En holdover
+wireless-not-locked = Non verrouillé
+wireless-row-locked = Station, verrouillée
+wireless-row-holdover = Station, en holdover
+wireless-row-not-locked = Station, non verrouillée
+wireless-row-access-point = { $count ->
+    [one] Point d’accès, { $count } station
+    [many] Point d’accès, { $count } stations
+   *[other] Point d’accès, { $count } stations
+}
+wireless-link = Liaison
+wireless-channel = canal { $channel }
+wireless-not-known = Inconnue
+wireless-signal = Signal
+wireless-rate = Débit
+wireless-ftm-valid = { $share } valides
+wireless-rtt = aller-retour { $rtt }
+wireless-bursts = { $count ->
+    [one] rafales de { $count } trame
+    [many] rafales de { $count } trames
+   *[other] rafales de { $count } trames
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = le point d’accès accorde des rafales FTM d’une autre longueur que trois ou deux trames
+wireless-reason-measurement = ni FTM ni TM avec le point d’accès
+wireless-reason-signaling = aucun message Signaling compatible gPTP du point d’accès
+wireless-reason-other = une raison non prévue par le profil
+wireless-servo = Erreur du servo
+wireless-stations = Stations
+wireless-station-count = { $count ->
+    [one] { $count } station
+    [many] { $count } stations
+   *[other] { $count } stations
+}
+wireless-no-ftm = sans FTM
+wireless-unserved = Listeners non servis
+wireless-stream-frames = Trames de flux
+wireless-frames-of = { $readdressed } vers les stations, { $unmapped } sans listener, { $dropped } rejetées, { $restored } depuis les stations
+wireless-class-a-allowed = Autorisée, pour les essais sur banc
+wireless-class-a-not-allowed = Non autorisée
+wireless-alarm-not-locked = Temps Wi-Fi non verrouillé sur le point d’accès
+wireless-alarm-holdover = Temps Wi-Fi en holdover, verrouillage sur le point d’accès perdu
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener non servi sur le port Wi-Fi, au-delà de la limite unicast
+    [many] { $count } listeners non servis sur le port Wi-Fi, au-delà de la limite unicast
+   *[other] { $count } listeners non servis sur le port Wi-Fi, au-delà de la limite unicast
+}
 
 ## Log
 

@@ -35,6 +35,11 @@ How `i18n/ko/triib.ftl` renders the glossary's roles and terms of art.
 | identify | 식별 | As the Windows display settings say it; the IDENTIFY control is 식별 컨트롤. |
 | counter | 카운터 | |
 | locked, lost lock | 락, 락 손실 | The PLL usage; media lock is 미디어 락. Not 잠금, the lay word for a screen or door lock. |
+| holding over | 홀드오버 | As in telecom and GNSS clocks. The state is 홀드오버 중, beside 락됨 and 락 안 됨. |
+| station | 스테이션 | The IEEE 802.11 term (STA); "3 stations" is 스테이션 3개. |
+| access point | 액세스 포인트 | Written with a space, as Korean networking manuals do. |
+| beacon | 비콘 | Mode B is Mode B, 비콘 기반. |
+| signal | 신호 강도 | The label for the RSSI in dBm. |
 | interrupted | 중단 | |
 | timestamp | 타임스탬프 | "Timestamp uncertain" is 타임스탬프 불확실. |
 | advertise, advertised | 광고, 광고됨 | As network engineers say it of routes (경로 광고). Also for an entity "announcing itself" (ADP). |
@@ -54,3 +59,4 @@ How `i18n/ko/triib.ftl` renders the glossary's roles and terms of art.
 - Particles after values use the 을(를), 과(와), (으)로 forms Korean software writes, or a noun such as 인터페이스 or 포맷 takes the particle.
 - No particle is written against a Latin term, because the tests need each standards word on its own: "triib 앱이", "gPTP 미실행", "스트림 ID".
 - The NOT ON THE gPTP TREE band uses a string-literal selector so the word check finds the English capitals; only gPTP 트리에 없음 shows.
+- 스테이션 for a Wi-Fi station, where consumer settings say 클라이언트. 락됨 / 락 안 됨 for the station's time, parallel to 동기화됨 / 동기화 안 됨.

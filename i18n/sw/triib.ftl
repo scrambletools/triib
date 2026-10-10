@@ -277,6 +277,7 @@ column-talker-streams = Mitiririko ya talker
 column-listener-streams = Mitiririko ya listener
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Pasiwaya
 
 ## Settings file
 
@@ -309,6 +310,7 @@ netmap-show-map = Onyesha ramani
 netmap-show-details = Onyesha maelezo
 stream-numbered = Mtiririko { $index }
 netmap-bridge = Swichi
+netmap-access-point = Access point
 netmap-device = Kifaa
 netmap-this-computer = Kompyuta hii
 netmap-connected = Imeunganishwa
@@ -561,6 +563,63 @@ lite-egress-reported = Kama huluki inavyohesabu mitiririko yake iliyokubaliwa.
 lite-egress-worked-out = Kutoka kwenye miundo ya matowe yake ya mtiririko yaliyounganishwa.
 lite-alarm-offset = Offset ya PTP { $offset }, zaidi ya 50 µs ambazo AVB Lite inaruhusu
 lite-alarm-egress = Egress ni { $share } ya kiungo, zaidi ya { $limit } ambayo mitiririko inaruhusiwa kuchukua
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = Jukumu
+wireless-mode = Modi
+wireless-time = Muda
+wireless-mode-a-ftm = Mode A, 802.1AS kupitia FTM
+wireless-mode-a-tm = Mode A, 802.1AS kupitia TM
+wireless-mode-b = Mode B, kutoka kwenye beacon
+wireless-no-time = Bila muda
+wireless-other-mode = Modi ambayo profaili haitaji
+wireless-locked = Imepata lock
+wireless-holdover = Iko kwenye holdover
+wireless-not-locked = Haijapata lock
+wireless-row-locked = Station, imepata lock
+wireless-row-holdover = Station, iko kwenye holdover
+wireless-row-not-locked = Station, haijapata lock
+wireless-row-access-point = { $count ->
+    [one] Access point, station { $count }
+   *[other] Access point, station { $count }
+}
+wireless-link = Kiungo
+wireless-channel = chaneli { $channel }
+wireless-not-known = Haijulikani
+wireless-signal = Mawimbi
+wireless-rate = Kasi
+wireless-ftm-valid = { $share } sahihi
+wireless-rtt = kwenda na kurudi { $rtt }
+wireless-bursts = { $count ->
+    [one] burst zenye fremu { $count }
+   *[other] burst zenye fremu { $count }
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = access point inatoa burst za FTM zenye idadi ya fremu isiyo tatu wala mbili
+wireless-reason-measurement = hakuna FTM wala TM na access point
+wireless-reason-signaling = hakuna Signaling ya gPTP-capable kutoka kwa access point
+wireless-reason-other = sababu ambayo profaili haitaji
+wireless-servo = Hitilafu ya servo
+wireless-stations = Station
+wireless-station-count = { $count ->
+    [one] station { $count }
+   *[other] station { $count }
+}
+wireless-no-ftm = bila FTM
+wireless-unserved = Listener zisizohudumiwa
+wireless-stream-frames = Fremu za mtiririko
+wireless-frames-of = { $readdressed } kwa station, { $unmapped } bila listener, { $dropped } zimetupwa, { $restored } kutoka kwa station
+wireless-class-a-allowed = Inaruhusiwa, kwa majaribio ya maabara
+wireless-class-a-not-allowed = Hairuhusiwi
+wireless-alarm-not-locked = Muda wa Wi-Fi haujapata lock kwa access point
+wireless-alarm-holdover = Muda wa Wi-Fi uko kwenye holdover, umepoteza lock ya access point
+wireless-alarm-unserved = { $count ->
+    [one] listener { $count } kwenye mlango wa Wi-Fi haihudumiwi, zaidi ya kikomo cha unicast
+   *[other] listener { $count } kwenye mlango wa Wi-Fi hazihudumiwi, zaidi ya kikomo cha unicast
+}
 
 ## Log
 

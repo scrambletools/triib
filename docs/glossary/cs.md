@@ -35,6 +35,11 @@ How `i18n/cs/triib.ftl` renders the glossary's roles and terms of art.
 | identify | identifikovat | |
 | counter | čítač | |
 | locked, lost lock | synchronizace, ztráta synchronizace | Diagnostics count them as nouns: «3 synchronizace, 1 ztráta synchronizace». |
+| holding over | holdover | Kept in English, as timing practice says it: «Režim holdover», «v režimu holdover». |
+| station | stanice | The IEEE 802.11 term, rather than «klient»: 1 stanice, 5 stanic. «Stanice, synchronizovaná» in the entity list. |
+| access point | přístupový bod | |
+| beacon | beacon | In «rámce beacon»: «Mode B, z rámců beacon». |
+| signal | signál | The inspector label, in dBm. |
 | interrupted | přerušení | «Bez přerušení», «2 přerušení». |
 | timestamp | časová značka | |
 | advertise, advertised | ohlašovat, ohlášeno | Advertising is «ohlašování». |
@@ -52,3 +57,6 @@ How `i18n/cs/triib.ftl` renders the glossary's roles and terms of art.
 - «přiřazeno» for a bound input.
 - «mediální hodiny» for media clock, and «synchronizace» counted as lock events in the diagnostics.
 - Peer delay kept in English.
+- «holdover» kept in English for holding over.
+- Wireless locked written as «Synchronizováno», the same word as the map's gPTP «Sync».
+- «Chyba serva» for the station's servo error.

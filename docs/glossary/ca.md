@@ -39,6 +39,11 @@ imperative ("Desa", "Recupera") and instructions address the user as
 | identify | identificar | Button: «Identifica». |
 | counter | comptador | |
 | locked, lost lock | enganxat, enganxament perdut | «enganxat al rellotge de mitjans» for media lock. |
+| holding over | en holdover | Kept in English, as practitioners say it: «Estació, en holdover». |
+| station | estació, estacions | The IEEE 802.11 term (estació sense fil). |
+| access point | punt d’accés (m.) | |
+| beacon | balisa | As in a router’s «interval de balisa»: «Mode B, a partir de les balises». An FTM burst is «ràfega». |
+| signal | senyal (m.) | As in «intensitat del senyal». |
 | interrupted | interromput | |
 | timestamp | marca de temps | |
 | advertise, advertised | anunciar, anunciat | «notificar» is kept for *report*. |
@@ -58,3 +63,5 @@ imperative ("Desa", "Recupera") and instructions address the user as
 - **preset** and **firmware** kept as practitioners say, rather than
   «preconfiguració» and «microprogramari».
 - **report → notificar** («Camí no notificat»).
+- **holding over → en holdover**, kept in English; «en mode de
+  retenció» is the ITU-style alternative. **beacon → balisa**.

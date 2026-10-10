@@ -285,6 +285,7 @@ column-talker-streams = Talker-striimit
 column-listener-streams = Listener-striimit
 column-avb-lite = AVB Lite
 column-egress = Lähtevä liikenne
+column-wireless = Langaton
 
 ## Settings file
 
@@ -317,6 +318,7 @@ netmap-show-map = Näytä kartta
 netmap-show-details = Näytä tiedot
 stream-numbered = Striimi { $index }
 netmap-bridge = Silta
+netmap-access-point = Tukiasema
 netmap-device = Laite
 netmap-this-computer = Tämä tietokone
 netmap-connected = Yhdistetty
@@ -579,6 +581,63 @@ lite-egress-worked-out = Laskettu sen yhdistettyjen striimilähtöjen muodoista.
 lite-alarm-offset = PTP-poikkeama { $offset }, yli 50 µs:n rajan, jonka AVB Lite sallii
 lite-alarm-egress = Lähtevä liikenne { $share } linkistä, yli striimeille sallitun rajan { $limit }
 
+## AVB Wireless
+
+wireless-station = Asema
+wireless-access-point = Tukiasema
+wireless-role = Rooli
+wireless-mode = Toimintatila
+wireless-time = Aika
+wireless-mode-a-ftm = Mode A, 802.1AS FTM:n kautta
+wireless-mode-a-tm = Mode A, 802.1AS TM:n kautta
+wireless-mode-b = Mode B, majakkakehyksistä
+wireless-no-time = Ei aikaa
+wireless-other-mode = Toimintatila, jota profiili ei nimeä
+wireless-locked = Lukittu
+wireless-holdover = Holdover-tilassa
+wireless-not-locked = Ei lukittu
+wireless-row-locked = Asema, lukittu
+wireless-row-holdover = Asema, holdover-tilassa
+wireless-row-not-locked = Asema, ei lukittu
+wireless-row-access-point = { $count ->
+    [one] Tukiasema, { $count } asema
+   *[other] Tukiasema, { $count } asemaa
+}
+wireless-link = Linkki
+wireless-channel = kanava { $channel }
+wireless-not-known = Ei tiedossa
+wireless-signal = Signaali
+wireless-rate = Lähetysnopeus
+wireless-ftm-valid = { $share } kelvollisia
+wireless-rtt = edestakainen viive { $rtt }
+wireless-bursts = { $count ->
+    [one] purskeissa { $count } kehys
+   *[other] purskeissa { $count } kehystä
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = tukiasema myöntää FTM-purskeita, joissa on muu määrä kehyksiä kuin kolme tai kaksi
+wireless-reason-measurement = ei FTM:ää eikä TM:ää tukiaseman kanssa
+wireless-reason-signaling = ei gPTP-capable Signaling -viestiä tukiasemalta
+wireless-reason-other = syy, jota profiili ei nimeä
+wireless-servo = Servovirhe
+wireless-stations = Asemat
+wireless-station-count = { $count ->
+    [one] { $count } asema
+   *[other] { $count } asemaa
+}
+wireless-no-ftm = ilman FTM:ää
+wireless-unserved = Palvelemattomat listenerit
+wireless-stream-frames = Striimikehykset
+wireless-frames-of = { $readdressed } asemille, { $unmapped } ilman listeneriä, { $dropped } hylätty, { $restored } asemilta
+wireless-class-a-allowed = Sallittu, laboratoriotesteihin
+wireless-class-a-not-allowed = Ei sallittu
+wireless-alarm-not-locked = Wi-Fi-aika ei ole lukittunut tukiasemaan
+wireless-alarm-holdover = Wi-Fi-aika holdover-tilassa, lukitus tukiasemaan menetetty
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener Wi-Fi-portissa palvelematta, yli unicast-rajan
+   *[other] { $count } listeneriä Wi-Fi-portissa palvelematta, yli unicast-rajan
+}
+
 ## Log
 
 log-all = Kaikki
@@ -671,7 +730,7 @@ host-new-talker = Isännän talker { $number }
 host-new-listener = Isännän listener { $number }
 host-failed = Lisääminen tähän tietokoneeseen ei onnistunut: { $reason }
 host-needs-clock = Tämän tietokoneen omat talkerit ja listenerit tarvitsevat langallisen liitännän, jossa on PTP-laitekello
-host-no-ptp4l = ptp4l ei vastaa, joten tämän tietokoneen streamit eivät pysy gPTP-ajassa
+host-no-ptp4l = ptp4l ei vastaa, joten tämän tietokoneen striimit eivät pysy gPTP-ajassa
 host-state = Tila
 host-streaming = Lähettää
 host-waiting = Odottaa listeneriä

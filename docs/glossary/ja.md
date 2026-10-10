@@ -35,6 +35,11 @@ How `i18n/ja/triib.ftl` renders the glossary's roles and terms of art.
 | identify | 識別 | As the Windows display settings say it; the IDENTIFY control is 識別コントロール. |
 | counter | カウンター | |
 | locked, lost lock | ロック, ロック外れ | The PLL usage; media lock is メディアロック. Not ロック解除, which is a deliberate unlock. |
+| holding over | ホールドオーバー | As in telecom and GNSS clocks. The state is ホールドオーバー中, beside ロック済み and 未ロック. |
+| station | ステーション | The IEEE 802.11 term (STA); "3 stations" is ステーション 3 台. |
+| access point | アクセスポイント | |
+| beacon | ビーコン | Mode B is Mode B、ビーコンから取得. |
+| signal | 信号強度 | The label for the RSSI in dBm. |
 | interrupted | 中断 | |
 | timestamp | タイムスタンプ | "Timestamp uncertain" is タイムスタンプ不確定. |
 | advertise, advertised | アドバタイズ, アドバタイズ中 | Also for an entity "announcing itself" (ADP). |
@@ -52,3 +57,4 @@ How `i18n/ja/triib.ftl` renders the glossary's roles and terms of art.
 - インターフェイス rather than インターフェース.
 - Spacing: a half-width space separates Latin terms from Japanese (AVB インターフェイス, triib は, gPTP ツリー). The tests need it, because a standards word written against kana counts as lost. Values such as { $entity } are spaced the same way.
 - The NOT ON THE gPTP TREE band uses a string-literal selector so the word check finds the English capitals; only gPTP ツリー外 shows.
+- ステーション for a Wi-Fi station; Wi-Fi users may know クライアント or 子機 better. ロック済み / 未ロック for the station's time, parallel to 同期済み / 未同期.

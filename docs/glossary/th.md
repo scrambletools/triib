@@ -38,6 +38,11 @@ text uses no full stops, separates sentences with a space, quotes with
 | identify | ระบุตัว | |
 | counter | ตัวนับ | |
 | locked, lost lock | ล็อก, หลุดล็อก | [0] variants: ไม่เคยล็อก, ไม่เคยหลุดล็อก. |
+| holding over | holdover | Kept in Latin script, as telecom engineers write it: อยู่ใน holdover, "สถานี อยู่ใน holdover". |
+| station | สถานี | The IEEE 802.11 term in Thai writing; ไคลเอนต์ is what router pages say. |
+| access point | แอคเซสพอยต์ | Transliterated, as Thai IT writing spells it. |
+| beacon | บีคอน | "Mode B, จากบีคอน". |
+| signal | สัญญาณ | As in ความแรงสัญญาณ. |
 | interrupted | หยุดชะงัก | |
 | timestamp | ไทม์สแตมป์ | |
 | advertise, advertised | ประกาศ, ประกาศแล้ว | The ADP section is การประกาศ. |

@@ -40,6 +40,11 @@ How `i18n/nb/triib.ftl` renders the terms in `docs/GLOSSARY.md`.
 | counter | teller | |
 | locked | låst | |
 | lost lock | mistet låsing | |
+| holding over | i holdover | Kept, as telecom writing does: Wi-Fi-tid i holdover |
+| station | stasjon | Plural stasjoner; the IEEE 802.11 term |
+| access point | tilgangspunkt | tilgangspunktet, as on router settings pages |
+| beacon | beacon | beacon-rammer; burst is burst, plural burster |
+| signal | signal | As in signalstyrke |
 | interrupted | avbrutt | |
 | timestamp | tidsstempel | |
 | advertise, advertised | annonsere, annonsert | Also for "announce itself": annonsere seg |
@@ -57,3 +62,5 @@ Frames are rammer; discovery is oppdage ("Oppdager som …").
 - **maskinvareklokke** rather than hardwareklokke.
 - **link** rather than lenke for a network link.
 - **låst / mistet låsing** for locked and lost lock.
+- **tilgangspunkt** rather than aksesspunkt, **stasjon** for a Wi-Fi
+  station rather than klient, and **i holdover** kept in English.

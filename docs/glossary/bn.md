@@ -41,6 +41,11 @@ words are Bengali. Sentences end with the danda (।).
 | identify | Identify, identify করা | শনাক্ত করা would read as "detect". |
 | counter | counter | |
 | locked, lost lock | lock হয়েছে, lock হারিয়েছে | |
+| holding over | holdover | Latin script, as telecom and PTP engineers say it: Holdover-এ আছে, Station, holdover-এ. |
+| station | station, stations | Latin script, as Wi-Fi engineers say it; singular after the classifier (3টি station). |
+| access point | access point | Latin script. Genitive access point-এর. |
+| beacon | beacon | Latin script: Mode B, beacon থেকে. |
+| signal | সিগন্যাল | The Bengali spelling phones and software use for signal strength. |
 | interrupted | ব্যাহত | |
 | timestamp | timestamp | |
 | advertise, advertised | advertise করা, Advertise করা হয়েছে | Also for an entity announcing itself (নিজেকে advertise করা). |

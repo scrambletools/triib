@@ -277,6 +277,7 @@ column-talker-streams = Talker streams
 column-listener-streams = Listener streams
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Wireless
 
 ## Settings file
 
@@ -309,6 +310,7 @@ netmap-show-map = ম্যাপ দেখান
 netmap-show-details = বিস্তারিত দেখান
 stream-numbered = Stream { $index }
 netmap-bridge = Bridge
+netmap-access-point = Access point
 netmap-device = ডিভাইস
 netmap-this-computer = এই কম্পিউটার
 netmap-connected = সংযুক্ত
@@ -552,6 +554,63 @@ lite-egress-reported = Entity নিজে তার গৃহীত streams য
 lite-egress-worked-out = এর সংযুক্ত stream outputs-এর formats থেকে হিসাব করা।
 lite-alarm-offset = PTP offset { $offset }, AVB Lite-এর অনুমোদিত 50 µs ছাড়িয়ে
 lite-alarm-egress = Egress link-এর { $share }, streams-এর জন্য অনুমোদিত { $limit } ছাড়িয়ে
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = ভূমিকা
+wireless-mode = মোড
+wireless-time = সময়
+wireless-mode-a-ftm = Mode A, FTM-এর মাধ্যমে 802.1AS
+wireless-mode-a-tm = Mode A, TM-এর মাধ্যমে 802.1AS
+wireless-mode-b = Mode B, beacon থেকে
+wireless-no-time = সময় নেই
+wireless-other-mode = এমন মোড, যার নাম profile-এ নেই
+wireless-locked = Lock হয়েছে
+wireless-holdover = Holdover-এ আছে
+wireless-not-locked = Lock হয়নি
+wireless-row-locked = Station, lock হয়েছে
+wireless-row-holdover = Station, holdover-এ
+wireless-row-not-locked = Station, lock হয়নি
+wireless-row-access-point = { $count ->
+    [one] Access point, { $count }টি station
+   *[other] Access point, { $count }টি station
+}
+wireless-link = Link
+wireless-channel = চ্যানেল { $channel }
+wireless-not-known = অজানা
+wireless-signal = সিগন্যাল
+wireless-rate = Rate
+wireless-ftm-valid = { $share } বৈধ
+wireless-rtt = round trip { $rtt }
+wireless-bursts = { $count ->
+    [one] { $count }টি frame-এর burst
+   *[other] { $count }টি frame-এর burst
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = access point তিন বা দুই ছাড়া অন্য সংখ্যক frame-এর FTM burst দেয়
+wireless-reason-measurement = access point-এর সঙ্গে FTM বা TM কোনোটিই নেই
+wireless-reason-signaling = access point থেকে কোনো gPTP-capable Signaling আসেনি
+wireless-reason-other = এমন কারণ, যার নাম profile-এ নেই
+wireless-servo = Servo ত্রুটি
+wireless-stations = Stations
+wireless-station-count = { $count ->
+    [one] { $count }টি station
+   *[other] { $count }টি station
+}
+wireless-no-ftm = FTM ছাড়া
+wireless-unserved = সেবা না পাওয়া Listeners
+wireless-stream-frames = Stream frames
+wireless-frames-of = { $readdressed } station-এ, { $unmapped } Listener ছাড়া, { $dropped } drop হয়েছে, { $restored } station থেকে
+wireless-class-a-allowed = অনুমোদিত, bench test-এর জন্য
+wireless-class-a-not-allowed = অনুমোদিত নয়
+wireless-alarm-not-locked = Wi-Fi সময় access point-এর সঙ্গে lock হয়নি
+wireless-alarm-holdover = Wi-Fi সময় holdover-এ, access point-এর সঙ্গে lock হারিয়েছে
+wireless-alarm-unserved = { $count ->
+    [one] Wi-Fi port-এ { $count }টি Listener সেবা পায়নি, unicast সীমা ছাড়িয়ে
+   *[other] Wi-Fi port-এ { $count }টি Listener সেবা পায়নি, unicast সীমা ছাড়িয়ে
+}
 
 ## Log
 

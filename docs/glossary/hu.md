@@ -46,6 +46,11 @@ sikerült (X → Y): ok.»
 | identify | azonosítás | |
 | counter | számláló | |
 | locked, lost lock | zárolódott, elvesztette a zárolást | Media lock: «zárolódott a médiaórajelre», «médiaórajel-zárolás». |
+| holding over | holdover | Kept, as timing practice says it: «holdover módban». |
+| station | állomás | The IEEE 802.11 term, rather than «kliens»: «Állomás, zárolódott». |
+| access point | hozzáférési pont | |
+| beacon | beacon | In «beacon keretek»: «Mode B, beacon keretekből». |
+| signal | jelerősség | The inspector label, in dBm; «jel» alone reads too general. |
 | interrupted | megszakadt | |
 | timestamp | időbélyeg | |
 | advertise, advertised | meghirdet, meghirdetve | Also for an entity announcing itself: «hirdesse meg magát». The ADP section is «Hirdetés». |
@@ -68,3 +73,6 @@ inspector «Vizsgáló», log «Napló».
 - «link» rather than «összeköttetés» for *link*.
 - «óra» (PTP clocks) versus «órajel» (audio clocks), as in «Óraazonosító»
   but «Órajelforrás» and «Órajelfa».
+- «holdover» kept for holding over; Hungarian telecom texts may have a native term.
+- «Szabályozási hiba» for the station's servo error, rather than «szervóhiba».
+- «körülfordulási idő» for round-trip time.

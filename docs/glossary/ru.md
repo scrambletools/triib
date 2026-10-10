@@ -35,6 +35,11 @@ How `i18n/ru/triib.ftl` renders the glossary's roles and terms of art.
 | identify | идентифицировать | |
 | counter | счётчик | |
 | locked, lost lock | захват синхронизации, потеря синхронизации | Diagnostics count them as nouns: «3 захвата синхронизации». Media lock is «захват медиасинхронизации». |
+| holding over | режим удержания | The term Russian synchronization writing uses for holdover; «удержание» in the entity list's short cells. |
+| station | станция | The IEEE 802.11 term (STA), rather than «клиент»: 1 станция, 2 станции, 5 станций. |
+| access point | точка доступа | |
+| beacon | Beacon | Latin script, as the frame type: «кадры Beacon». |
+| signal | сигнал | The inspector label, in dBm. |
 | interrupted | прерывание | «Без прерываний», «2 прерывания». |
 | timestamp | метка времени | |
 | advertise, advertised | объявлять, объявлено | Advertising is «объявление». |
@@ -52,3 +57,6 @@ How `i18n/ru/triib.ftl` renders the glossary's roles and terms of art.
 - «захват синхронизации» for lock, and the diagnostics written as noun counts.
 - Peer delay, unicast and multicast kept in English.
 - «Тревога» for alarm.
+- «режим удержания» for holding over, rather than the English «holdover».
+- «Ошибка подстройки» for the station's servo error, avoiding «регулятор» (control) and «сервопривод» (a motor).
+- «круговая задержка» for round-trip time.

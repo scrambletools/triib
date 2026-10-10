@@ -38,6 +38,11 @@ recommends.
 | identify | identificar | |
 | counter | contador | |
 | locked, lost lock | enganchado, perder el enganche | PLL lock: «se enganchó», «perdió el enganche». |
+| holding over | en holdover | Kept in English, as Spanish telecom and PTP writing does. |
+| station | estación (f.) | The IEEE 802.11 term: «Estación, enganchada». |
+| access point | punto de acceso | |
+| beacon | baliza (f.) | «Mode B, a partir de las balizas». |
+| signal | señal | The inspector label, in dBm. |
 | interrupted | interrumpido | |
 | timestamp | marca de tiempo | |
 | advertise, advertised | anunciar, anunciado | The ADP section is «Anuncio». |
@@ -63,3 +68,7 @@ log «Registro».
 - «Frecuencia de muestreo» may be long for the inspector's labels.
 - The no-break space as thousands separator (RAE) rather than the point
   Spain also uses or the comma used in Mexico.
+- «en holdover» for *holding over*, rather than «en retención».
+- «baliza» for *beacon*; many Wi-Fi engineers say «beacon».
+- «Inalámbrico» for the Wireless column; «Wi-Fi» is the alternative.
+- «Sin sincronización» for the time mode «No time».

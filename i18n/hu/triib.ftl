@@ -279,6 +279,7 @@ column-talker-streams = Talker-streamek
 column-listener-streams = Listener-streamek
 column-avb-lite = AVB Lite
 column-egress = Kimenő forgalom
+column-wireless = Vezeték nélküli
 
 ## Settings file
 
@@ -311,6 +312,7 @@ netmap-show-map = Térkép megjelenítése
 netmap-show-details = Részletek megjelenítése
 stream-numbered = Stream { $index }
 netmap-bridge = Híd
+netmap-access-point = Hozzáférési pont
 netmap-device = Eszköz
 netmap-this-computer = Ez a számítógép
 netmap-connected = Csatlakoztatva
@@ -554,6 +556,63 @@ lite-egress-reported = Ahogy az entitás a befogadott streamjeit számolja.
 lite-egress-worked-out = A csatlakoztatott streamkimenetei formátumaiból számolva.
 lite-alarm-offset = PTP-eltérés: { $offset }, több az AVB Lite által megengedett 50 µs-nál
 lite-alarm-egress = Kimenő forgalom: { $share } a link kapacitásából, több a streamek számára megengedett { $limit } értéknél
+
+## AVB Wireless
+
+wireless-station = Állomás
+wireless-access-point = Hozzáférési pont
+wireless-role = Szerepkör
+wireless-mode = Mód
+wireless-time = Idő
+wireless-mode-a-ftm = Mode A, 802.1AS FTM-en keresztül
+wireless-mode-a-tm = Mode A, 802.1AS TM-en keresztül
+wireless-mode-b = Mode B, beacon keretekből
+wireless-no-time = Nincs időszinkron
+wireless-other-mode = A profil által meg nem nevezett mód
+wireless-locked = Zárolódott
+wireless-holdover = Holdover módban
+wireless-not-locked = Nem zárolódott
+wireless-row-locked = Állomás, zárolódott
+wireless-row-holdover = Állomás, holdover módban
+wireless-row-not-locked = Állomás, nem zárolódott
+wireless-row-access-point = { $count ->
+    [one] Hozzáférési pont, { $count } állomás
+   *[other] Hozzáférési pont, { $count } állomás
+}
+wireless-link = Link
+wireless-channel = csatorna { $channel }
+wireless-not-known = Nem ismert
+wireless-signal = Jelerősség
+wireless-rate = Sebesség
+wireless-ftm-valid = { $share } érvényes
+wireless-rtt = { $rtt } körülfordulási idő
+wireless-bursts = { $count ->
+    [one] { $count } keretes sorozatok
+   *[other] { $count } keretes sorozatok
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = a hozzáférési pont háromtól és kettőtől eltérő keretszámú FTM-sorozatokat engedélyez
+wireless-reason-measurement = nincs sem FTM, sem TM a hozzáférési ponttal
+wireless-reason-signaling = nem érkezik gPTP-capable Signaling üzenet a hozzáférési ponttól
+wireless-reason-other = a profil által meg nem nevezett ok
+wireless-servo = Szabályozási hiba
+wireless-stations = Állomások
+wireless-station-count = { $count ->
+    [one] { $count } állomás
+   *[other] { $count } állomás
+}
+wireless-no-ftm = FTM nélkül
+wireless-unserved = Kiszolgálatlan listenerek
+wireless-stream-frames = Streamkeretek
+wireless-frames-of = { $readdressed } állomásokhoz, { $unmapped } listener nélkül, { $dropped } eldobva, { $restored } állomásoktól
+wireless-class-a-allowed = Engedélyezve, laboratóriumi tesztekhez
+wireless-class-a-not-allowed = Nincs engedélyezve
+wireless-alarm-not-locked = A Wi-Fi-idő nem zárolódott a hozzáférési pontra
+wireless-alarm-holdover = A Wi-Fi-idő holdover módban, a hozzáférési pontra való zárolás elveszett
+wireless-alarm-unserved = { $count ->
+    [one] { $count } kiszolgálatlan listener a Wi-Fi-porton, az unicast-korláton felül
+   *[other] { $count } kiszolgálatlan listener a Wi-Fi-porton, az unicast-korláton felül
+}
 
 ## Log
 

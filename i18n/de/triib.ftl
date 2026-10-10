@@ -279,6 +279,7 @@ column-talker-streams = Talker-Streams
 column-listener-streams = Listener-Streams
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = WLAN
 
 ## Settings file
 
@@ -311,6 +312,7 @@ netmap-show-map = Karte anzeigen
 netmap-show-details = Details anzeigen
 stream-numbered = Stream { $index }
 netmap-bridge = Switch
+netmap-access-point = Access Point
 netmap-device = Gerät
 netmap-this-computer = Dieser Computer
 netmap-connected = Verbunden
@@ -562,6 +564,63 @@ lite-egress-reported = So, wie die Entität ihre zugelassenen Streams zählt.
 lite-egress-worked-out = Aus den Formaten ihrer verbundenen Stream-Ausgänge.
 lite-alarm-offset = PTP-Offset { $offset }, mehr als die 50 µs, die AVB Lite erlaubt
 lite-alarm-egress = Egress bei { $share } des Links, mehr als die { $limit }, die Streams belegen dürfen
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access Point
+wireless-role = Rolle
+wireless-mode = Modus
+wireless-time = Zeit
+wireless-mode-a-ftm = Mode A, 802.1AS über FTM
+wireless-mode-a-tm = Mode A, 802.1AS über TM
+wireless-mode-b = Mode B, aus Beacons
+wireless-no-time = Keine Zeitsynchronisation
+wireless-other-mode = Ein Modus, den das Profil nicht nennt
+wireless-locked = Eingerastet
+wireless-holdover = Im Holdover
+wireless-not-locked = Nicht eingerastet
+wireless-row-locked = Station, eingerastet
+wireless-row-holdover = Station, im Holdover
+wireless-row-not-locked = Station, nicht eingerastet
+wireless-row-access-point = { $count ->
+    [one] Access Point, { $count } Station
+   *[other] Access Point, { $count } Stationen
+}
+wireless-link = Link
+wireless-channel = Kanal { $channel }
+wireless-not-known = Unbekannt
+wireless-signal = Signal
+wireless-rate = Datenrate
+wireless-ftm-valid = { $share } gültig
+wireless-rtt = Umlaufzeit { $rtt }
+wireless-bursts = { $count ->
+    [one] Bursts mit je { $count } Frame
+   *[other] Bursts mit je { $count } Frames
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = der Access Point gewährt FTM-Bursts mit einer anderen Länge als drei oder zwei Frames
+wireless-reason-measurement = weder FTM noch TM mit dem Access Point
+wireless-reason-signaling = kein gPTP-fähiges Signaling vom Access Point
+wireless-reason-other = ein Grund, den das Profil nicht nennt
+wireless-servo = Servo-Fehler
+wireless-stations = Stationen
+wireless-station-count = { $count ->
+    [one] { $count } Station
+   *[other] { $count } Stationen
+}
+wireless-no-ftm = ohne FTM
+wireless-unserved = Nicht bediente Listener
+wireless-stream-frames = Stream-Frames
+wireless-frames-of = { $readdressed } an Stationen, { $unmapped } ohne Listener, { $dropped } verworfen, { $restored } von Stationen
+wireless-class-a-allowed = Erlaubt, für Labortests
+wireless-class-a-not-allowed = Nicht erlaubt
+wireless-alarm-not-locked = Wi-Fi-Zeit nicht auf den Access Point eingerastet
+wireless-alarm-holdover = Wi-Fi-Zeit im Holdover, Bezug zum Access Point verloren
+wireless-alarm-unserved = { $count ->
+    [one] { $count } Listener am Wi-Fi-Port nicht bedient, über dem Unicast-Limit
+   *[other] { $count } Listener am Wi-Fi-Port nicht bedient, über dem Unicast-Limit
+}
 
 ## Log
 

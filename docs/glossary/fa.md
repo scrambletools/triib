@@ -43,6 +43,11 @@ percent "80٪", the Persian marks, beside the ASCII digits triib shows.
 | identify | شناسایی | |
 | counter | شمارنده | |
 | locked, lost lock | قفل برقرار شده، قفل از دست رفته | |
+| holding over | در حالت هولداور | Transliterated, as Persian telecom writing carries holdover: ایستگاه، در حالت هولداور. |
+| station | ایستگاه | The IEEE 802.11 term; singular after a number: 3 ایستگاه. |
+| access point | نقطه دسترسی | |
+| beacon | بیکن | Beacon frames are فریم‌های بیکن. |
+| signal | سیگنال | The label is قدرت سیگنال (signal strength). |
 | interrupted | وقفه | Kept apart from قطع (link down, disconnect). |
 | timestamp | مهر زمانی | |
 | advertise, advertised | اعلام، اعلام‌شده | An MSRP declaration is اعلان, kept apart. |
@@ -59,3 +64,5 @@ percent "80٪", the Persian marks, beside the ASCII digits triib shows.
 - آلارم for alarm, to keep it apart from هشدار (warnings in the log).
 - ID stays in Latin (ID موجودیت) because the tests keep it as written;
   شناسه موجودیت would be the native term.
+- هولداور transliterated for holdover, and برست for an FTM burst; حالت
+  نگهداشت and دسته are Persian alternatives.

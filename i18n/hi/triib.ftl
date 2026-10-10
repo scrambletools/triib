@@ -277,6 +277,7 @@ column-talker-streams = Talker streams
 column-listener-streams = Listener streams
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Wireless
 
 ## Settings file
 
@@ -309,6 +310,7 @@ netmap-show-map = नक्शा दिखाएँ
 netmap-show-details = विवरण दिखाएँ
 stream-numbered = Stream { $index }
 netmap-bridge = Bridge
+netmap-access-point = Access point
 netmap-device = डिवाइस
 netmap-this-computer = यह कंप्यूटर
 netmap-connected = कनेक्ट है
@@ -552,6 +554,63 @@ lite-egress-reported = Entity द्वारा गिनी गई स्व�
 lite-egress-worked-out = इसके कनेक्ट हुए stream outputs के formats से निकाला गया।
 lite-alarm-offset = PTP offset { $offset }, AVB Lite की अनुमत 50 µs सीमा से ज़्यादा
 lite-alarm-egress = Egress link का { $share }, streams के लिए अनुमत { $limit } से ज़्यादा
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = भूमिका
+wireless-mode = मोड
+wireless-time = समय
+wireless-mode-a-ftm = Mode A, FTM पर 802.1AS
+wireless-mode-a-tm = Mode A, TM पर 802.1AS
+wireless-mode-b = Mode B, beacons से
+wireless-no-time = समय नहीं
+wireless-other-mode = ऐसा मोड जो profile में नहीं है
+wireless-locked = Lock है
+wireless-holdover = Holdover में
+wireless-not-locked = Lock नहीं है
+wireless-row-locked = Station, lock है
+wireless-row-holdover = Station, holdover में
+wireless-row-not-locked = Station, lock नहीं है
+wireless-row-access-point = { $count ->
+    [one] Access point, { $count } station
+   *[other] Access point, { $count } stations
+}
+wireless-link = Link
+wireless-channel = चैनल { $channel }
+wireless-not-known = अज्ञात
+wireless-signal = सिग्नल
+wireless-rate = Rate
+wireless-ftm-valid = { $share } मान्य
+wireless-rtt = round trip { $rtt }
+wireless-bursts = { $count ->
+    [one] { $count } frame के bursts
+   *[other] { $count } frames के bursts
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = access point तीन या दो के अलावा किसी और संख्या के frames वाले FTM bursts देता है
+wireless-reason-measurement = access point के साथ न FTM है, न TM
+wireless-reason-signaling = access point से कोई gPTP-capable Signaling नहीं आया
+wireless-reason-other = ऐसा कारण जो profile में नहीं है
+wireless-servo = Servo त्रुटि
+wireless-stations = Stations
+wireless-station-count = { $count ->
+    [one] { $count } station
+   *[other] { $count } stations
+}
+wireless-no-ftm = FTM के बिना
+wireless-unserved = बिना सेवा के Listeners
+wireless-stream-frames = Stream frames
+wireless-frames-of = { $readdressed } stations को, { $unmapped } बिना Listener के, { $dropped } drop हुए, { $restored } stations से
+wireless-class-a-allowed = अनुमत, bench tests के लिए
+wireless-class-a-not-allowed = अनुमत नहीं
+wireless-alarm-not-locked = Wi-Fi समय access point से lock नहीं है
+wireless-alarm-holdover = Wi-Fi समय holdover में, access point से lock टूटा
+wireless-alarm-unserved = { $count ->
+    [one] Wi-Fi port पर { $count } Listener को सेवा नहीं मिली, unicast सीमा से ज़्यादा
+   *[other] Wi-Fi port पर { $count } Listeners को सेवा नहीं मिली, unicast सीमा से ज़्यादा
+}
 
 ## Log
 

@@ -285,6 +285,7 @@ column-talker-streams = Fluxuri talker
 column-listener-streams = Fluxuri listener
 column-avb-lite = AVB Lite
 column-egress = Trafic de ieșire
+column-wireless = Wireless
 
 ## Settings file
 
@@ -319,6 +320,7 @@ netmap-show-map = Afișează harta
 netmap-show-details = Afișează detaliile
 stream-numbered = Flux { $index }
 netmap-bridge = Switch
+netmap-access-point = Punct de acces
 netmap-device = Dispozitiv
 netmap-this-computer = Acest computer
 netmap-connected = Conectat
@@ -614,6 +616,67 @@ lite-egress-reported = Conform numărării de către entitate a fluxurilor ei ad
 lite-egress-worked-out = Calculat din formatele ieșirilor ei de flux conectate.
 lite-alarm-offset = Decalaj PTP de { $offset }, peste limita de 50 µs permisă de AVB Lite
 lite-alarm-egress = Trafic de ieșire la { $share } din legătură, peste limita de { $limit } permisă fluxurilor
+
+## AVB Wireless
+
+wireless-station = Stație
+wireless-access-point = Punct de acces
+wireless-role = Rol
+wireless-mode = Mod
+wireless-time = Timp
+wireless-mode-a-ftm = Mode A, 802.1AS prin FTM
+wireless-mode-a-tm = Mode A, 802.1AS prin TM
+wireless-mode-b = Mode B, din cadrele beacon
+wireless-no-time = Fără sincronizarea timpului
+wireless-other-mode = Un mod pe care profilul nu îl numește
+wireless-locked = Calat
+wireless-holdover = În holdover
+wireless-not-locked = Necalat
+wireless-row-locked = Stație, calată
+wireless-row-holdover = Stație, în holdover
+wireless-row-not-locked = Stație, necalată
+wireless-row-access-point = { $count ->
+    [one] Punct de acces, { $count } stație
+    [few] Punct de acces, { $count } stații
+   *[other] Punct de acces, { $count } de stații
+}
+wireless-link = Legătură
+wireless-channel = canalul { $channel }
+wireless-not-known = Necunoscut
+wireless-signal = Semnal
+wireless-rate = Viteză
+wireless-ftm-valid = { $share } valide
+wireless-rtt = timp dus-întors { $rtt }
+wireless-bursts = { $count ->
+    [one] rafale de { $count } cadru
+    [few] rafale de { $count } cadre
+   *[other] rafale de { $count } de cadre
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = punctul de acces acordă rafale FTM de altă lungime decât trei sau două cadre
+wireless-reason-measurement = nici FTM, nici TM cu punctul de acces
+wireless-reason-signaling = niciun mesaj Signaling gPTP-capable de la punctul de acces
+wireless-reason-other = un motiv pe care profilul nu îl numește
+wireless-servo = Eroare servo
+wireless-stations = Stații
+wireless-station-count = { $count ->
+    [one] { $count } stație
+    [few] { $count } stații
+   *[other] { $count } de stații
+}
+wireless-no-ftm = fără FTM
+wireless-unserved = Listenere neservite
+wireless-stream-frames = Cadre de flux
+wireless-frames-of = către stații: { $readdressed }, fără listener: { $unmapped }, aruncate: { $dropped }, de la stații: { $restored }
+wireless-class-a-allowed = Permisă, pentru teste de laborator
+wireless-class-a-not-allowed = Nepermisă
+wireless-alarm-not-locked = Timpul Wi-Fi nu este calat pe punctul de acces
+wireless-alarm-holdover = Timpul Wi-Fi în holdover, calarea pe punctul de acces s-a pierdut
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener pe portul Wi-Fi neservit, peste limita unicast
+    [few] { $count } listenere pe portul Wi-Fi neservite, peste limita unicast
+   *[other] { $count } de listenere pe portul Wi-Fi neservite, peste limita unicast
+}
 
 ## Log
 

@@ -279,6 +279,7 @@ column-talker-streams = Talkerstreams
 column-listener-streams = Listenerstreams
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Draadloos
 
 ## Settings file
 
@@ -311,6 +312,7 @@ netmap-show-map = Kaart tonen
 netmap-show-details = Details tonen
 stream-numbered = Stream { $index }
 netmap-bridge = Switch
+netmap-access-point = Access point
 netmap-device = Apparaat
 netmap-this-computer = Deze computer
 netmap-connected = Verbonden
@@ -562,6 +564,63 @@ lite-egress-reported = Zoals de entiteit haar toegelaten streams telt.
 lite-egress-worked-out = Uit de formaten van haar verbonden stream-uitgangen.
 lite-alarm-offset = PTP-offset { $offset }, meer dan de 50 µs die AVB Lite toestaat
 lite-alarm-egress = Egress op { $share } van de link, meer dan de { $limit } die streams mogen innemen
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = Rol
+wireless-mode = Modus
+wireless-time = Tijd
+wireless-mode-a-ftm = Mode A, 802.1AS via FTM
+wireless-mode-a-tm = Mode A, 802.1AS via TM
+wireless-mode-b = Mode B, uit beacons
+wireless-no-time = Geen tijd
+wireless-other-mode = Een modus die het profiel niet noemt
+wireless-locked = Vergrendeld
+wireless-holdover = In holdover
+wireless-not-locked = Niet vergrendeld
+wireless-row-locked = Station, vergrendeld
+wireless-row-holdover = Station, in holdover
+wireless-row-not-locked = Station, niet vergrendeld
+wireless-row-access-point = { $count ->
+    [one] Access point, { $count } station
+   *[other] Access point, { $count } stations
+}
+wireless-link = Link
+wireless-channel = kanaal { $channel }
+wireless-not-known = Onbekend
+wireless-signal = Signaal
+wireless-rate = Zendsnelheid
+wireless-ftm-valid = { $share } geldig
+wireless-rtt = retourtijd { $rtt }
+wireless-bursts = { $count ->
+    [one] bursts van { $count } frame
+   *[other] bursts van { $count } frames
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = het access point wijst FTM-bursts toe van een ander aantal frames dan drie of twee
+wireless-reason-measurement = noch FTM noch TM met het access point
+wireless-reason-signaling = geen gPTP-capable Signaling van het access point
+wireless-reason-other = een reden die het profiel niet noemt
+wireless-servo = Servofout
+wireless-stations = Stations
+wireless-station-count = { $count ->
+    [one] { $count } station
+   *[other] { $count } stations
+}
+wireless-no-ftm = zonder FTM
+wireless-unserved = Niet-bediende listeners
+wireless-stream-frames = Streamframes
+wireless-frames-of = { $readdressed } naar stations, { $unmapped } zonder listener, { $dropped } verworpen, { $restored } van stations
+wireless-class-a-allowed = Toegestaan, voor testopstellingen
+wireless-class-a-not-allowed = Niet toegestaan
+wireless-alarm-not-locked = Wi-Fi-tijd niet vergrendeld op het access point
+wireless-alarm-holdover = Wi-Fi-tijd in holdover, vergrendeling op het access point verloren
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener op de Wi-Fi-poort niet bediend, boven de unicastlimiet
+   *[other] { $count } listeners op de Wi-Fi-poort niet bediend, boven de unicastlimiet
+}
 
 ## Log
 

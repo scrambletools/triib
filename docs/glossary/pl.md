@@ -35,6 +35,11 @@ How `i18n/pl/triib.ftl` renders the glossary's roles and terms of art.
 | identify | identyfikuj | Button; the verb in sentences is «zidentyfikować». |
 | counter | licznik | |
 | locked, lost lock | synchronizacja, utrata synchronizacji | Diagnostics count them as nouns: «3 synchronizacje, 1 utrata synchronizacji». |
+| holding over | holdover | Kept in English, as timing practice says it: «Tryb holdover», «w trybie holdover». «Tryb podtrzymania» is the formal alternative. |
+| station | stacja | The IEEE 802.11 term, rather than «klient»: 1 stacja, 2 stacje, 5 stacji. «Stacja, zsynchronizowana» in the entity list. |
+| access point | punkt dostępowy | As on Polish router pages. |
+| beacon | beacon | In «ramki beacon»: «Mode B, z ramek beacon». |
+| signal | sygnał | The inspector label, in dBm. |
 | interrupted | przerwa | «Bez przerw», «2 przerwy». |
 | timestamp | znacznik czasu | |
 | advertise, advertised | ogłaszać, ogłoszono | Advertising is «ogłaszanie». |
@@ -51,3 +56,6 @@ How `i18n/pl/triib.ftl` renders the glossary's roles and terms of art.
 - «zegar mediów» for media clock, and «synchronizacja» counted as lock events in the diagnostics.
 - Peer delay and «Firmware» kept in English.
 - The percent sign without a space («80%»), following CLDR.
+- «holdover» kept in English for holding over, rather than «podtrzymanie».
+- Wireless locked written as «Zsynchronizowano», the same word as the map's gPTP «Sync».
+- «Błąd serwa» for the station's servo error, and «czas obiegu» for round-trip time.

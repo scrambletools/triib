@@ -279,6 +279,7 @@ column-talker-streams = Talker-streams
 column-listener-streams = Listener-streams
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Trådløst
 
 ## Settings file
 
@@ -311,6 +312,7 @@ netmap-show-map = Vis kortet
 netmap-show-details = Vis detaljerne
 stream-numbered = Stream { $index }
 netmap-bridge = Switch
+netmap-access-point = Adgangspunkt
 netmap-device = Enhed
 netmap-this-computer = Denne computer
 netmap-connected = Forbundet
@@ -562,6 +564,63 @@ lite-egress-reported = Sådan som entiteten tæller sine godkendte streams.
 lite-egress-worked-out = Ud fra formaterne på dens forbundne stream-udgange.
 lite-alarm-offset = PTP-offset { $offset }, over de 50 µs, som AVB Lite tillader
 lite-alarm-egress = Egress på { $share } af linket, over de { $limit }, som streams må optage
+
+## AVB Wireless
+
+wireless-station = Station
+wireless-access-point = Adgangspunkt
+wireless-role = Rolle
+wireless-mode = Tilstand
+wireless-time = Tid
+wireless-mode-a-ftm = Mode A, 802.1AS over FTM
+wireless-mode-a-tm = Mode A, 802.1AS over TM
+wireless-mode-b = Mode B, fra beacon-rammer
+wireless-no-time = Ingen tid
+wireless-other-mode = En tilstand, som profilen ikke nævner
+wireless-locked = Låst
+wireless-holdover = I holdover
+wireless-not-locked = Ikke låst
+wireless-row-locked = Station, låst
+wireless-row-holdover = Station, i holdover
+wireless-row-not-locked = Station, ikke låst
+wireless-row-access-point = { $count ->
+    [one] Adgangspunkt, { $count } station
+   *[other] Adgangspunkt, { $count } stationer
+}
+wireless-link = Link
+wireless-channel = kanal { $channel }
+wireless-not-known = Ukendt
+wireless-signal = Signal
+wireless-rate = Sendehastighed
+wireless-ftm-valid = { $share } gyldige
+wireless-rtt = tur-retur { $rtt }
+wireless-bursts = { $count ->
+    [one] bursts på { $count } ramme
+   *[other] bursts på { $count } rammer
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = adgangspunktet tildeler FTM-bursts med et andet antal rammer end tre eller to
+wireless-reason-measurement = hverken FTM eller TM med adgangspunktet
+wireless-reason-signaling = ingen gPTP-capable Signaling fra adgangspunktet
+wireless-reason-other = en årsag, som profilen ikke nævner
+wireless-servo = Servofejl
+wireless-stations = Stationer
+wireless-station-count = { $count ->
+    [one] { $count } station
+   *[other] { $count } stationer
+}
+wireless-no-ftm = uden FTM
+wireless-unserved = Ikke-betjente listenere
+wireless-stream-frames = Stream-rammer
+wireless-frames-of = { $readdressed } til stationer, { $unmapped } uden listener, { $dropped } kasseret, { $restored } fra stationer
+wireless-class-a-allowed = Tilladt, til labtest
+wireless-class-a-not-allowed = Ikke tilladt
+wireless-alarm-not-locked = Wi-Fi-tid ikke låst til adgangspunktet
+wireless-alarm-holdover = Wi-Fi-tid i holdover, mistet lås til adgangspunktet
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener på Wi-Fi-porten betjenes ikke, over unicast-grænsen
+   *[other] { $count } listenere på Wi-Fi-porten betjenes ikke, over unicast-grænsen
+}
 
 ## Log
 

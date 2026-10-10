@@ -38,6 +38,11 @@ follows the number with no space.
 | identify | identificare | Button: “Identifica”. |
 | counter | contatore | |
 | locked, lost lock | agganciato, aggancio perso | The PLL term; “agganciato al media clock” for media lock. |
+| holding over | in holdover | Kept in English, as Italian telecom and PTP writing does. |
+| station | stazione | The IEEE 802.11 term: “Stazione, agganciata”. |
+| access point | access point (m., invariable) | The word Italian Wi-Fi practitioners use, rather than “punto di accesso”. |
+| beacon | beacon (m., invariable) | “Mode B, dai beacon”. |
+| signal | segnale | The inspector label, in dBm. |
 | interrupted | interrotto | |
 | timestamp | timestamp (m., invariable) | Rather than “marca temporale”. |
 | advertise, advertised | annunciare, annunciato | “segnalare” is kept for *report*. |
@@ -57,3 +62,6 @@ follows the number with no space.
   “Ispettore” and “Registro”.
 - **pre-empted → “prelazione da parte di un flusso di rango superiore”**
   (MSRP code 6).
+- **holding over → “in holdover”**, kept in English.
+- **Time → “Tempo”** for how a station gets its time, and “Nessuna
+  sincronizzazione” for the mode “No time”.

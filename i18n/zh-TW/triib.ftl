@@ -265,6 +265,7 @@ column-talker-streams = 發送端串流
 column-listener-streams = 接收端串流
 column-avb-lite = AVB Lite
 column-egress = 出口流量
+column-wireless = 無線
 
 ## Settings file
 
@@ -291,6 +292,7 @@ netmap-show-map = 顯示拓樸圖
 netmap-show-details = 顯示詳細資料
 stream-numbered = 串流 { $index }
 netmap-bridge = 交換器
+netmap-access-point = 存取點
 netmap-device = 裝置
 netmap-this-computer = 本機
 netmap-connected = 已連線
@@ -482,6 +484,51 @@ lite-egress-reported = 依實體統計的已准入串流計算。
 lite-egress-worked-out = 依已連線串流輸出的格式推算。
 lite-alarm-offset = PTP 偏移 { $offset }，超出 AVB Lite 允許的 50 µs
 lite-alarm-egress = 出口流量達到連結的 { $share }，超出串流可佔用的 { $limit }
+
+## AVB Wireless
+
+wireless-station = 站台
+wireless-access-point = 存取點
+wireless-role = 角色
+wireless-mode = 模式
+wireless-time = 時間
+wireless-mode-a-ftm = Mode A，基於 FTM 的 802.1AS
+wireless-mode-a-tm = Mode A，基於 TM 的 802.1AS
+wireless-mode-b = Mode B，基於信標
+wireless-no-time = 無時間同步
+wireless-other-mode = 該規範未定義的模式
+wireless-locked = 已鎖定
+wireless-holdover = 保持中
+wireless-not-locked = 未鎖定
+wireless-row-locked = 站台，已鎖定
+wireless-row-holdover = 站台，保持中
+wireless-row-not-locked = 站台，未鎖定
+wireless-row-access-point = 存取點，{ $count } 個站台
+wireless-link = 連結
+wireless-channel = 頻道 { $channel }
+wireless-not-known = 未知
+wireless-signal = 訊號強度
+wireless-rate = 傳送速率
+wireless-ftm-valid = 有效率 { $share }
+wireless-rtt = 往返時間 { $rtt }
+wireless-bursts = 每次叢發 { $count } 個訊框
+wireless-not-as-capable = FALSE，{ $reason }
+wireless-reason-bursts = 存取點分配的 FTM 叢發既非 3 個也非 2 個訊框
+wireless-reason-measurement = 與存取點之間既無 FTM 也無 TM
+wireless-reason-signaling = 存取點未發出支援 gPTP 的 Signaling 訊息
+wireless-reason-other = 該規範未定義的原因
+wireless-servo = 伺服誤差
+wireless-stations = 站台
+wireless-station-count = { $count } 個站台
+wireless-no-ftm = 不支援 FTM
+wireless-unserved = 未獲服務的接收端
+wireless-stream-frames = 串流訊框
+wireless-frames-of = 傳往站台 { $readdressed }，無接收端 { $unmapped }，丟棄 { $dropped }，來自站台 { $restored }
+wireless-class-a-allowed = 允許，僅供實驗室測試
+wireless-class-a-not-allowed = 不允許
+wireless-alarm-not-locked = Wi-Fi 時間未鎖定至存取點
+wireless-alarm-holdover = Wi-Fi 時間處於保持狀態，已與存取點失鎖
+wireless-alarm-unserved = Wi-Fi 埠上有 { $count } 個接收端未獲服務，超出單播上限
 
 ## Log
 

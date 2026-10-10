@@ -287,6 +287,7 @@ column-talker-streams = Потоки Talker
 column-listener-streams = Потоки Listener
 column-avb-lite = AVB Lite
 column-egress = Вихідний трафік
+column-wireless = Бездротова мережа
 
 ## Settings file
 
@@ -323,6 +324,7 @@ netmap-show-map = Показати карту
 netmap-show-details = Показати подробиці
 stream-numbered = Потік { $index }
 netmap-bridge = Комутатор
+netmap-access-point = Точка доступу
 netmap-device = Пристрій
 netmap-this-computer = Цей комп'ютер
 netmap-connected = Підключено
@@ -612,6 +614,71 @@ lite-egress-reported = Так рахує сама сутність за свої
 lite-egress-worked-out = Розраховано за форматами її підключених виходів потоків.
 lite-alarm-offset = Зсув PTP { $offset }, більше за 50 µs, які допускає AVB Lite
 lite-alarm-egress = Вихідний трафік — { $share } лінку, більше за допустимі для потоків { $limit }
+
+## AVB Wireless
+
+wireless-station = Станція
+wireless-access-point = Точка доступу
+wireless-role = Роль
+wireless-mode = Режим
+wireless-time = Час
+wireless-mode-a-ftm = Mode A, 802.1AS через FTM
+wireless-mode-a-tm = Mode A, 802.1AS через TM
+wireless-mode-b = Mode B, з кадрів Beacon
+wireless-no-time = Без синхронізації часу
+wireless-other-mode = Режим, якого профіль не називає
+wireless-locked = Синхронізацію захоплено
+wireless-holdover = Режим утримання
+wireless-not-locked = Немає захоплення синхронізації
+wireless-row-locked = Станція, захоплення
+wireless-row-holdover = Станція, утримання
+wireless-row-not-locked = Станція, немає захоплення
+wireless-row-access-point = { $count ->
+    [one] Точка доступу, { $count } станція
+    [few] Точка доступу, { $count } станції
+    [many] Точка доступу, { $count } станцій
+   *[other] Точка доступу, { $count } станції
+}
+wireless-link = Лінк
+wireless-channel = канал { $channel }
+wireless-not-known = Невідомо
+wireless-signal = Сигнал
+wireless-rate = Швидкість
+wireless-ftm-valid = { $share } достовірних
+wireless-rtt = кругова затримка { $rtt }
+wireless-bursts = { $count ->
+    [one] серії з { $count } кадру
+    [few] серії з { $count } кадрів
+    [many] серії з { $count } кадрів
+   *[other] серії з { $count } кадру
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = точка доступу призначає серії FTM не з трьох і не з двох кадрів
+wireless-reason-measurement = ні FTM, ні TM з точкою доступу
+wireless-reason-signaling = немає повідомлення Signaling gPTP-capable від точки доступу
+wireless-reason-other = причина, якої профіль не називає
+wireless-servo = Похибка підстроювання
+wireless-stations = Станції
+wireless-station-count = { $count ->
+    [one] { $count } станція
+    [few] { $count } станції
+    [many] { $count } станцій
+   *[other] { $count } станції
+}
+wireless-no-ftm = без FTM
+wireless-unserved = Listener без обслуговування
+wireless-stream-frames = Кадри потоків
+wireless-frames-of = станціям: { $readdressed }, без Listener: { $unmapped }, відкинуто: { $dropped }, від станцій: { $restored }
+wireless-class-a-allowed = Дозволено, для стендових випробувань
+wireless-class-a-not-allowed = Не дозволено
+wireless-alarm-not-locked = Немає захоплення синхронізації часу Wi-Fi від точки доступу
+wireless-alarm-holdover = Час Wi-Fi у режимі утримання, синхронізацію від точки доступу втрачено
+wireless-alarm-unserved = { $count ->
+    [one] { $count } Listener на порту Wi-Fi без обслуговування, понад ліміт unicast
+    [few] { $count } Listener на порту Wi-Fi без обслуговування, понад ліміт unicast
+    [many] { $count } Listener на порту Wi-Fi без обслуговування, понад ліміт unicast
+   *[other] { $count } Listener на порту Wi-Fi без обслуговування, понад ліміт unicast
+}
 
 ## Log
 

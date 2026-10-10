@@ -39,6 +39,11 @@ terms are set off by a space; sentences use full-width punctuation and
 | identify | 識別 | "Could not identify" is phrased 無法讓 … 執行識別. |
 | counter | 計數器 | |
 | locked, lost lock | 鎖定, 失鎖 | [0] variants: 未鎖定, 未失鎖. |
+| holding over | 保持 | The telecom clock state. Shown as 保持中; the alarm says 處於保持狀態. |
+| station | 站台 | The IEEE 802.11 term (STA). { $count } 個站台. |
+| access point | 存取點 | Taiwan's term, as in 無線存取點. |
+| beacon | 信標 | Mode B is Mode B，基於信標. |
+| signal | 訊號強度 | The label for the RSSI in dBm. Wi-Fi channel is 頻道, kept apart from 通道 (audio channel); an FTM burst is 叢發. |
 | interrupted | 中斷 | |
 | timestamp | 時間戳記 | |
 | advertise, advertised | 通告, 已通告 | Discovery is 探索 (探索中), as in 網路探索. |
@@ -61,3 +66,6 @@ terms are set off by a space; sentences use full-width punctuation and
   usage); 日誌 and 檢查器 are the alternatives.
 - **List separator `，`**, for the same reason as in zh-CN: it joins clauses
   as well as nouns.
+- **站台 for station** and **叢發 for an FTM burst.** 站台 follows the
+  802.11 term (STA); router pages say 用戶端. 叢發 is Taiwan's word for
+  burst, where mainland writing has 突發.

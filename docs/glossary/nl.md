@@ -40,6 +40,11 @@ How `i18n/nl/triib.ftl` renders the terms in `docs/GLOSSARY.md`.
 | counter | teller | |
 | locked | vergrendeld | As in fasevergrendelde lus (PLL) |
 | lost lock | vergrendeling verloren | |
+| holding over | in holdover | Kept, as telecom writing does: "Wi-Fi-tijd in holdover" |
+| station | station | Plural stations; the IEEE 802.11 term |
+| access point | access point | het access point, plural access points, as practitioners say |
+| beacon | beacon | Plural beacons: "Mode B, uit beacons" |
+| signal | signaal | As in signaalsterkte |
 | interrupted | onderbroken | |
 | timestamp | tijdstempel | |
 | advertise, advertised | aankondigen, aangekondigd | Also for "announce itself": zich aankondigen |
@@ -61,3 +66,5 @@ Discovery is detectie (as in Windows' netwerkdetectie): "Detectie actief",
 - **detectie / detecteren** for discovery.
 - **stream-ingang / stream-uitgang** with a hyphen, and closed compounds
   such as talkerstreams and mediaklokstreams.
+- **access point** rather than toegangspunt, and **in holdover** kept
+  in English for holding over.

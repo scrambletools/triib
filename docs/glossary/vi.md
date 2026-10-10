@@ -37,6 +37,11 @@ networking loanwords do. Counts set thousands apart with a dot (1.204.331).
 | identify | nhận dạng | "Could not identify" is phrased as sending the identify command. |
 | counter | bộ đếm | |
 | locked, lost lock | khóa, mất khóa | [0] variants: chưa khóa, chưa mất khóa. |
+| holding over | holdover | Kept in English, as telecom engineers say it: Đang holdover, "Trạm, đang holdover". |
+| station | trạm | The IEEE 802.11 term (trạm, STA). |
+| access point | điểm truy cập | As on router settings pages. |
+| beacon | beacon | Kept, as Wi-Fi engineers say it: "Mode B, từ beacon". |
+| signal | tín hiệu | As in cường độ tín hiệu. |
 | interrupted | bị gián đoạn | |
 | timestamp | dấu thời gian | |
 | advertise, advertised | quảng bá, đã quảng bá | Discovery is phát hiện. |

@@ -38,6 +38,11 @@ keep many English terms. Counts set thousands apart with a dot
 | identify | identifikasi | |
 | counter | penghitung | |
 | locked, lost lock | terkunci, lepas kunci | As for signal lock: "terkunci sekali", "lepas kunci 3 kali". |
+| holding over | holdover | Kept, as telecom engineers say it: "Holdover", "Station, holdover", "dalam holdover". |
+| station | station | Kept, as in a wireless card's station mode; lower case mid-sentence. "stasiun" is the formal alternative. |
+| access point | access point | Kept, as Indonesian network engineers say it. |
+| beacon | beacon | Kept: "Mode B, dari beacon". |
+| signal | sinyal | As in "kekuatan sinyal". |
 | interrupted | terputus | |
 | timestamp | timestamp | Kept; "stempel waktu" is the formal alternative. |
 | advertise, advertised | mengumumkan, diumumkan | The ADP section is "Pengumuman". |

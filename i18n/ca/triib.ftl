@@ -289,6 +289,7 @@ column-talker-streams = Fluxos talker
 column-listener-streams = Fluxos listener
 column-avb-lite = AVB Lite
 column-egress = Trànsit de sortida
+column-wireless = Sense fil
 
 ## Settings file
 
@@ -323,6 +324,7 @@ netmap-show-map = Mostra el mapa
 netmap-show-details = Mostra els detalls
 stream-numbered = Flux { $index }
 netmap-bridge = Commutador
+netmap-access-point = Punt d’accés
 netmap-device = Dispositiu
 netmap-this-computer = Aquest ordinador
 netmap-connected = Connectat
@@ -606,6 +608,67 @@ lite-egress-reported = Segons el recompte que fa l’entitat dels seus fluxos ad
 lite-egress-worked-out = Calculat a partir dels formats de les seves sortides de flux connectades.
 lite-alarm-offset = Decalatge PTP de { $offset }, més dels 50 µs que permet AVB Lite
 lite-alarm-egress = Trànsit de sortida al { $share } de l’enllaç, més del { $limit } que poden ocupar els fluxos
+
+## AVB Wireless
+
+wireless-station = Estació
+wireless-access-point = Punt d’accés
+wireless-role = Rol
+wireless-mode = Mode
+wireless-time = Temps
+wireless-mode-a-ftm = Mode A, 802.1AS sobre FTM
+wireless-mode-a-tm = Mode A, 802.1AS sobre TM
+wireless-mode-b = Mode B, a partir de les balises
+wireless-no-time = Sense temps
+wireless-other-mode = Un mode que el perfil no preveu
+wireless-locked = Enganxat
+wireless-holdover = En holdover
+wireless-not-locked = No enganxat
+wireless-row-locked = Estació, enganxada
+wireless-row-holdover = Estació, en holdover
+wireless-row-not-locked = Estació, no enganxada
+wireless-row-access-point = { $count ->
+    [one] Punt d’accés, { $count } estació
+    [many] Punt d’accés, { $count } estacions
+   *[other] Punt d’accés, { $count } estacions
+}
+wireless-link = Enllaç
+wireless-channel = canal { $channel }
+wireless-not-known = Desconegut
+wireless-signal = Senyal
+wireless-rate = Velocitat
+wireless-ftm-valid = { $share } vàlides
+wireless-rtt = anada i tornada { $rtt }
+wireless-bursts = { $count ->
+    [one] ràfegues de { $count } trama
+    [many] ràfegues de { $count } trames
+   *[other] ràfegues de { $count } trames
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = el punt d’accés concedeix ràfegues FTM que no són de tres ni de dues trames
+wireless-reason-measurement = ni FTM ni TM amb el punt d’accés
+wireless-reason-signaling = cap missatge Signaling gPTP-capable del punt d’accés
+wireless-reason-other = un motiu que el perfil no preveu
+wireless-servo = Error del servo
+wireless-stations = Estacions
+wireless-station-count = { $count ->
+    [one] { $count } estació
+    [many] { $count } estacions
+   *[other] { $count } estacions
+}
+wireless-no-ftm = sense FTM
+wireless-unserved = Listeners no atesos
+wireless-stream-frames = Trames de flux
+wireless-frames-of = { $readdressed } a les estacions, { $unmapped } sense listener, { $dropped } descartades, { $restored } de les estacions
+wireless-class-a-allowed = Permesa, per a proves de laboratori
+wireless-class-a-not-allowed = No permesa
+wireless-alarm-not-locked = Temps Wi-Fi no enganxat al punt d’accés
+wireless-alarm-holdover = Temps Wi-Fi en holdover, enganxament al punt d’accés perdut
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener al port Wi-Fi no atès, per sobre del límit d’unicast
+    [many] { $count } listeners al port Wi-Fi no atesos, per sobre del límit d’unicast
+   *[other] { $count } listeners al port Wi-Fi no atesos, per sobre del límit d’unicast
+}
 
 ## Log
 

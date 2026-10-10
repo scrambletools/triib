@@ -262,6 +262,7 @@ column-talker-streams = Strim talker
 column-listener-streams = Strim listener
 column-avb-lite = AVB Lite
 column-egress = Egress
+column-wireless = Wayarles
 
 ## Settings file
 
@@ -288,6 +289,7 @@ netmap-show-map = Tunjukkan peta
 netmap-show-details = Tunjukkan butiran
 stream-numbered = Strim { $index }
 netmap-bridge = Suis
+netmap-access-point = Titik capaian
 netmap-device = Peranti
 netmap-this-computer = Komputer ini
 netmap-connected = Disambungkan
@@ -487,6 +489,51 @@ lite-egress-reported = Mengikut kiraan entiti bagi strim yang diterimanya.
 lite-egress-worked-out = Dikira daripada format output strim yang disambungkan.
 lite-alarm-offset = Ofset PTP { $offset }, melebihi 50 µs yang dibenarkan AVB Lite
 lite-alarm-egress = Egress pada { $share } daripada pautan, melebihi had { $limit } untuk strim
+
+## AVB Wireless
+
+wireless-station = Stesen
+wireless-access-point = Titik capaian
+wireless-role = Peranan
+wireless-mode = Mod
+wireless-time = Masa
+wireless-mode-a-ftm = Mode A, 802.1AS melalui FTM
+wireless-mode-a-tm = Mode A, 802.1AS melalui TM
+wireless-mode-b = Mode B, daripada beacon
+wireless-no-time = Tanpa masa
+wireless-other-mode = Mod yang tidak dinamakan oleh profil
+wireless-locked = Terkunci
+wireless-holdover = Holdover
+wireless-not-locked = Tidak terkunci
+wireless-row-locked = Stesen, terkunci
+wireless-row-holdover = Stesen, holdover
+wireless-row-not-locked = Stesen, tidak terkunci
+wireless-row-access-point = Titik capaian, { $count } stesen
+wireless-link = Pautan
+wireless-channel = saluran { $channel }
+wireless-not-known = Tidak diketahui
+wireless-signal = Isyarat
+wireless-rate = Kadar
+wireless-ftm-valid = { $share } sah
+wireless-rtt = pergi balik { $rtt }
+wireless-bursts = burst { $count } bingkai
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = titik capaian memberikan burst FTM dengan bilangan bingkai selain tiga atau dua
+wireless-reason-measurement = tiada FTM mahupun TM dengan titik capaian
+wireless-reason-signaling = tiada Signaling gPTP-capable daripada titik capaian
+wireless-reason-other = sebab yang tidak dinamakan oleh profil
+wireless-servo = Ralat servo
+wireless-stations = Stesen
+wireless-station-count = { $count } stesen
+wireless-no-ftm = tanpa FTM
+wireless-unserved = Listener tidak dilayan
+wireless-stream-frames = Bingkai strim
+wireless-frames-of = { $readdressed } ke stesen, { $unmapped } tanpa listener, { $dropped } digugurkan, { $restored } daripada stesen
+wireless-class-a-allowed = Dibenarkan, untuk ujian makmal
+wireless-class-a-not-allowed = Tidak dibenarkan
+wireless-alarm-not-locked = Masa Wi-Fi tidak terkunci pada titik capaian
+wireless-alarm-holdover = Masa Wi-Fi dalam holdover, terlepas kunci daripada titik capaian
+wireless-alarm-unserved = { $count } listener pada port Wi-Fi tidak dilayan, melebihi had unicast
 
 ## Log
 

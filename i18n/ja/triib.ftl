@@ -265,6 +265,7 @@ column-talker-streams = トーカーストリーム
 column-listener-streams = リスナーストリーム
 column-avb-lite = AVB Lite
 column-egress = エグレス
+column-wireless = 無線
 
 ## Settings file
 
@@ -291,6 +292,7 @@ netmap-show-map = マップを表示
 netmap-show-details = 詳細を表示
 stream-numbered = ストリーム { $index }
 netmap-bridge = ブリッジ
+netmap-access-point = アクセスポイント
 netmap-device = デバイス
 netmap-this-computer = このコンピューター
 netmap-connected = 接続済み
@@ -482,6 +484,51 @@ lite-egress-reported = エンティティが数えた許可済みストリーム
 lite-egress-worked-out = 接続済みストリーム出力のフォーマットから算出した値です。
 lite-alarm-offset = PTP オフセット { $offset }、AVB Lite の許容値 50 µs を超過
 lite-alarm-egress = エグレスがリンクの { $share }、ストリームの上限 { $limit } を超過
+
+## AVB Wireless
+
+wireless-station = ステーション
+wireless-access-point = アクセスポイント
+wireless-role = ロール
+wireless-mode = モード
+wireless-time = 時刻
+wireless-mode-a-ftm = Mode A、FTM による 802.1AS
+wireless-mode-a-tm = Mode A、TM による 802.1AS
+wireless-mode-b = Mode B、ビーコンから取得
+wireless-no-time = 時刻同期なし
+wireless-other-mode = プロファイルに定義のないモード
+wireless-locked = ロック済み
+wireless-holdover = ホールドオーバー中
+wireless-not-locked = 未ロック
+wireless-row-locked = ステーション、ロック済み
+wireless-row-holdover = ステーション、ホールドオーバー中
+wireless-row-not-locked = ステーション、未ロック
+wireless-row-access-point = アクセスポイント、ステーション { $count } 台
+wireless-link = リンク
+wireless-channel = チャンネル { $channel }
+wireless-not-known = 不明
+wireless-signal = 信号強度
+wireless-rate = 送信レート
+wireless-ftm-valid = 有効 { $share }
+wireless-rtt = 往復 { $rtt }
+wireless-bursts = バーストあたり { $count } フレーム
+wireless-not-as-capable = FALSE、{ $reason }
+wireless-reason-bursts = アクセスポイントが許可する FTM バーストのフレーム数が 3 または 2 以外
+wireless-reason-measurement = アクセスポイントとの間で FTM も TM も利用不可
+wireless-reason-signaling = アクセスポイントからの gPTP 対応 Signaling メッセージなし
+wireless-reason-other = プロファイルに定義のない理由
+wireless-servo = サーボ誤差
+wireless-stations = ステーション
+wireless-station-count = ステーション { $count } 台
+wireless-no-ftm = FTM 非対応
+wireless-unserved = 配信されないリスナー
+wireless-stream-frames = ストリームフレーム
+wireless-frames-of = ステーション宛 { $readdressed }、リスナーなし { $unmapped }、破棄 { $dropped }、ステーションから { $restored }
+wireless-class-a-allowed = 許可（ベンチテスト用）
+wireless-class-a-not-allowed = 不許可
+wireless-alarm-not-locked = Wi-Fi の時刻がアクセスポイントに未ロック
+wireless-alarm-holdover = Wi-Fi の時刻がホールドオーバー中、アクセスポイントとのロック外れ
+wireless-alarm-unserved = Wi-Fi ポートのリスナー { $count } 台に未配信、ユニキャストの上限を超過
 
 ## Log
 

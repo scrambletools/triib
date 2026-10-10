@@ -279,6 +279,7 @@ column-talker-streams = Talker akışları
 column-listener-streams = Listener akışları
 column-avb-lite = AVB Lite
 column-egress = Çıkış trafiği
+column-wireless = Kablosuz
 
 ## Settings file
 
@@ -311,6 +312,7 @@ netmap-show-map = Haritayı göster
 netmap-show-details = Ayrıntıları göster
 stream-numbered = Akış { $index }
 netmap-bridge = Köprü
+netmap-access-point = Erişim noktası
 netmap-device = Cihaz
 netmap-this-computer = Bu bilgisayar
 netmap-connected = Bağlı
@@ -554,6 +556,63 @@ lite-egress-reported = Varlığın kabul ettiği akışları kendi saydığı ş
 lite-egress-worked-out = Bağlı akış çıkışlarının biçimlerinden hesaplandı.
 lite-alarm-offset = PTP sapması { $offset }, AVB Lite için izin verilen 50 µs sınırının üzerinde
 lite-alarm-egress = Çıkış trafiği linkin { $share } kadarı, akışlara izin verilen { $limit } sınırının üzerinde
+
+## AVB Wireless
+
+wireless-station = İstasyon
+wireless-access-point = Erişim noktası
+wireless-role = Rol
+wireless-mode = Mod
+wireless-time = Zaman
+wireless-mode-a-ftm = Mode A, FTM üzerinden 802.1AS
+wireless-mode-a-tm = Mode A, TM üzerinden 802.1AS
+wireless-mode-b = Mode B, beacon çerçevelerinden
+wireless-no-time = Zaman yok
+wireless-other-mode = Profilin adlandırmadığı bir mod
+wireless-locked = Kilitli
+wireless-holdover = Holdover modunda
+wireless-not-locked = Kilitli değil
+wireless-row-locked = İstasyon, kilitli
+wireless-row-holdover = İstasyon, holdover modunda
+wireless-row-not-locked = İstasyon, kilitli değil
+wireless-row-access-point = { $count ->
+    [one] Erişim noktası, { $count } istasyon
+   *[other] Erişim noktası, { $count } istasyon
+}
+wireless-link = Link
+wireless-channel = kanal { $channel }
+wireless-not-known = Bilinmiyor
+wireless-signal = Sinyal gücü
+wireless-rate = İletim hızı
+wireless-ftm-valid = { $share } geçerli
+wireless-rtt = gidiş-dönüş süresi { $rtt }
+wireless-bursts = { $count ->
+    [one] { $count } çerçevelik burst'ler
+   *[other] { $count } çerçevelik burst'ler
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = erişim noktası FTM burst'lerini üç veya iki dışında bir çerçeve sayısıyla veriyor
+wireless-reason-measurement = erişim noktasıyla FTM de TM de yok
+wireless-reason-signaling = erişim noktasından gPTP-capable Signaling mesajı yok
+wireless-reason-other = profilin adlandırmadığı bir neden
+wireless-servo = Servo hatası
+wireless-stations = İstasyonlar
+wireless-station-count = { $count ->
+    [one] { $count } istasyon
+   *[other] { $count } istasyon
+}
+wireless-no-ftm = FTM desteksiz
+wireless-unserved = Hizmet verilmeyen listener'lar
+wireless-stream-frames = Akış çerçeveleri
+wireless-frames-of = { $readdressed } istasyonlara, { $unmapped } listener'sız, { $dropped } düşürüldü, { $restored } istasyonlardan
+wireless-class-a-allowed = İzin veriliyor, laboratuvar testleri için
+wireless-class-a-not-allowed = İzin verilmiyor
+wireless-alarm-not-locked = Wi-Fi zamanı erişim noktasına kilitli değil
+wireless-alarm-holdover = Wi-Fi zamanı holdover modunda, erişim noktasına olan kilit kaybedildi
+wireless-alarm-unserved = { $count ->
+    [one] Wi-Fi portunda { $count } listener hizmet almıyor, unicast sınırının üzerinde
+   *[other] Wi-Fi portunda { $count } listener hizmet almıyor, unicast sınırının üzerinde
+}
 
 ## Log
 

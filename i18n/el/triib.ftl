@@ -282,6 +282,7 @@ column-talker-streams = Ροές Talker
 column-listener-streams = Ροές Listener
 column-avb-lite = AVB Lite
 column-egress = Εξερχόμενη κίνηση
+column-wireless = Ασύρματο
 
 ## Settings file
 
@@ -314,6 +315,7 @@ netmap-show-map = Εμφάνιση του χάρτη
 netmap-show-details = Εμφάνιση των λεπτομερειών
 stream-numbered = Ροή { $index }
 netmap-bridge = Γέφυρα
+netmap-access-point = Σημείο πρόσβασης
 netmap-device = Συσκευή
 netmap-this-computer = Αυτός ο υπολογιστής
 netmap-connected = Συνδεδεμένη
@@ -575,6 +577,63 @@ lite-egress-reported = Όπως μετρά η οντότητα τις ροές �
 lite-egress-worked-out = Από τις μορφές των συνδεδεμένων εξόδων ροής της.
 lite-alarm-offset = Απόκλιση PTP { $offset }, πάνω από τα 50 µs που επιτρέπει το AVB Lite
 lite-alarm-egress = Εξερχόμενη κίνηση στο { $share } της ζεύξης, πάνω από το { $limit } που επιτρέπεται στις ροές
+
+## AVB Wireless
+
+wireless-station = Σταθμός
+wireless-access-point = Σημείο πρόσβασης
+wireless-role = Ρόλος
+wireless-mode = Λειτουργία
+wireless-time = Χρονισμός
+wireless-mode-a-ftm = Mode A, 802.1AS μέσω FTM
+wireless-mode-a-tm = Mode A, 802.1AS μέσω TM
+wireless-mode-b = Mode B, από πλαίσια beacon
+wireless-no-time = Χωρίς χρονισμό
+wireless-other-mode = Λειτουργία που δεν κατονομάζει το προφίλ
+wireless-locked = Κλειδωμένο
+wireless-holdover = Σε holdover
+wireless-not-locked = Μη κλειδωμένο
+wireless-row-locked = Σταθμός, κλειδωμένος
+wireless-row-holdover = Σταθμός, σε holdover
+wireless-row-not-locked = Σταθμός, μη κλειδωμένος
+wireless-row-access-point = { $count ->
+    [one] Σημείο πρόσβασης, { $count } σταθμός
+   *[other] Σημείο πρόσβασης, { $count } σταθμοί
+}
+wireless-link = Ζεύξη
+wireless-channel = κανάλι { $channel }
+wireless-not-known = Άγνωστη
+wireless-signal = Ισχύς σήματος
+wireless-rate = Ρυθμός μετάδοσης
+wireless-ftm-valid = { $share } έγκυρες
+wireless-rtt = χρόνος μετ' επιστροφής { $rtt }
+wireless-bursts = { $count ->
+    [one] ριπές { $count } πλαισίου
+   *[other] ριπές { $count } πλαισίων
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = το σημείο πρόσβασης παραχωρεί ριπές FTM με πλήθος πλαισίων άλλο από τρία ή δύο
+wireless-reason-measurement = ούτε FTM ούτε TM με το σημείο πρόσβασης
+wireless-reason-signaling = κανένα μήνυμα Signaling gPTP-capable από το σημείο πρόσβασης
+wireless-reason-other = αιτία που δεν κατονομάζει το προφίλ
+wireless-servo = Σφάλμα servo
+wireless-stations = Σταθμοί
+wireless-station-count = { $count ->
+    [one] { $count } σταθμός
+   *[other] { $count } σταθμοί
+}
+wireless-no-ftm = χωρίς FTM
+wireless-unserved = Μη εξυπηρετούμενοι Listener
+wireless-stream-frames = Πλαίσια ροών
+wireless-frames-of = { $readdressed } προς σταθμούς, { $unmapped } χωρίς Listener, { $dropped } απορρίφθηκαν, { $restored } από σταθμούς
+wireless-class-a-allowed = Επιτρέπεται, για εργαστηριακές δοκιμές
+wireless-class-a-not-allowed = Δεν επιτρέπεται
+wireless-alarm-not-locked = Χρονισμός Wi-Fi μη κλειδωμένος στο σημείο πρόσβασης
+wireless-alarm-holdover = Χρονισμός Wi-Fi σε holdover, χάθηκε το κλείδωμα στο σημείο πρόσβασης
+wireless-alarm-unserved = { $count ->
+    [one] { $count } Listener στη θύρα Wi-Fi δεν εξυπηρετείται, πάνω από το όριο unicast
+   *[other] { $count } Listener στη θύρα Wi-Fi δεν εξυπηρετούνται, πάνω από το όριο unicast
+}
 
 ## Log
 

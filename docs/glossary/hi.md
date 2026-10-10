@@ -40,6 +40,11 @@ words are Hindi, or the loanword Hindi software already spells in Devanagari
 | identify | Identify, identify करना | पहचानना would read as "recognize". |
 | counter | counter | |
 | locked, lost lock | lock हुआ, lock टूटा | |
+| holding over | holdover | Latin script, as telecom and PTP engineers say it: Holdover में, Station, holdover में. |
+| station | station, stations | Latin script, as Wi-Fi engineers say it. Access point, 3 stations. |
+| access point | access point | Latin script. The map label and the role are Access point. |
+| beacon | beacon, beacons | Latin script: Mode B, beacons से. |
+| signal | सिग्नल | The Devanagari spelling Hindi phones and software use for signal strength. |
 | interrupted | बाधित | |
 | timestamp | timestamp | |
 | advertise, advertised | advertise करना, Advertise हुई | Also for an entity announcing itself (खुद को advertise करना). |

@@ -37,6 +37,11 @@ a space, and sentences use full-width punctuation (，。：；“”（）).
 | identify | 识别 | "Could not identify" is phrased 无法让 … 执行识别, so it does not read as "could not recognize". |
 | counter | 计数器 | |
 | locked, lost lock | 锁定, 失锁 | [0] variants: 未锁定, 未失锁. |
+| holding over | 保持 | The telecom clock state (锁定 / 保持 / 自由振荡). Shown as 保持中; the alarm says 处于保持状态. |
+| station | 站点 | The IEEE 802.11 term (STA). { $count } 个站点. Not 终端, which renders endpoint. |
+| access point | 接入点 | |
+| beacon | 信标 | Mode B is Mode B，基于信标. |
+| signal | 信号强度 | The label for the RSSI in dBm. Wi-Fi channel is 信道, kept apart from 通道 (audio channel). |
 | interrupted | 中断 | |
 | timestamp | 时间戳 | |
 | advertise, advertised | 通告, 已通告 | Discovery is 发现 (正在发现). |
@@ -60,3 +65,7 @@ a space, and sentences use full-width punctuation (，。：；“”（）).
 - **pull 系数 for a sampling rate's pull.** Only shown for reserved pull
   codes; the standard's word "pull" is kept with 系数 (factor).
 - **控制项 for control** and **出口流量 for the egress column**.
+- **站点 for station** and **保持中 for holding over.** 站点 is the 802.11
+  term (STA) but can read as a website; 客户端 or keeping STA are the
+  alternatives. 保持 is the telecom clock state; 守时 is what GNSS timing
+  products say.

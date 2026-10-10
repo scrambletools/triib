@@ -35,6 +35,11 @@ How `i18n/uk/triib.ftl` renders the glossary's roles and terms of art.
 | identify | ідентифікувати | |
 | counter | лічильник | |
 | locked, lost lock | захоплення синхронізації, втрата синхронізації | Diagnostics count them as nouns: «3 захоплення синхронізації». Media lock is «захоплення медіасинхронізації». |
+| holding over | режим утримання | The synchronization term for holdover; «утримання» in the entity list's short cells. |
+| station | станція | The IEEE 802.11 term (STA), rather than «клієнт»: 1 станція, 2 станції, 5 станцій. |
+| access point | точка доступу | |
+| beacon | Beacon | Latin script, as the frame type: «кадри Beacon». |
+| signal | сигнал | The inspector label, in dBm. |
 | interrupted | переривання | «Без переривань», «2 переривання». |
 | timestamp | мітка часу | |
 | advertise, advertised | оголошувати, оголошено | Advertising is «оголошення». |
@@ -51,3 +56,6 @@ How `i18n/uk/triib.ftl` renders the glossary's roles and terms of art.
 - «регулятор» for control, which also covers mute.
 - Peer delay, unicast and multicast kept in English.
 - The percent sign without a space («80%»), following CLDR; Ukrainian print often writes «80 %».
+- «режим утримання» for holding over, rather than the English «holdover».
+- «Похибка підстроювання» for the station's servo error, avoiding «регулятор» (control).
+- «кругова затримка» for round-trip time.

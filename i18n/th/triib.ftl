@@ -262,6 +262,7 @@ column-talker-streams = สตรีม Talker
 column-listener-streams = สตรีม Listener
 column-avb-lite = AVB Lite
 column-egress = ขาออก
+column-wireless = ไร้สาย
 
 ## Settings file
 
@@ -288,6 +289,7 @@ netmap-show-map = แสดงแผนที่
 netmap-show-details = แสดงรายละเอียด
 stream-numbered = สตรีม { $index }
 netmap-bridge = สวิตช์
+netmap-access-point = แอคเซสพอยต์
 netmap-device = อุปกรณ์
 netmap-this-computer = คอมพิวเตอร์เครื่องนี้
 netmap-connected = เชื่อมต่อแล้ว
@@ -479,6 +481,51 @@ lite-egress-reported = ตามที่เอนทิตีนับสตร
 lite-egress-worked-out = คำนวณจากรูปแบบของเอาต์พุตสตรีมที่เชื่อมต่ออยู่
 lite-alarm-offset = ออฟเซ็ต PTP { $offset } เกิน 50 µs ที่ AVB Lite อนุญาต
 lite-alarm-egress = ขาออก { $share } ของลิงก์ เกิน { $limit } ที่สตรีมใช้ได้
+
+## AVB Wireless
+
+wireless-station = สถานี
+wireless-access-point = แอคเซสพอยต์
+wireless-role = บทบาท
+wireless-mode = โหมด
+wireless-time = เวลา
+wireless-mode-a-ftm = Mode A, 802.1AS ผ่าน FTM
+wireless-mode-a-tm = Mode A, 802.1AS ผ่าน TM
+wireless-mode-b = Mode B, จากบีคอน
+wireless-no-time = ไม่ได้รับเวลา
+wireless-other-mode = โหมดที่โปรไฟล์ไม่ได้ระบุไว้
+wireless-locked = ล็อกแล้ว
+wireless-holdover = อยู่ใน holdover
+wireless-not-locked = ไม่ได้ล็อก
+wireless-row-locked = สถานี ล็อกแล้ว
+wireless-row-holdover = สถานี อยู่ใน holdover
+wireless-row-not-locked = สถานี ไม่ได้ล็อก
+wireless-row-access-point = แอคเซสพอยต์ มี { $count } สถานี
+wireless-link = ลิงก์
+wireless-channel = ช่องสัญญาณ { $channel }
+wireless-not-known = ไม่ทราบ
+wireless-signal = สัญญาณ
+wireless-rate = อัตราส่ง
+wireless-ftm-valid = ใช้ได้ { $share }
+wireless-rtt = เวลาไป-กลับ { $rtt }
+wireless-bursts = เบิร์สต์ละ { $count } เฟรม
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = แอคเซสพอยต์ให้เบิร์สต์ FTM ที่มีจำนวนเฟรมอื่นนอกจากสามหรือสอง
+wireless-reason-measurement = ไม่มีทั้ง FTM และ TM กับแอคเซสพอยต์
+wireless-reason-signaling = ไม่ได้รับ Signaling แบบ gPTP-capable จากแอคเซสพอยต์
+wireless-reason-other = สาเหตุที่โปรไฟล์ไม่ได้ระบุไว้
+wireless-servo = ค่าผิดพลาดเซอร์โว
+wireless-stations = สถานี
+wireless-station-count = { $count } สถานี
+wireless-no-ftm = ไม่มี FTM
+wireless-unserved = Listener ที่ไม่ได้รับบริการ
+wireless-stream-frames = เฟรมสตรีม
+wireless-frames-of = ส่งถึงสถานี { $readdressed }, ไม่มี Listener { $unmapped }, ถูกทิ้ง { $dropped }, จากสถานี { $restored }
+wireless-class-a-allowed = อนุญาต สำหรับการทดสอบในแล็บ
+wireless-class-a-not-allowed = ไม่อนุญาต
+wireless-alarm-not-locked = เวลา Wi-Fi ไม่ได้ล็อกกับแอคเซสพอยต์
+wireless-alarm-holdover = เวลา Wi-Fi อยู่ใน holdover หลุดล็อกจากแอคเซสพอยต์
+wireless-alarm-unserved = Listener { $count } ตัวบนพอร์ต Wi-Fi ไม่ได้รับบริการ เพราะเกินขีดจำกัดยูนิคาสต์
 
 ## Log
 

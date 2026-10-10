@@ -39,6 +39,11 @@ thousands separator is `.` and `%` follows a no-break space. Counts take
 | identify | a identifica | Button: „Identifică”. |
 | counter | contor, contoare | |
 | locked, lost lock | calat, calare pierdută | The PLL term; „calat pe ceasul media” for media lock. |
+| holding over | holdover | Kept in English, as timing practitioners say it: „În holdover”, „Stație, în holdover”. |
+| station | stație, stații | The IEEE 802.11 term, rather than „client”: „Stație, calată” in the entity list. |
+| access point | punct de acces | |
+| beacon | beacon | In „cadre beacon”: „Mode B, din cadrele beacon”. |
+| signal | semnal | The inspector label, in dBm. |
 | interrupted | întrerupt | |
 | timestamp | marcaj temporal | |
 | advertise, advertised | a anunța, anunțat | „a raporta” is kept for *report*. |
@@ -56,3 +61,5 @@ thousands separator is `.` and `%` follows a no-break space. Counts take
   other device nouns („playere”, „controlere”).
 - **recall → „Încarcă”** (load), as Romanian software says for presets.
 - **frame → cadru**, rather than the English „frame”.
+- **holding over → „holdover”**, kept in English; „menținere” is a possible Romanian rendering.
+- **Wireless** kept for the column and inspector section, as for the interface.

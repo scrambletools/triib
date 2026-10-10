@@ -39,6 +39,11 @@ separator.
 | identify | identifier | |
 | counter | compteur | |
 | locked, lost lock | verrouillé, verrouillage perdu | « verrouillé sur l’horloge média » for media lock. |
+| holding over | en holdover | Kept in English, as synchronization practitioners say it; ITU-T French writes « mode de maintien ». |
+| station | station (f.) | The IEEE 802.11 term: « Station, verrouillée ». |
+| access point | point d’accès (m.) | |
+| beacon | balise (f.) | « Mode B, par les balises ». |
+| signal | signal | The inspector label, in dBm. |
 | interrupted | interrompu | |
 | timestamp | horodatage | |
 | advertise, advertised | annoncer, annoncé | « signaler » is kept for *report*. |
@@ -60,3 +65,7 @@ separator.
 - **egress → « port sortant »**, chosen so one word covers the column
   (« Trafic sortant ») and the MSRP codes; « port de sortie » is also common.
 - **Firmware** kept rather than « micrologiciel ».
+- **holding over → « en holdover »**, rather than « en maintien » (ITU-T).
+- **beacon → « balise »**; many Wi-Fi engineers say « beacon ».
+- **Time → « Temps »** for how a station gets its time, and « Aucune
+  synchronisation » for the mode « No time ».

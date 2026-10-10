@@ -39,6 +39,11 @@ pt.
 | identify | identificar | |
 | counter | contador | |
 | locked, lost lock | entrar em lock, perder o lock | «travar» reads as a frozen program in Brazilian computing. |
+| holding over | em holdover | Kept in English, as Brazilian telecom and PTP writing does; pairs with «em lock». |
+| station | estação | The IEEE 802.11 term: «Estação, em lock». |
+| access point | ponto de acesso | |
+| beacon | beacon (m.), beacons | «Mode B, a partir dos beacons». |
+| signal | sinal | The inspector label, in dBm. |
 | interrupted | interrompido | |
 | timestamp | timestamp (m.) | |
 | advertise, advertised | anunciar, anunciado | The ADP section is «Anúncio». |
@@ -59,3 +64,6 @@ Settings «Configurações», Save «Salvar», Delete «Excluir», log «Log».
 - «relógio de mídia» for *media clock*.
 - «sem tag» and «tags VLAN» for VLAN tagging, rather than «não marcado».
 - «substituído por um fluxo de rank superior» for MSRP's pre-emption.
+- «em holdover» for *holding over*, kept in English like «lock».
+- «rajadas» for FTM *bursts*, rather than «bursts».
+- «Sem sincronização» for the time mode «No time».

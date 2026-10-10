@@ -43,6 +43,11 @@ end with ۔. Quotations use straight quotes. A talker-to-listener arrow is
 | identify | شناخت کریں | |
 | counter | کاؤنٹر، کاؤنٹرز | |
 | locked, lost lock | لاک ہوا، لاک ٹوٹا | |
+| holding over | ہولڈ اوور | In Urdu script, as engineers say it: ہولڈ اوور میں. |
+| station | اسٹیشن، اسٹیشنز | Masculine. |
+| access point | ایکسس پوائنٹ | |
+| beacon | بیکن، بیکنز | Mode B، بیکنز سے. |
+| signal | سگنل | The label is سگنل کی طاقت (signal strength). |
 | interrupted | تعطل | Kept apart from منقطع (disconnect). |
 | timestamp | ٹائم اسٹیمپ، ٹائم اسٹیمپس | |
 | advertise, advertised | اعلان، اعلان شدہ | An MSRP declaration is ڈیکلریشن, kept apart. |
@@ -58,3 +63,4 @@ end with ۔. Quotations use straight quotes. A talker-to-listener arrow is
 - بائنڈ شدہ for bound.
 - Genders given to loanwords: اسٹریم feminine, ان پٹ and آؤٹ پٹ masculine.
 - کھنچاؤ for a sampling rate's pull.
+- ہولڈ اوور and ایکسس پوائنٹ in Urdu script, rather than Urdu words.

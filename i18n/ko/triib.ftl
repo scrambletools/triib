@@ -265,6 +265,7 @@ column-talker-streams = 토커 스트림
 column-listener-streams = 리스너 스트림
 column-avb-lite = AVB Lite
 column-egress = 이그레스
+column-wireless = 무선
 
 ## Settings file
 
@@ -291,6 +292,7 @@ netmap-show-map = 맵 보기
 netmap-show-details = 세부 정보 보기
 stream-numbered = 스트림 { $index }
 netmap-bridge = 브리지
+netmap-access-point = 액세스 포인트
 netmap-device = 장치
 netmap-this-computer = 이 컴퓨터
 netmap-connected = 연결됨
@@ -482,6 +484,51 @@ lite-egress-reported = 엔티티가 집계한 허용 스트림 기준입니다.
 lite-egress-worked-out = 연결된 스트림 출력의 포맷으로 계산했습니다.
 lite-alarm-offset = PTP 오프셋 { $offset }, AVB Lite 허용치 50 µs 초과
 lite-alarm-egress = 이그레스가 링크의 { $share }로 스트림 허용치 { $limit } 초과
+
+## AVB Wireless
+
+wireless-station = 스테이션
+wireless-access-point = 액세스 포인트
+wireless-role = 역할
+wireless-mode = 모드
+wireless-time = 시간
+wireless-mode-a-ftm = Mode A, FTM 기반 802.1AS
+wireless-mode-a-tm = Mode A, TM 기반 802.1AS
+wireless-mode-b = Mode B, 비콘 기반
+wireless-no-time = 시간 동기 없음
+wireless-other-mode = 프로파일에 정의되지 않은 모드
+wireless-locked = 락됨
+wireless-holdover = 홀드오버 중
+wireless-not-locked = 락 안 됨
+wireless-row-locked = 스테이션, 락됨
+wireless-row-holdover = 스테이션, 홀드오버 중
+wireless-row-not-locked = 스테이션, 락 안 됨
+wireless-row-access-point = 액세스 포인트, 스테이션 { $count }개
+wireless-link = 링크
+wireless-channel = 채널 { $channel }
+wireless-not-known = 알 수 없음
+wireless-signal = 신호 강도
+wireless-rate = 송신 속도
+wireless-ftm-valid = 유효 { $share }
+wireless-rtt = 왕복 { $rtt }
+wireless-bursts = 버스트당 { $count }프레임
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = 액세스 포인트가 허용한 FTM 버스트가 3프레임 또는 2프레임이 아님
+wireless-reason-measurement = 액세스 포인트와 FTM 및 TM 모두 사용할 수 없음
+wireless-reason-signaling = 액세스 포인트로부터 gPTP 지원 Signaling 메시지 없음
+wireless-reason-other = 프로파일에 정의되지 않은 이유
+wireless-servo = 서보 오차
+wireless-stations = 스테이션
+wireless-station-count = 스테이션 { $count }개
+wireless-no-ftm = FTM 미지원
+wireless-unserved = 서비스되지 않는 리스너
+wireless-stream-frames = 스트림 프레임
+wireless-frames-of = 스테이션으로 { $readdressed }, 리스너 없음 { $unmapped }, 폐기 { $dropped }, 스테이션에서 { $restored }
+wireless-class-a-allowed = 허용(벤치 테스트용)
+wireless-class-a-not-allowed = 허용 안 됨
+wireless-alarm-not-locked = Wi-Fi 시간이 액세스 포인트에 락되지 않음
+wireless-alarm-holdover = Wi-Fi 시간 홀드오버 중, 액세스 포인트와 락 손실
+wireless-alarm-unserved = Wi-Fi 포트의 리스너 { $count }개가 서비스되지 않음, 유니캐스트 한도 초과
 
 ## Log
 

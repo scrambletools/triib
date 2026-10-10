@@ -287,6 +287,7 @@ column-talker-streams = Strumienie talkera
 column-listener-streams = Strumienie listenera
 column-avb-lite = AVB Lite
 column-egress = Ruch wychodzący
+column-wireless = Sieć bezprzewodowa
 
 ## Settings file
 
@@ -323,6 +324,7 @@ netmap-show-map = Pokaż mapę
 netmap-show-details = Pokaż szczegóły
 stream-numbered = Strumień { $index }
 netmap-bridge = Przełącznik
+netmap-access-point = Punkt dostępowy
 netmap-device = Urządzenie
 netmap-this-computer = Ten komputer
 netmap-connected = Połączono
@@ -613,6 +615,71 @@ lite-egress-reported = Według zliczeń encji dla jej dopuszczonych strumieni.
 lite-egress-worked-out = Obliczono z formatów jej połączonych wyjść strumieni.
 lite-alarm-offset = Przesunięcie PTP { $offset }, powyżej 50 µs dopuszczanych przez AVB Lite
 lite-alarm-egress = Ruch wychodzący na poziomie { $share } łącza, powyżej { $limit } dopuszczalnych dla strumieni
+
+## AVB Wireless
+
+wireless-station = Stacja
+wireless-access-point = Punkt dostępowy
+wireless-role = Rola
+wireless-mode = Tryb
+wireless-time = Czas
+wireless-mode-a-ftm = Mode A, 802.1AS przez FTM
+wireless-mode-a-tm = Mode A, 802.1AS przez TM
+wireless-mode-b = Mode B, z ramek beacon
+wireless-no-time = Bez synchronizacji czasu
+wireless-other-mode = Tryb, którego profil nie wymienia
+wireless-locked = Zsynchronizowano
+wireless-holdover = Tryb holdover
+wireless-not-locked = Brak synchronizacji
+wireless-row-locked = Stacja, zsynchronizowana
+wireless-row-holdover = Stacja, tryb holdover
+wireless-row-not-locked = Stacja, bez synchronizacji
+wireless-row-access-point = { $count ->
+    [one] Punkt dostępowy, { $count } stacja
+    [few] Punkt dostępowy, { $count } stacje
+    [many] Punkt dostępowy, { $count } stacji
+   *[other] Punkt dostępowy, { $count } stacji
+}
+wireless-link = Łącze
+wireless-channel = kanał { $channel }
+wireless-not-known = Nieznane
+wireless-signal = Sygnał
+wireless-rate = Szybkość
+wireless-ftm-valid = { $share } poprawnych
+wireless-rtt = czas obiegu { $rtt }
+wireless-bursts = { $count ->
+    [one] serie po { $count } ramce
+    [few] serie po { $count } ramki
+    [many] serie po { $count } ramek
+   *[other] serie po { $count } ramki
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = punkt dostępowy przydziela serie FTM o długości innej niż trzy lub dwie ramki
+wireless-reason-measurement = ani FTM, ani TM z punktem dostępowym
+wireless-reason-signaling = brak komunikatu Signaling gPTP-capable od punktu dostępowego
+wireless-reason-other = przyczyna, której profil nie wymienia
+wireless-servo = Błąd serwa
+wireless-stations = Stacje
+wireless-station-count = { $count ->
+    [one] { $count } stacja
+    [few] { $count } stacje
+    [many] { $count } stacji
+   *[other] { $count } stacji
+}
+wireless-no-ftm = bez FTM
+wireless-unserved = Nieobsłużone listenery
+wireless-stream-frames = Ramki strumieni
+wireless-frames-of = do stacji: { $readdressed }, bez listenera: { $unmapped }, odrzucone: { $dropped }, od stacji: { $restored }
+wireless-class-a-allowed = Dozwolona, do testów laboratoryjnych
+wireless-class-a-not-allowed = Niedozwolona
+wireless-alarm-not-locked = Czas Wi-Fi nie jest zsynchronizowany z punktem dostępowym
+wireless-alarm-holdover = Czas Wi-Fi w trybie holdover, utracono synchronizację z punktem dostępowym
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener na porcie Wi-Fi bez obsługi, ponad limit unicast
+    [few] { $count } listenery na porcie Wi-Fi bez obsługi, ponad limit unicast
+    [many] { $count } listenerów na porcie Wi-Fi bez obsługi, ponad limit unicast
+   *[other] { $count } listenera na porcie Wi-Fi bez obsługi, ponad limit unicast
+}
 
 ## Log
 

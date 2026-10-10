@@ -277,6 +277,7 @@ column-talker-streams = Talker اسٹریمز
 column-listener-streams = Listener اسٹریمز
 column-avb-lite = AVB Lite
 column-egress = ایگریس
+column-wireless = وائرلیس
 
 ## Settings file
 
@@ -309,6 +310,7 @@ netmap-show-map = نقشہ دکھائیں
 netmap-show-details = تفصیلات دکھائیں
 stream-numbered = اسٹریم { $index }
 netmap-bridge = برج
+netmap-access-point = ایکسس پوائنٹ
 netmap-device = ڈیوائس
 netmap-this-computer = یہ کمپیوٹر
 netmap-connected = منسلک
@@ -552,6 +554,63 @@ lite-egress-reported = جیسا کہ اینٹیٹی اپنی منظور شدہ �
 lite-egress-worked-out = اس کے منسلک اسٹریم آؤٹ پٹس کے فارمیٹس سے حساب۔
 lite-alarm-offset = PTP آفسیٹ { $offset }، AVB Lite کی اجازت کردہ 50 µs سے زیادہ
 lite-alarm-egress = ایگریس لنک کے { $share } پر، اسٹریمز کی اجازت کردہ { $limit } سے زیادہ
+
+## AVB Wireless
+
+wireless-station = اسٹیشن
+wireless-access-point = ایکسس پوائنٹ
+wireless-role = کردار
+wireless-mode = موڈ
+wireless-time = وقت
+wireless-mode-a-ftm = Mode A، FTM پر 802.1AS
+wireless-mode-a-tm = Mode A، TM پر 802.1AS
+wireless-mode-b = Mode B، بیکنز سے
+wireless-no-time = وقت نہیں
+wireless-other-mode = ایسا موڈ جس کا پروفائل نام نہیں لیتا
+wireless-locked = لاک شدہ
+wireless-holdover = ہولڈ اوور میں
+wireless-not-locked = لاک نہیں
+wireless-row-locked = اسٹیشن، لاک شدہ
+wireless-row-holdover = اسٹیشن، ہولڈ اوور میں
+wireless-row-not-locked = اسٹیشن، لاک نہیں
+wireless-row-access-point = { $count ->
+    [one] ایکسس پوائنٹ، { $count } اسٹیشن
+   *[other] ایکسس پوائنٹ، { $count } اسٹیشنز
+}
+wireless-link = لنک
+wireless-channel = چینل { $channel }
+wireless-not-known = معلوم نہیں
+wireless-signal = سگنل کی طاقت
+wireless-rate = ٹرانسمٹ ریٹ
+wireless-ftm-valid = { $share } درست
+wireless-rtt = راؤنڈ ٹرپ { $rtt }
+wireless-bursts = { $count ->
+    [one] { $count } فریم کے برسٹس
+   *[other] { $count } فریمز کے برسٹس
+}
+wireless-not-as-capable = FALSE، { $reason }
+wireless-reason-bursts = ایکسس پوائنٹ تین یا دو کے علاوہ فریمز والے FTM برسٹس دیتا ہے
+wireless-reason-measurement = ایکسس پوائنٹ کے ساتھ نہ FTM نہ TM
+wireless-reason-signaling = ایکسس پوائنٹ سے کوئی gPTP-capable Signaling نہیں
+wireless-reason-other = ایسی وجہ جس کا پروفائل نام نہیں لیتا
+wireless-servo = سروو غلطی
+wireless-stations = اسٹیشنز
+wireless-station-count = { $count ->
+    [one] { $count } اسٹیشن
+   *[other] { $count } اسٹیشنز
+}
+wireless-no-ftm = FTM کے بغیر
+wireless-unserved = سروس سے محروم Listener
+wireless-stream-frames = اسٹریم فریمز
+wireless-frames-of = { $readdressed } اسٹیشنز کو، { $unmapped } بغیر Listener، { $dropped } ڈراپ ہوئے، { $restored } اسٹیشنز سے
+wireless-class-a-allowed = اجازت ہے، بینچ ٹیسٹس کے لیے
+wireless-class-a-not-allowed = اجازت نہیں
+wireless-alarm-not-locked = Wi-Fi کا وقت ایکسس پوائنٹ سے لاک نہیں
+wireless-alarm-holdover = Wi-Fi کا وقت ہولڈ اوور میں، ایکسس پوائنٹ سے لاک ٹوٹ گیا
+wireless-alarm-unserved = { $count ->
+    [one] Wi-Fi پورٹ پر { $count } Listener کو سروس نہیں ملی، یونی کاسٹ حد سے زیادہ
+   *[other] Wi-Fi پورٹ پر { $count } Listener کو سروس نہیں ملی، یونی کاسٹ حد سے زیادہ
+}
 
 ## Log
 

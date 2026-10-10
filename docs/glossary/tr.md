@@ -50,6 +50,11 @@ dışında» has no *i*).
 | identify | tanımla | The button is «Tanımla». |
 | counter | sayaç | |
 | locked, lost lock | kilitlendi, kilit kaybedildi | Media lock: «medya saatine kilitlendi», «medya kilidi». |
+| holding over | holdover modunda | Kept, as telecom engineers say it: «Holdover modunda», «İstasyon, holdover modunda». |
+| station | istasyon | The IEEE 802.11 term; router pages may say «istemci». |
+| access point | erişim noktası | As on a router's settings page. |
+| beacon | beacon | Kept, with a head noun taking the suffix: «beacon çerçevelerinden». |
+| signal | sinyal | The label is «Sinyal gücü» (signal strength). |
 | interrupted | kesildi | |
 | timestamp | zaman damgası | |
 | advertise, advertised | duyur, duyuruldu | Also for an entity announcing itself: «kendini duyurmak». The ADP section is «Duyuru». |
@@ -71,3 +76,5 @@ inspector «İnceleyici», log «Günlük».
 - «rezervasyon» rather than «ayırma» for *reservation*.
 - «İnceleyici» for the Inspector, chosen to keep apart from
   «denetleyici» (controller).
+- «istasyon» for *station* rather than «istemci», and «holdover modunda»
+  kept in English.

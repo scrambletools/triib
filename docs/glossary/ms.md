@@ -38,6 +38,11 @@ apart with a comma (1,204,331).
 | identify | kenal pasti | |
 | counter | pembilang | |
 | locked, lost lock | terkunci, terlepas kunci | |
+| holding over | holdover | Kept, as telecom engineers say it: "Holdover", "Stesen, holdover", "dalam holdover". |
+| station | stesen | The Malay word for an IEEE 802.11 station. |
+| access point | titik capaian | The Malaysian software term; engineers also say "access point". |
+| beacon | beacon | Kept: "Mode B, daripada beacon". |
+| signal | isyarat | As in "kekuatan isyarat". |
 | interrupted | terganggu | |
 | timestamp | cap masa | |
 | advertise, advertised | mengumumkan, diumumkan | The ADP section is "Pengumuman". |

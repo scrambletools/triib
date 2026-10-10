@@ -297,6 +297,7 @@ column-talker-streams = تدفقات Talker
 column-listener-streams = تدفقات Listener
 column-avb-lite = AVB Lite
 column-egress = الخروج
+column-wireless = لاسلكي
 
 ## Settings file
 
@@ -337,6 +338,7 @@ netmap-show-map = إظهار الخريطة
 netmap-show-details = إظهار التفاصيل
 stream-numbered = التدفق { $index }
 netmap-bridge = جسر
+netmap-access-point = نقطة وصول
 netmap-device = جهاز
 netmap-this-computer = هذا الحاسوب
 netmap-connected = متصل
@@ -664,6 +666,79 @@ lite-egress-reported = كما يعدّ الكيان تدفقاته المقبو�
 lite-egress-worked-out = محسوب من تنسيقات مخارج التدفق المتصلة.
 lite-alarm-offset = إزاحة PTP { $offset }، متجاوزةً حد 50 µs الذي يسمح به AVB Lite
 lite-alarm-egress = الخروج عند { $share } من الوصلة، متجاوزًا { $limit } المسموح بها للتدفقات
+
+## AVB Wireless
+
+wireless-station = محطة
+wireless-access-point = نقطة وصول
+wireless-role = الدور
+wireless-mode = الوضع
+wireless-time = التوقيت
+wireless-mode-a-ftm = Mode A، 802.1AS عبر إطارات FTM
+wireless-mode-a-tm = Mode A، 802.1AS عبر إطارات TM
+wireless-mode-b = Mode B، من إطارات المنارة
+wireless-no-time = بلا توقيت
+wireless-other-mode = وضع لا يسمّيه ملف التعريف
+wireless-locked = تم القفل
+wireless-holdover = في وضع الاحتفاظ
+wireless-not-locked = لم يتم القفل
+wireless-row-locked = محطة، تم القفل
+wireless-row-holdover = محطة، في وضع الاحتفاظ
+wireless-row-not-locked = محطة، لم يتم القفل
+wireless-row-access-point = { $count ->
+    [zero] نقطة وصول، { $count } محطة
+    [one] نقطة وصول، محطة واحدة
+    [two] نقطة وصول، محطتان
+    [few] نقطة وصول، { $count } محطات
+    [many] نقطة وصول، { $count } محطةً
+   *[other] نقطة وصول، { $count } محطة
+}
+wireless-link = الوصلة
+wireless-channel = القناة { $channel }
+wireless-not-known = غير معروفة
+wireless-signal = قوة الإشارة
+wireless-rate = معدل الإرسال
+wireless-ftm-valid = { $share } صالحة
+wireless-rtt = زمن الذهاب والإياب { $rtt }
+wireless-bursts = { $count ->
+    [zero] رشقات من { $count } إطار
+    [one] رشقات من إطار واحد
+    [two] رشقات من إطارين
+    [few] رشقات من { $count } إطارات
+    [many] رشقات من { $count } إطارًا
+   *[other] رشقات من { $count } إطار
+}
+wireless-not-as-capable = FALSE، { $reason }
+wireless-reason-bursts = تمنح نقطة الوصول رشقات FTM لا تتألف من ثلاثة إطارات أو إطارين
+wireless-reason-measurement = لا FTM ولا TM مع نقطة الوصول
+wireless-reason-signaling = لا رسائل Signaling من نوع gPTP-capable من نقطة الوصول
+wireless-reason-other = سبب لا يسمّيه ملف التعريف
+wireless-servo = خطأ المؤازر
+wireless-stations = المحطات
+wireless-station-count = { $count ->
+    [zero] { $count } محطة
+    [one] محطة واحدة
+    [two] محطتان
+    [few] { $count } محطات
+    [many] { $count } محطةً
+   *[other] { $count } محطة
+}
+wireless-no-ftm = بلا FTM
+wireless-unserved = Listener بلا خدمة
+wireless-stream-frames = إطارات التدفقات
+wireless-frames-of = { $readdressed } إلى المحطات، { $unmapped } بلا Listener، { $dropped } أُسقطت، { $restored } من المحطات
+wireless-class-a-allowed = مسموح، لاختبارات المختبر
+wireless-class-a-not-allowed = غير مسموح
+wireless-alarm-not-locked = لم يتم قفل توقيت Wi-Fi على نقطة الوصول
+wireless-alarm-holdover = توقيت Wi-Fi في وضع الاحتفاظ، فُقد القفل على نقطة الوصول
+wireless-alarm-unserved = { $count ->
+    [zero] { $count } Listener على منفذ Wi-Fi بلا خدمة لتجاوز حد البث الأحادي
+    [one] Listener واحد على منفذ Wi-Fi بلا خدمة لتجاوز حد البث الأحادي
+    [two] { $count } Listener على منفذ Wi-Fi بلا خدمة لتجاوز حد البث الأحادي
+    [few] { $count } Listener على منفذ Wi-Fi بلا خدمة لتجاوز حد البث الأحادي
+    [many] { $count } Listener على منفذ Wi-Fi بلا خدمة لتجاوز حد البث الأحادي
+   *[other] { $count } Listener على منفذ Wi-Fi بلا خدمة لتجاوز حد البث الأحادي
+}
 
 ## Log
 

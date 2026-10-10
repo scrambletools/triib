@@ -287,6 +287,7 @@ column-talker-streams = Streamy talkeru
 column-listener-streams = Streamy listeneru
 column-avb-lite = AVB Lite
 column-egress = Odchozí provoz
+column-wireless = Bezdrátová síť
 
 ## Settings file
 
@@ -323,6 +324,7 @@ netmap-show-map = Zobrazit mapu
 netmap-show-details = Zobrazit podrobnosti
 stream-numbered = Stream { $index }
 netmap-bridge = Přepínač
+netmap-access-point = Přístupový bod
 netmap-device = Zařízení
 netmap-this-computer = Tento počítač
 netmap-connected = Připojeno
@@ -614,6 +616,71 @@ lite-egress-reported = Podle toho, jak entita sama počítá své povolené stre
 lite-egress-worked-out = Spočteno z formátů jejích připojených výstupů streamů.
 lite-alarm-offset = Odchylka PTP { $offset }, nad 50 µs, které AVB Lite povoluje
 lite-alarm-egress = Odchozí provoz na { $share } linky, nad { $limit }, které mohou streamy zabrat
+
+## AVB Wireless
+
+wireless-station = Stanice
+wireless-access-point = Přístupový bod
+wireless-role = Role
+wireless-mode = Režim
+wireless-time = Čas
+wireless-mode-a-ftm = Mode A, 802.1AS přes FTM
+wireless-mode-a-tm = Mode A, 802.1AS přes TM
+wireless-mode-b = Mode B, z rámců beacon
+wireless-no-time = Bez synchronizace času
+wireless-other-mode = Režim, který profil neuvádí
+wireless-locked = Synchronizováno
+wireless-holdover = Režim holdover
+wireless-not-locked = Nesynchronizováno
+wireless-row-locked = Stanice, synchronizovaná
+wireless-row-holdover = Stanice, režim holdover
+wireless-row-not-locked = Stanice, nesynchronizovaná
+wireless-row-access-point = { $count ->
+    [one] Přístupový bod, { $count } stanice
+    [few] Přístupový bod, { $count } stanice
+    [many] Přístupový bod, { $count } stanice
+   *[other] Přístupový bod, { $count } stanic
+}
+wireless-link = Linka
+wireless-channel = kanál { $channel }
+wireless-not-known = Neznámé
+wireless-signal = Signál
+wireless-rate = Rychlost
+wireless-ftm-valid = { $share } platných
+wireless-rtt = doba obrátky { $rtt }
+wireless-bursts = { $count ->
+    [one] dávky po { $count } rámci
+    [few] dávky po { $count } rámcích
+    [many] dávky po { $count } rámce
+   *[other] dávky po { $count } rámcích
+}
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = přístupový bod přiděluje dávky FTM s jiným počtem rámců než tři nebo dva
+wireless-reason-measurement = ani FTM, ani TM s přístupovým bodem
+wireless-reason-signaling = žádná zpráva Signaling gPTP-capable od přístupového bodu
+wireless-reason-other = důvod, který profil neuvádí
+wireless-servo = Chyba serva
+wireless-stations = Stanice
+wireless-station-count = { $count ->
+    [one] { $count } stanice
+    [few] { $count } stanice
+    [many] { $count } stanice
+   *[other] { $count } stanic
+}
+wireless-no-ftm = bez FTM
+wireless-unserved = Neobsloužené listenery
+wireless-stream-frames = Rámce streamů
+wireless-frames-of = do stanic: { $readdressed }, bez listeneru: { $unmapped }, zahozeno: { $dropped }, od stanic: { $restored }
+wireless-class-a-allowed = Povoleno, pro laboratorní testy
+wireless-class-a-not-allowed = Nepovoleno
+wireless-alarm-not-locked = Čas Wi-Fi není synchronizován s přístupovým bodem
+wireless-alarm-holdover = Čas Wi-Fi v režimu holdover, synchronizace s přístupovým bodem ztracena
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener na portu Wi-Fi bez obsluhy, nad limit unicastu
+    [few] { $count } listenery na portu Wi-Fi bez obsluhy, nad limit unicastu
+    [many] { $count } listeneru na portu Wi-Fi bez obsluhy, nad limit unicastu
+   *[other] { $count } listenerů na portu Wi-Fi bez obsluhy, nad limit unicastu
+}
 
 ## Log
 

@@ -39,6 +39,11 @@ Counts set thousands apart with a comma (1,204,331).
 | identify | kutambua | The button is "Tambua". |
 | counter | kihesabu, vihesabu | |
 | locked, lost lock | kupata lock, kupoteza lock | "ilipata lock mara 3", "ilipoteza lock ya media mara moja". |
+| holding over | holdover | Loanword, as telecom engineers say it: "Iko kwenye holdover". |
+| station | station | Loanword, class 9/10, as for talker: "station 3". "kituo" would clash with access point, which Swahili software renders "kituo cha ufikiaji". |
+| access point | access point | Loanword, class 9/10: "kutoka kwa access point". Kept with station so the two roles read apart. |
+| beacon | beacon | Loanword: "Mode B, kutoka kwenye beacon". |
+| signal | mawimbi | As phones show signal strength (nguvu ya mawimbi). |
 | interrupted | kukatizwa | |
 | timestamp | muhuri wa muda | Plural mihuri ya muda. |
 | advertise, advertised | kutangaza, imetangazwa | The ADP section is "Utangazaji". |
