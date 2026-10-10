@@ -780,9 +780,9 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     and with a plain gPTP device beside the ESP it goes to gPTP and is
     back on AVB Lite 3 s after starting, on the ESP's beacon.
 - To do:
-  - Report the atlantic driver's time stamps to its maintainers: left
-    on multicast PTP frames after a renegotiation, and 12 octets cut
-    from unicast ones.
+  - The atlantic driver's time stamps, reported to its maintainer and
+    netdev on 2026-10-09: answer the thread, and drop the workaround
+    once a fix is in the kernels triib's users run.
   - The linuxptp organization TLV tables (v2 of the series, a table
     or a built-in option as Erez prefers; replies sent 2026-10-09),
     then the Endpoint Declaration TLV from ptp4l in gPTP mode.
