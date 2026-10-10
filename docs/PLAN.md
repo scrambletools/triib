@@ -356,12 +356,15 @@ in the access point's beacons, and streamed unicast on the air.
   opt-in.
 - **The ESP:** the beacon element's new identifier, and answering the
   status query.
-- **triib, as a controller:** asks the query; marks wireless interfaces
-  in the entity list and inspector with their status; draws each station
-  under its access point in the network view, with the wireless hop's
-  link and sync; alarms for a station not locked and listeners an access
-  point cannot serve; `triib-cli` prints it.
-- Checked against the ESP wireless station and access point.
+- **triib, as a controller:** done. atdecc asks each AVB interface once
+  an entity is read and the wireless ones every 5 s, and follows
+  unsolicited responses. The inspector's Wireless section, an entity
+  list column, each station under its access point in the network view
+  with its hop dotted and in sync while locked, alarms for a station not
+  locked and listeners an access point cannot serve, the log, and
+  `triib-cli wireless` and `wireless-config`.
+- To do: check it against the ESP wireless station and access point once
+  they answer the query; translate its text.
 - Not in P3.1: this computer as a wireless station, which needs its Wi-Fi
   card's own PTP clock and timing support; a later phase.
 

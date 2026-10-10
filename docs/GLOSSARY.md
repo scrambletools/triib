@@ -18,14 +18,16 @@ a lay word that loses its meaning.
 These are names, not words. They stay in Latin script exactly as English
 writes them, including their case:
 
-- **Standards and profiles:** AVB, AVB Lite, Milan, ATDECC, IEEE 1722.1,
-  IEEE 802.1Q, 802.1AS, PTP, gPTP, SRP, MSRP, MMRP, CVU SRP.
+- **Standards and profiles:** AVB, AVB Lite, AVB Wireless, Milan, ATDECC,
+  IEEE 1722.1, IEEE 802.1Q, 802.1AS, PTP, gPTP, SRP, MSRP, MMRP, CVU SRP,
+  and AVB Wireless's Mode A and Mode B.
 - **Protocols and their parts:** ADP, AECP, ACMP, AEM, TLV,
   control_data_length, asCapable.
 - **Other acronyms:** CRF (media clock streams), VLAN, MAC (address), BTC,
-  CRC, SR class letters A and B.
-- **Product names:** triib, Omarchy.
-- **Units:** Hz, kHz, ns, µs, ms, kb/s, Mb/s, Gb/s.
+  CRC, SR class letters A and B, FTM and TM (Wi-Fi's timing measurements),
+  BSSID.
+- **Product names:** triib, Omarchy, Wi-Fi.
+- **Units:** Hz, kHz, MHz, GHz, ns, µs, ms, kb/s, Mb/s, Gb/s, dBm.
 - **Notations:** stream formats such as `48k 8ch` or `48k CRF`, interface
   names such as `enp6s0`, clock names such as `ptp0`.
 
@@ -101,6 +103,11 @@ including inside longer messages.
 | identify | Making a device show itself, such as by blinking | The verb device managers use |
 | counter | A count an entity keeps of events | The networking word |
 | locked, lost lock | A clock or receiver following, or no longer following, its reference | The audio and clock word for lock (PLL lock) |
+| holding over | A clock keeping time on its own after losing its reference | The clock and telecom word for holdover |
+| station | A Wi-Fi device associated with an access point | The Wi-Fi term (IEEE 802.11 station, client) |
+| access point | The Wi-Fi device stations associate with | The Wi-Fi term, as on a router's settings page |
+| beacon | The frame an access point sends a few times a second | The Wi-Fi term |
+| signal | The strength of a Wi-Fi signal, in dBm | The Wi-Fi word, as in signal strength |
 | interrupted | A stream that stopped unexpectedly | Ordinary word |
 | timestamp | The time a frame carries for when to play it | The technical word |
 | advertise, advertised | An entity announcing itself, or a talker offering a stream | The networking word for advertise or announce |

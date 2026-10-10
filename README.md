@@ -23,7 +23,9 @@ Website: **[triib.run](https://triib.run)**, with
 > that and the connections, logs every ATDECC frame sent and heard,
 > marking those that break the rules, and shows how entities run AVB
 > Lite, what their streams take of each link and the alarms the AVB Lite
-> profile calls for. On Linux it runs talkers and listeners of its own,
+> profile calls for, and what Wi-Fi stations and access points report
+> under [AVB Wireless](https://github.com/avbcommunity/profiles/blob/main/avb_wireless.md),
+> each station under its access point in the network view. On Linux it runs talkers and listeners of its own,
 > Milan entities streaming AAF or AM824 at 48, 96 or 192 kHz to and from the
 > computer's audio devices. It speaks 38 languages, following the system's or the
 > one picked in Settings. See the [plan](docs/PLAN.md).
@@ -146,6 +148,7 @@ cargo run -p triib-cli -- disconnect <interface> <listener-id>:<input>
 cargo run -p triib-cli -- disconnect-talker <interface> <talker-id>:<output> <listener-id>:<input>
 cargo run -p triib-cli -- identify <interface> <entity-id> [seconds]
 cargo run -p triib-cli -- streams <interface> <entity-id>
+cargo run -p triib-cli -- wireless <interface> <entity-id>
 cargo run -p triib-cli -- transit <interface> <entity-id> <output> [nanoseconds]
 cargo run -p triib-cli -- descriptor <interface> <entity-id> <type:index>
 cargo run -p triib-cli -- harvest <interface> <entity-id> [repeat]
