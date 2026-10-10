@@ -3796,7 +3796,7 @@ dependencies = [
 
 [[package]]
 name = "triib"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "atdecc",
  "avb-mrp",
@@ -3816,7 +3816,7 @@ dependencies = [
 
 [[package]]
 name = "triib-cli"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "atdecc",
  "avb-net",
@@ -3824,7 +3824,7 @@ dependencies = [
 
 [[package]]
 name = "triib-endpointd"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "atdecc",
  "avb-mrp",
@@ -3837,7 +3837,7 @@ dependencies = [
 
 [[package]]
 name = "triib-store"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "serde",
  "tempfile",
@@ -3846,7 +3846,7 @@ dependencies = [
 
 [[package]]
 name = "triib-stream"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "atdecc",
  "avb-net",
