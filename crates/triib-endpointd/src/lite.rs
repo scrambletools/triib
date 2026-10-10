@@ -192,6 +192,8 @@ pub struct Fallback {
     reason: Option<FallbackReason>,
     /// The link is down, so nothing can answer and nothing is weighed.
     link_down: bool,
+    /// Since when it has weighed: its start, or the link coming up.
+    armed_at: Duration,
     next: Duration,
     outgoing: VecDeque<Vec<u8>>,
 }
@@ -212,6 +214,7 @@ impl Fallback {
             ptp4l_request: None,
             reason: configured.then_some(FallbackReason::CONFIGURED),
             link_down: false,
+            armed_at: now,
             next: now + START_GRACE,
             outgoing: VecDeque::new(),
         }
@@ -248,9 +251,17 @@ impl Fallback {
             if self.ptp4l_since.is_some() {
                 self.ptp4l_since = Some(now);
             }
+            self.armed_at = now;
             self.next = now + START_GRACE;
         }
         self.link_down = !up;
+    }
+
+    /// Whether it has weighed long enough to have heard another
+    /// endpoint's beacon, two of them at least: without a fallback by
+    /// then, the link has no AVB Lite endpoint saying so.
+    pub fn settled(&self, now: Duration) -> bool {
+        !self.link_down && now >= self.armed_at + PEERLESS
     }
 
     fn fall_back(&mut self, reason: FallbackReason) {
@@ -637,6 +648,20 @@ mod tests {
         sync.extend([0xa5; 12]);
         assert!(stamped(&sync));
         assert!(!stamped(&[0x0b, 0x02]));
+    }
+
+    /// It has weighed long enough 10 s after it starts or the link comes
+    /// up, and never while the link is down.
+    #[test]
+    fn it_settles_after_ten_seconds_of_link() {
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        assert!(!fallback.settled(Duration::from_secs(9)));
+        assert!(fallback.settled(Duration::from_secs(10)));
+        fallback.set_link(Duration::from_secs(20), false);
+        assert!(!fallback.settled(Duration::from_secs(40)));
+        fallback.set_link(Duration::from_secs(40), true);
+        assert!(!fallback.settled(Duration::from_secs(49)));
+        assert!(fallback.settled(Duration::from_secs(50)));
     }
 
     /// With the cable out nothing answers, which is no reason to fall back:

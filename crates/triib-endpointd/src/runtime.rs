@@ -331,7 +331,8 @@ pub struct Runtime {
     /// daemon last started one.
     link: Option<profile::Link>,
     switched_at: Option<Duration>,
-    /// A ptp4l unit switch put off until `SWITCH_AGAIN` has passed.
+    /// A ptp4l unit switch put off until `SWITCH_AGAIN` has passed, or
+    /// until the fallback has settled.
     steer_pending: bool,
     /// PTP frames from others in a row that carried the driver's time
     /// stamp, and when the daemon last restarted the interface for them.
@@ -1016,11 +1017,7 @@ impl Runtime {
             maap.handle_timeout(now);
         }
         self.fallback.handle_timeout(since);
-        if self.steer_pending
-            && self
-                .switched_at
-                .is_some_and(|at| since >= at + SWITCH_AGAIN)
-        {
+        if self.steer_pending && !self.switched_at.is_some_and(|at| since < at + SWITCH_AGAIN) {
             self.steer_profile();
         }
         if self.lite.is_none()
@@ -2086,6 +2083,13 @@ impl Runtime {
         let since = self.elapsed();
         self.steer_pending = false;
         if unit == wanted {
+            return;
+        }
+        // From AVB Lite, ptp4l stays until the fallback has had its time
+        // to hear an endpoint, so starting, or the link coming up, on an
+        // AVB Lite network does not move it to gPTP and back.
+        if unit == Profile::Lite && !self.fallback.settled(since) {
+            self.steer_pending = true;
             return;
         }
         // Too soon after the last switch: the turn makes this one once the
