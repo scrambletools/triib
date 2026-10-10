@@ -20,6 +20,7 @@ use atdecc::media_clock::{Broken, ClockFrom, DomainClock, DomainId, media_clocks
 use atdecc::model::{EntityModel, EnumerationState};
 use atdecc::neighbor::{Neighbor, NeighborListener};
 use atdecc::stream_format::StreamFormat;
+use atdecc::wireless::{AsCapableReason, Band, StationFlags, TimeMode, WirelessFlags};
 use atdecc::{
     ClockIdentity, ControllerCapabilities, DiscoveredEntity, EntityCapabilities, EntityId, Event,
     ListenerCapabilities, OfflineReason, StreamId, TalkerCapabilities,
@@ -81,6 +82,16 @@ commands:
                                      answers, with the octets of the answer,
                                      then the streams it declares over CVU
                                      SRP, heard for the seconds given
+  wireless-config <interface> <entity-id> <avb-interface> <on|off>
+                                     allow or disallow Class A toward an
+                                     access point's wireless port, the AVB
+                                     Wireless bench-test opt-in
+                                     (SET_WIRELESS_CONFIG)
+  wireless <interface> <entity-id>   print what each of an entity's
+                                     interfaces reports of AVB Wireless: its
+                                     link, its time and, on an access point,
+                                     its stations, with the octets of the
+                                     answer
   transit <interface> <entity-id> <output> [nanoseconds]
                                      print or set a stream output's max transit
                                      time, 0 for the entity's default
@@ -237,6 +248,14 @@ fn main() -> ExitCode {
             lite(interface, entity, Duration::from_secs(seconds))
                 .map_err(|error| format!("{interface}: {error}"))
         }
+        Some("wireless") => {
+            let (Some(interface), Some(Ok(entity))) =
+                (argument(1), argument(2).map(str::parse::<EntityId>))
+            else {
+                return usage();
+            };
+            wireless(interface, entity).map_err(|error| format!("{interface}: {error}"))
+        }
         Some("transit") => {
             let (Some(interface), Some(Ok(entity)), Some(Ok(output))) = (
                 argument(1),
@@ -311,7 +330,9 @@ fn main() -> ExitCode {
             };
             set(interface, entity, change).map_err(|error| format!("{interface}: {error}"))
         }
-        Some(command @ ("name" | "format" | "rate" | "clock" | "lite-config")) => {
+        Some(
+            command @ ("name" | "format" | "rate" | "clock" | "lite-config" | "wireless-config"),
+        ) => {
             let (Some(interface), Some(Ok(entity)), Some(target), Some(value)) = (
                 argument(1),
                 argument(2).map(str::parse::<EntityId>),
@@ -579,6 +600,11 @@ enum Change {
         interface: u16,
         escalation: bool,
     },
+    /// Allow or disallow Class A toward an access point's wireless port.
+    WirelessConfig {
+        interface: u16,
+        class_a: bool,
+    },
 }
 
 impl Change {
@@ -613,6 +639,14 @@ impl Change {
             "lite-config" => Some(Change::LiteConfig {
                 interface: number(target)?,
                 escalation: match value {
+                    "on" => true,
+                    "off" => false,
+                    _ => return None,
+                },
+            }),
+            "wireless-config" => Some(Change::WirelessConfig {
+                interface: number(target)?,
+                class_a: match value {
                     "on" => true,
                     "off" => false,
                     _ => return None,
@@ -774,6 +808,184 @@ fn streams(interface: &str, entity: EntityId) -> std::io::Result<()> {
         }
     }
     driver.close()
+}
+
+/// Reads an entity, which asks it for its AVB Wireless status, then prints
+/// what each interface reports.
+fn wireless(interface: &str, entity: EntityId) -> std::io::Result<()> {
+    let driver = read(interface, Some(entity))?;
+    let controller = driver.controller();
+    let (Some(found), Some(model)) = (controller.entity(entity), controller.model(entity)) else {
+        println!("{entity} not found or without an AEM model");
+        return driver.close();
+    };
+    println!("{}", summary(found));
+    for (index, _) in model.descriptors(DescriptorType::AVB_INTERFACE) {
+        let name = model
+            .name_of(DescriptorType::AVB_INTERFACE, index)
+            .unwrap_or_default();
+        let Some(wireless) = model.wireless(index) else {
+            let why = match model.wireless_supported {
+                Some(false) => "does not implement the AVB Wireless status query",
+                Some(true) => "wired",
+                None => "did not answer the AVB Wireless status query",
+            };
+            println!("  interface {index} \"{name}\": {why}");
+            continue;
+        };
+        let status = &wireless.status;
+        let flags = status.flags;
+        if status.access_point() {
+            println!(
+                "  interface {index} \"{name}\": access point, BSS up {} s, Class A {}",
+                status.association_age,
+                if flags.contains(WirelessFlags::CLASS_A_ALLOWED) {
+                    "allowed"
+                } else {
+                    "not allowed"
+                }
+            );
+        } else {
+            let time = if flags.contains(WirelessFlags::LOCKED) {
+                "time locked"
+            } else if flags.contains(WirelessFlags::HOLDOVER) {
+                "holding over"
+            } else {
+                "time not locked"
+            };
+            println!(
+                "  interface {index} \"{name}\": station, {}, {time}",
+                time_mode(status.time_mode)
+            );
+        }
+        println!("      {}", wireless_link(status));
+        println!(
+            "      BSSID {}, access point port {} port {}",
+            status.bssid, status.ap_clock, status.ap_port
+        );
+        if status.access_point() {
+            let unserved = status
+                .unserved()
+                .map_or("not known".to_owned(), |count| count.to_string());
+            println!(
+                "      stream frames readdressed {}, unmapped {}, dropped {}, restored {}; \
+                 listeners unserved {unserved}",
+                status.downlink_readdressed,
+                status.downlink_unmapped,
+                status.downlink_dropped,
+                status.uplink_restored
+            );
+            for station in &wireless.stations {
+                let rssi = station
+                    .signal()
+                    .map_or("RSSI not known".to_owned(), |rssi| {
+                        format!("RSSI {rssi} dBm")
+                    });
+                let ftm = if !station.flags.contains(StationFlags::FTM_KNOWN) {
+                    "FTM not known"
+                } else if station.flags.contains(StationFlags::FTM_INITIATOR) {
+                    "FTM initiator"
+                } else {
+                    "no FTM"
+                };
+                println!("      station {}, {rssi}, {ftm}", station.mac);
+            }
+        } else {
+            let mut ftm = Vec::new();
+            if status.ftm_success != 0xff {
+                ftm.push(format!("{}% valid", status.ftm_success));
+            }
+            if let Some(rtt) = status.rtt() {
+                ftm.push(format!("RTT {rtt} ns"));
+            }
+            match status.ftm_burst_frames {
+                0 => ftm.push("none".to_owned()),
+                0xff => {}
+                frames => ftm.push(format!("bursts of {frames} frames")),
+            }
+            if !matches!(status.ftm_burst_duration, 0 | 0xff) {
+                ftm.push(format!("duration code {}", status.ftm_burst_duration));
+            }
+            if !matches!(status.ftm_min_delta, 0 | 0xff) {
+                ftm.push(format!(
+                    "min delta {:.1} ms",
+                    f64::from(status.ftm_min_delta) / 10.0
+                ));
+            }
+            if !ftm.is_empty() {
+                println!("      FTM {}", ftm.join(", "));
+            }
+            if status.as_capable_reason != AsCapableReason::NONE {
+                println!(
+                    "      asCapable FALSE: {}",
+                    match status.as_capable_reason {
+                        AsCapableReason::BURST_FRAMES =>
+                            "FTM bursts granted of other than three or two frames",
+                        AsCapableReason::NO_MEASUREMENT => "neither FTM nor TM with the other end",
+                        AsCapableReason::NO_SIGNALING => "no gPTP-capable Signaling from it",
+                        _ => "a reason this version does not know",
+                    }
+                );
+            }
+            let servo = status
+                .servo()
+                .map_or("not known".to_owned(), |servo| format!("{servo} ns"));
+            let age = match status.time_age {
+                0xffff => "none applied".to_owned(),
+                millis => format!("applied {millis} ms ago"),
+            };
+            println!(
+                "      servo error {servo}, time element {age}, associated {} s, \
+                 {} access point resets",
+                status.association_age, status.ap_resets
+            );
+        }
+        let mut octets = status.to_bytes().to_vec();
+        for station in &wireless.stations {
+            octets.extend_from_slice(&station.to_bytes());
+        }
+        print_octets(&octets);
+    }
+    driver.close()
+}
+
+fn time_mode(mode: TimeMode) -> String {
+    match mode {
+        TimeMode::NONE => "no time".to_owned(),
+        TimeMode::MODE_A_FTM => "Mode A over FTM".to_owned(),
+        TimeMode::MODE_A_TM => "Mode A over TM".to_owned(),
+        TimeMode::MODE_B => "Mode B, beacon carrier".to_owned(),
+        TimeMode(other) => format!("time mode {other}"),
+    }
+}
+
+/// The band, channel, width, PHY, signal and rate an interface reports.
+fn wireless_link(status: &atdecc::wireless::WirelessStatus) -> String {
+    let mut parts = vec![match status.band {
+        Band::GHZ_2_4 => "2.4 GHz".to_owned(),
+        Band::GHZ_5 => "5 GHz".to_owned(),
+        Band::GHZ_6 => "6 GHz".to_owned(),
+        Band(0) => "band not known".to_owned(),
+        Band(other) => format!("band {other}"),
+    }];
+    if status.channel != 0 {
+        parts.push(format!("channel {}", status.channel));
+    }
+    if status.channel_width != 0 {
+        parts.push(format!("{} MHz", status.channel_width));
+    }
+    match status.phy_generation {
+        0 => {}
+        3 => parts.push("802.11a/b/g".to_owned()),
+        generation => parts.push(format!("Wi-Fi {generation}")),
+    }
+    if let Some(rssi) = status.signal() {
+        parts.push(format!("RSSI {rssi} dBm"));
+    }
+    if status.phy_rate != 0 {
+        parts.push(format!("{} Mb/s", status.phy_rate));
+    }
+    parts.join(", ")
 }
 
 /// Reads an entity, which asks it for its AVB Lite status, listens for
@@ -1013,6 +1225,9 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
             interface,
             escalation,
         } => controller.set_lite_config(now, entity, *interface, *escalation),
+        Change::WirelessConfig { interface, class_a } => {
+            controller.set_wireless_config(now, entity, *interface, *class_a)
+        }
     };
     let started = Instant::now();
     let outcome = loop {
@@ -1042,6 +1257,32 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
         Some(Outcome::NoResponse) => println!("no response"),
         Some(Outcome::NotPossible) => println!("not possible"),
         None => println!("no answer in {} seconds", LIMIT.as_secs()),
+    }
+    if let Change::WirelessConfig { interface, .. } = change {
+        // The status the controller asks for after the change shows it.
+        let asked = Instant::now();
+        while asked.elapsed() < Duration::from_secs(2) {
+            driver.turn(Duration::from_millis(100))?;
+            while driver.controller_mut().poll_event().is_some() {}
+        }
+        if let Some(wireless) = driver
+            .controller()
+            .model(entity)
+            .and_then(|model| model.wireless(interface))
+        {
+            println!(
+                "Class A now {}",
+                if wireless
+                    .status
+                    .flags
+                    .contains(WirelessFlags::CLASS_A_ALLOWED)
+                {
+                    "allowed"
+                } else {
+                    "not allowed"
+                }
+            );
+        }
     }
     if let Change::LiteConfig { interface, .. } = change {
         // The status the controller asks for after the change shows it.
@@ -1158,7 +1399,8 @@ fn set(interface: &str, entity: EntityId, change: Change) -> std::io::Result<()>
             }
             Change::DisconnectTalker { .. }
             | Change::Identify { .. }
-            | Change::LiteConfig { .. } => {}
+            | Change::LiteConfig { .. }
+            | Change::WirelessConfig { .. } => {}
         }
     }
     driver.close()
