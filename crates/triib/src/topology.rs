@@ -245,7 +245,13 @@ impl Topology {
                 topology.apart.push(node);
             }
             for interface in &entity.interfaces {
-                let Some(path) = interface.path else {
+                // A station whose path names nothing beyond itself, as
+                // before it follows anyone or behind an upstream sending
+                // no path, hangs under its access point instead.
+                let Some(path) = interface.path.filter(|path| {
+                    interface.station().is_none()
+                        || path.iter().any(|&clock| clock != interface.clock)
+                }) else {
                     unplaced.push((entity, interface));
                     continue;
                 };
@@ -528,6 +534,9 @@ impl Topology {
             let link = &mut self.nodes[node].link;
             link.wireless = Some(WirelessLink::of(status));
             link.synced = status.flags.contains(WirelessFlags::LOCKED);
+            // A Wi-Fi hop's delay of 0 is one not measured, as where FTM
+            // feeds the clock rather than the link delay.
+            link.delay = link.delay.filter(|&delay| delay > 0);
         }
     }
 
@@ -885,6 +894,46 @@ mod tests {
         assert!(!hop(listener).synced);
         assert!(hop(listener).wireless.is_some_and(|hop| hop.holdover));
         assert_eq!(hop(listener).delay, Some(12_000));
+        // A station's path ends with itself, as an ESP reports it; one
+        // naming nothing beyond itself, or nothing at all, is no path, and
+        // a delay of 0 is one not measured.
+        let own = [SWITCH, ACCESS_POINT, WIFI_CLOCK];
+        let alone = [BEACONS_CLOCK];
+        let unmeasured = super::tests::info(SWITCH, 0);
+        for listener_path in [&alone[..], &[][..]] {
+            let entities = [
+                EntityReport {
+                    entity_id: WIFI,
+                    name: "Wi-Fi talker",
+                    interfaces: vec![InterfaceReport {
+                        index: 0,
+                        clock: WIFI_CLOCK,
+                        path: Some(&own),
+                        info: Some(&unmeasured),
+                        wireless: Some(&locked),
+                    }],
+                },
+                EntityReport {
+                    entity_id: BEACONS,
+                    name: "Wi-Fi listener",
+                    interfaces: vec![InterfaceReport {
+                        index: 0,
+                        clock: BEACONS_CLOCK,
+                        path: Some(listener_path),
+                        info: Some(&info),
+                        wireless: Some(&holding),
+                    }],
+                },
+            ];
+            let topology = Topology::build(&entities, None);
+            let talker = topology.placed(WIFI).unwrap();
+            let listener = topology.placed(BEACONS).unwrap();
+            let access_point = topology.nodes[talker].parent.unwrap();
+            assert_eq!(topology.nodes[access_point].clock, Some(ACCESS_POINT));
+            assert_eq!(topology.nodes[listener].parent, Some(access_point));
+            assert_eq!(topology.nodes[talker].link.delay, None);
+            assert!(topology.apart.is_empty());
+        }
         assert!(topology.apart.is_empty());
         // A stream between them crosses both hops.
         assert_eq!(
