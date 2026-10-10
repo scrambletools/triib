@@ -33,7 +33,7 @@ sudo dpkg --add-architecture "$debarch"
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
   pkg-config desktop-file-utils file qemu-user-static \
-  gcc-$triple libasound2-dev:$debarch
+  gcc-$triple libc6-dev-$debarch-cross libasound2-dev:$debarch
 
 upper=$(echo "$target" | tr a-z- A-Z_)
 lower=${target//-/_}
