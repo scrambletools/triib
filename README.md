@@ -12,7 +12,7 @@ Website: **[triib.run](https://triib.run)**, with
 [a tour](https://triib.run/guide.html) and
 [the specifications](https://triib.run/specs.html).
 
-> **Status:** early. On Linux, macOS and Windows, triib discovers ATDECC entities, reads their
+> **Status:** 0.9.0, the first release. On Linux, macOS and Windows, triib discovers ATDECC entities, reads their
 > entity models (names, streams, clocks, Milan support) and keeps them for
 > next time, shows and changes stream connections in a matrix, maps the
 > network from each entity's gPTP path, identifies entities, renames
@@ -30,12 +30,14 @@ Website: **[triib.run](https://triib.run)**, with
 
 ## Installing
 
-Releases have packages for each system, each setting up what triib needs
-to send and receive raw Ethernet:
+[Releases](https://github.com/scrambletoolsllc/triib/releases) have
+packages for Linux on x86_64, ARM64 and RISC-V, Windows on x64 and ARM64,
+and macOS on Apple Silicon, each setting up what triib needs to send and
+receive raw Ethernet:
 
 | System | Package | What it sets up |
 |---|---|---|
-| Linux | .deb, .rpm, AUR | `CAP_NET_RAW` for `triib`, `triib-cli` and `triib-endpointd` |
+| Linux | .deb, .rpm, PKGBUILD | `CAP_NET_RAW` for `triib`, `triib-cli` and `triib-endpointd` |
 | Linux | .tar.gz | nothing: run `sudo setcap cap_net_raw+ep` on the three programs |
 | macOS (Apple Silicon) | .pkg | access to `/dev/bpf*` for the user installing it, at every start, as Wireshark's ChmodBPF does; `triib-cli` in /usr/local/bin |
 | Windows | .msi, .zip | nothing itself: install [Npcap](https://npcap.com) first, which the installer and triib point to when it is missing |

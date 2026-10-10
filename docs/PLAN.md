@@ -13,9 +13,10 @@ prev's look, widgets and window layout through scramble-ui.
 
 - Done: the controller on Linux, macOS and Windows (P0, P1, P2), in 38
   languages (P1.1), and this computer's own talkers and listeners on
-  Linux, on AVB and AVB Lite networks (P3). Packages for each system come
-  from the release workflow, the Windows programs and installer signed;
-  the website is triib.run.
+  Linux, on AVB and AVB Lite networks (P3). Released as 0.9.0 on
+  2026-10-10, with packages for Linux on x86_64, ARM64 and RISC-V,
+  Windows on x64 and ARM64, the programs and installer signed, and macOS
+  on Apple Silicon; the website is triib.run.
 - Next: P3.1, the AVB Wireless profile and triib's view of wireless
   endpoints and bridges; then P4, whether Windows and then macOS can run
   talkers and listeners of their own.
@@ -312,7 +313,7 @@ and P1 on both, and packages with what each system needs set up. The Mac's
 own AVB entity cannot be read from the same Mac, which triib says.
 
 - To do: try the macOS package's install on a Mac (it needs an
-  administrator's password).
+  administrator's password); its contents, scripts and app are checked.
 
 ### P3: virtual endpoints on Linux (done)
 
