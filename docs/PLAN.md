@@ -16,8 +16,9 @@ prev's look, widgets and window layout through scramble-ui.
   Linux, on AVB and AVB Lite networks (P3). Packages for each system come
   from the release workflow, the Windows programs and installer signed;
   the website is triib.run.
-- Next: P4, whether Windows and then macOS can run talkers and listeners
-  of their own.
+- Next: P3.1, the AVB Wireless profile and triib's view of wireless
+  endpoints and bridges; then P4, whether Windows and then macOS can run
+  talkers and listeners of their own.
 - Waiting on others: the linuxptp organization TLV tables, the atlantic
   driver's time stamps, and native speakers' review of the translations.
 
@@ -331,7 +332,41 @@ endpoint through a non-AVB switch.
     the kernels triib's users run.
   - Sinc resampling (`rubato`) if cubic ever falls short.
 
-### P4: virtual endpoints on Windows, then macOS (next)
+### P3.1: AVB Wireless (next)
+
+The AVB Wireless profile (avbcommunity/profiles, `avb_wireless.md`)
+extends AVB and AVB Lite over one 802.11 hop: an access point that is a
+bridge on its wired port, and Wi-Fi stations as talkers and listeners,
+timed by the 802.1AS §12.7 element in beacons with a TSF mapping and FTM,
+and streamed unicast on the air.
+
+- **The profile:**
+  - Revised with what the ESP's gPTP-to-FTM clock discipline work showed:
+    FTM burst parameters, the timestamp conversions, invalid
+    measurements, how beacons and FTM combine, the accuracy and time to
+    lock of each mode, and behaviour while unlocked or roaming.
+  - A first-pass discovery and status mechanism: a vendor unique AECP
+    query per AVB interface under the AVB Lite MA-S (sub-id `0x005`),
+    answered by wireless stations and by access points that run an
+    ATDECC entity. It reports the role (station, or access point
+    bridging to the wired side), the PHY (band, channel, width,
+    standard), the link (RSSI, PHY rates), the time carrier in use and
+    how well it holds (offset, FTM round trip and success), and on an
+    access point the unicast copies per stream against its fan-out
+    limit. A station names its access point (BSSID and gPTP clock
+    identity) so a controller can place it, with an unsolicited response
+    on change. Configuration stays minimal, such as the access point's
+    fan-out limit; nothing that needs the Wi-Fi stack reconfigured.
+- **triib, as a controller:** asks the query; marks wireless interfaces
+  in the entity list and inspector with their status; draws each station
+  under its access point in the network view, with the wireless hop's
+  link and sync; alarms for a station not locked and listeners an access
+  point cannot serve; `triib-cli` prints it.
+- Checked against the ESP wireless station and access point.
+- Not in P3.1: this computer as a wireless station, as Linux Wi-Fi drivers
+  give no PHC; a later phase if that changes.
+
+### P4: virtual endpoints on Windows, then macOS
 
 - **Windows.** Windows reports no time stamps on the Intel I226-V and the
   Realtek RTL8111 here (`GetInterfaceSupportedTimestampCapabilities`
