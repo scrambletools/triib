@@ -364,7 +364,7 @@ in the access point's beacons, and streamed unicast on the air.
   locked and listeners an access point cannot serve, the log, and
   `triib-cli wireless` and `wireless-config`.
 - To do: check it against the ESP wireless station and access point once
-  they answer the query; translate its text.
+  they answer the query.
 - Not in P3.1: this computer as a wireless station, which needs its Wi-Fi
   card's own PTP clock and timing support; a later phase.
 
