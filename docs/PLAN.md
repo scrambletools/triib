@@ -739,19 +739,39 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     lite-config sends), with the frames moving 200 ms after the
     declaration; a listener refused alone with a unicast Talker Failed;
     listeners admitting against their link; and a configurable fan-out
-    and media VLAN. The media clock's correction for the grandmaster's
-    link speed, from its Grandmaster Link TLV, is in but waits for an ESP
-    grandmaster that announces it.
+    and media VLAN.
   - ptp4l switched between gPTP and the AVB Lite PTP profile through
     triib's systemd units and polkit rule, back to gPTP when the link
     comes up again, run on the bench.
   - EEE and PAUSE kept off the endpoint's link by a boot unit,
     `triib-link@`, which the daemon runs again should they come back.
+  - Against an ESP grandmaster through a non-AVB switch (checked
+    2026-10-09, this computer's TX401 at 1 Gb/s, the ESP at 100 Mb/s):
+    the daemon fell back on the ESP's beacon and moved ptp4l to the
+    AVB Lite PTP profile, which followed the ESP within 40 to 65 ns
+    RMS, and corrected the media clock 2304 ns for the ESP's link
+    speed from its Grandmaster Link TLV. A ptp4l switch the 30 s wait
+    put off is now made once the wait is over. The ESP answers unicast
+    delay requests (hybrid_e2e), but the TX401's atlantic driver trims
+    12 octets from received unicast PTP frames, so ptp4l drops every
+    answer; triib's AVB Lite configuration keeps delay requests
+    multicast.
 - To do:
-  - Unicast delay requests (ptp4l's hybrid_e2e) once the ESP answers
-    them, and the link-speed correction against an ESP grandmaster.
-  - The linuxptp organization TLV tables (v2 of the series), then the
-    Endpoint Declaration TLV from ptp4l in gPTP mode.
+  - The TX401's atlantic driver leaves its timestamp on received PTP
+    frames after the link renegotiates, from a cable unplugged as well
+    as a PAUSE change, until the interface goes down and up; ptp4l
+    drops them all. Decide whether the daemon notices and restarts the
+    interface, and report it to the driver's maintainers.
+  - The fallback runs while the link is down, so an unplugged cable
+    puts the endpoints in AVB Lite until it comes back, which can hold
+    ptp4l off gPTP for the 30 s wait; arm it at link-up only, as the
+    profile's 2.2 says.
+  - For the ESP: its Delay_Resp asks for one delay request every 16 s
+    (logMessageInterval 4), where the profile counts one a second, and
+    its Announce does not claim the PTP timescale.
+  - The linuxptp organization TLV tables (v2 of the series, a table
+    or a built-in option as Erez prefers; replies sent 2026-10-09),
+    then the Endpoint Declaration TLV from ptp4l in gPTP mode.
   - Sinc resampling (`rubato`) if cubic ever falls short.
 
 ### P4: investigating virtual endpoints on Windows, then macOS
