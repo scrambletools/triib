@@ -774,7 +774,11 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     beacon then brings it back without the 30 s wait; two such peers
     are a flooding switch, and none for 10 s is condition 2's silence.
     On the bridge, from the AVB Lite unit: gPTP after 0.5 s and
-    ptp4l in sync after 6.8 s.
+    ptp4l in sync after 6.8 s. Through the non-AVB switch with the
+    ESP: from the AVB Lite unit ptp4l stays and the correction is in
+    after 0.8 s; from the gPTP unit it moves to AVB Lite after 1 s;
+    and with a plain gPTP device beside the ESP it goes to gPTP and is
+    back on AVB Lite 3 s after starting, on the ESP's beacon.
 - To do:
   - Report the atlantic driver's time stamps to its maintainers: left
     on multicast PTP frames after a renegotiation, and 12 octets cut
