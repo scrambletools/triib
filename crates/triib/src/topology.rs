@@ -3,12 +3,14 @@
 //! entities, what is not on any tree and why, and the links a stream
 //! between two entities crosses. Where the network runs AVB Lite, the
 //! clock instead flows end to end from each grandmaster to the devices
-//! following it, as they report it.
+//! following it, as they report it. A Wi-Fi station hangs under its access
+//! point, its link the Wi-Fi hop, as AVB Wireless has it.
 
 use std::collections::HashMap;
 
 use atdecc::aem::AvbInfo;
 use atdecc::lite::{LiteFlags, LiteStatus};
+use atdecc::wireless::{WirelessFlags, WirelessStatus};
 use atdecc::{ClockIdentity, EntityId};
 
 pub type NodeId = usize;
@@ -39,6 +41,29 @@ pub struct Link {
     /// In AVB Lite, the node's offset from its grandmaster in nanoseconds,
     /// as it reports it.
     pub offset: Option<i32>,
+    /// A Wi-Fi hop up to the station's access point.
+    pub wireless: Option<WirelessLink>,
+}
+
+/// A Wi-Fi hop, as the station at its lower end reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WirelessLink {
+    /// The station's time is locked to the access point.
+    pub locked: bool,
+    /// It lost the access point's time and keeps time on its own.
+    pub holdover: bool,
+    /// The access point's signal at the station, in dBm.
+    pub signal: Option<i8>,
+}
+
+impl WirelessLink {
+    fn of(status: &WirelessStatus) -> Self {
+        Self {
+            locked: status.flags.contains(WirelessFlags::LOCKED),
+            holdover: status.flags.contains(WirelessFlags::HOLDOVER),
+            signal: status.signal(),
+        }
+    }
 }
 
 /// Why a node is not on any tree.
@@ -72,6 +97,8 @@ pub struct Node {
     pub children: Vec<NodeId>,
     pub link: Link,
     pub apart: Option<Apart>,
+    /// A bridge or entity whose port is a Wi-Fi access point.
+    pub access_point: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Hash)]
@@ -99,6 +126,15 @@ pub struct InterfaceReport<'a> {
     pub path: Option<&'a [ClockIdentity]>,
     /// From GET_AVB_INFO, when it answered.
     pub info: Option<&'a AvbInfo>,
+    /// From GET_WIRELESS_STATUS, for a wireless interface.
+    pub wireless: Option<&'a WirelessStatus>,
+}
+
+impl InterfaceReport<'_> {
+    /// What the interface reports as a Wi-Fi station.
+    fn station(&self) -> Option<&WirelessStatus> {
+        self.wireless.filter(|status| !status.access_point())
+    }
 }
 
 /// What an entity reports of AVB Lite, for the PTP topology.
@@ -182,6 +218,7 @@ impl Topology {
                     ..Link::default()
                 },
                 apart: None,
+                access_point: false,
             });
             by_clock.insert(clock, node);
             node
@@ -203,6 +240,7 @@ impl Topology {
                     children: Vec::new(),
                     link: Link::default(),
                     apart: Some(Apart::Unreported),
+                    access_point: false,
                 });
                 topology.apart.push(node);
             }
@@ -227,6 +265,7 @@ impl Topology {
                 }
                 let node = node_for(&mut topology, &mut by_clock, interface.clock);
                 topology.nodes[node].link.delay = interface.info.map(|info| info.propagation_delay);
+                topology.wireless_hop(node, interface);
             }
         }
         // A path of the entity alone makes it a grandmaster, a root only
@@ -249,6 +288,34 @@ impl Topology {
         for (entity, interface) in unplaced {
             if let Some(&node) = by_clock.get(&interface.clock) {
                 topology.nodes[node].link.delay = interface.info.map(|info| info.propagation_delay);
+                topology.wireless_hop(node, interface);
+                continue;
+            }
+            // A station that reports no gPTP path, as in Mode B, hangs
+            // under the access point it names.
+            if let Some(&access_point) = interface
+                .station()
+                .and_then(|status| by_clock.get(&status.ap_clock))
+            {
+                let node = topology.push(Node {
+                    kind: Kind::Entity {
+                        entity_id: entity.entity_id,
+                        interface: interface.index,
+                    },
+                    clock: Some(interface.clock),
+                    name: entity.name.to_owned(),
+                    parent: None,
+                    children: Vec::new(),
+                    link: Link {
+                        delay: interface.info.map(|info| info.propagation_delay),
+                        ..Link::default()
+                    },
+                    apart: None,
+                    access_point: false,
+                });
+                by_clock.insert(interface.clock, node);
+                topology.attach(node, access_point);
+                topology.wireless_hop(node, interface);
                 continue;
             }
             let apart = match interface.info {
@@ -270,8 +337,19 @@ impl Topology {
                     ..Link::default()
                 },
                 apart: Some(apart),
+                access_point: false,
             });
             topology.apart.push(node);
+        }
+
+        // The access points the wireless interfaces name.
+        for interface in entities.iter().flat_map(|entity| &entity.interfaces) {
+            if let Some(&node) = interface
+                .wireless
+                .and_then(|status| by_clock.get(&status.ap_clock))
+            {
+                topology.nodes[node].access_point = true;
+            }
         }
 
         if let Some(host) = host {
@@ -283,6 +361,7 @@ impl Topology {
                 children: Vec::new(),
                 link: Link::default(),
                 apart: Some(Apart::NoNeighbor),
+                access_point: false,
             };
             match host {
                 HostReport::Heard(clock, port, synced) => {
@@ -356,6 +435,7 @@ impl Topology {
                             children: Vec::new(),
                             link: Link::default(),
                             apart: None,
+                            access_point: false,
                         });
                         by_clock.insert(clock, node);
                         node
@@ -386,6 +466,7 @@ impl Topology {
                     } else {
                         Apart::LiteUnreported
                     }),
+                    access_point: false,
                 });
                 topology.apart.push(node);
             }
@@ -399,6 +480,7 @@ impl Topology {
                 children: Vec::new(),
                 link: Link::default(),
                 apart: None,
+                access_point: false,
             });
             follows.push((node, host.grandmaster, host.offset));
         }
@@ -417,6 +499,7 @@ impl Topology {
                         children: Vec::new(),
                         link: Link::default(),
                         apart: None,
+                        access_point: false,
                     });
                     by_clock.insert(grandmaster, root);
                     root
@@ -436,6 +519,16 @@ impl Topology {
             .collect();
         topology.sort();
         topology
+    }
+
+    /// Makes the link up from a station's node its Wi-Fi hop, in sync while
+    /// the station's time is locked.
+    fn wireless_hop(&mut self, node: NodeId, interface: &InterfaceReport<'_>) {
+        if let Some(status) = interface.station() {
+            let link = &mut self.nodes[node].link;
+            link.wireless = Some(WirelessLink::of(status));
+            link.synced = status.flags.contains(WirelessFlags::LOCKED);
+        }
     }
 
     fn push(&mut self, node: Node) -> NodeId {
@@ -591,6 +684,43 @@ pub fn mac_of(clock: ClockIdentity) -> Option<[u8; 6]> {
     (d == 0xff && e == 0xfe).then_some([a, b, c, f, g, h])
 }
 
+/// A station's status for tests: following the access point whose port
+/// has `ap_clock`, its time as `flags` say.
+#[cfg(test)]
+pub(crate) fn test_station(ap_clock: ClockIdentity, flags: WirelessFlags) -> WirelessStatus {
+    use atdecc::wireless::{AsCapableReason, Band, TimeMode};
+    WirelessStatus {
+        interface: 0,
+        flags,
+        time_mode: TimeMode::MODE_A_FTM,
+        band: Band::GHZ_5,
+        channel: 36,
+        channel_width: 80,
+        phy_generation: 6,
+        rssi: -52,
+        phy_rate: 866,
+        ftm_success: 98,
+        as_capable_reason: AsCapableReason::NONE,
+        ftm_burst_frames: 3,
+        listeners_unserved: 0,
+        ftm_burst_duration: 7,
+        ftm_min_delta: 100,
+        ftm_rtt: 42,
+        servo_error: -380,
+        association_age: 60,
+        time_age: 50,
+        ap_resets: 0,
+        bssid: atdecc::MacAddress([0x30, 0xed, 0xa0, 0x11, 0x22, 0x33]),
+        ap_clock,
+        ap_port: 2,
+        downlink_readdressed: 0,
+        downlink_unmapped: 0,
+        downlink_dropped: 0,
+        uplink_restored: 0,
+        station_count: 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -631,6 +761,7 @@ mod tests {
                     clock: MAC_CLOCK,
                     path: Some(&mac_path),
                     info: Some(&mac_info),
+                    wireless: None,
                 }],
             },
             EntityReport {
@@ -641,6 +772,7 @@ mod tests {
                     clock: WIRED_CLOCK,
                     path: Some(&wired_path),
                     info: Some(&wired_info),
+                    wireless: None,
                 }],
             },
             EntityReport {
@@ -651,6 +783,7 @@ mod tests {
                     clock: WIFI_CLOCK,
                     path: None,
                     info: Some(&wifi_info),
+                    wireless: None,
                 }],
             },
         ];
@@ -693,6 +826,71 @@ mod tests {
         let wifi = topology.apart[0];
         assert_eq!(topology.nodes[wifi].apart, Some(Apart::OwnGrandmaster));
         assert_eq!(topology.placed(WIFI), None);
+    }
+
+    /// A station that reports its path hangs under its access point, and
+    /// one that reports none, as in Mode B, hangs under the access point it
+    /// names; each link is a Wi-Fi hop, in sync while its time is locked.
+    #[test]
+    fn stations_hang_under_their_access_point() {
+        const ACCESS_POINT: ClockIdentity = ClockIdentity(0x30ed_a0ff_fe11_2233);
+        const BEACONS: EntityId = EntityId(0xfc01_2cfd_fe80_0001);
+        const BEACONS_CLOCK: ClockIdentity = ClockIdentity(0xfc01_2cff_fefd_fe81);
+        let path = [SWITCH, ACCESS_POINT, WIFI_CLOCK];
+        let locked = test_station(ACCESS_POINT, WirelessFlags::LOCKED);
+        let holding = test_station(ACCESS_POINT, WirelessFlags::HOLDOVER);
+        let info = info(SWITCH, 12_000);
+        let entities = [
+            EntityReport {
+                entity_id: WIFI,
+                name: "Wi-Fi talker",
+                interfaces: vec![InterfaceReport {
+                    index: 0,
+                    clock: WIFI_CLOCK,
+                    path: Some(&path),
+                    info: Some(&info),
+                    wireless: Some(&locked),
+                }],
+            },
+            EntityReport {
+                entity_id: BEACONS,
+                name: "Wi-Fi listener",
+                interfaces: vec![InterfaceReport {
+                    index: 0,
+                    clock: BEACONS_CLOCK,
+                    path: None,
+                    info: Some(&info),
+                    wireless: Some(&holding),
+                }],
+            },
+        ];
+        let topology = Topology::build(&entities, None);
+        let talker = topology.placed(WIFI).unwrap();
+        let listener = topology.placed(BEACONS).unwrap();
+        let access_point = topology.nodes[talker].parent.unwrap();
+        assert_eq!(topology.nodes[listener].parent, Some(access_point));
+        assert_eq!(topology.nodes[access_point].clock, Some(ACCESS_POINT));
+        assert!(topology.nodes[access_point].access_point);
+        assert!(!topology.nodes[talker].access_point);
+        let hop = |node: NodeId| topology.nodes[node].link;
+        assert!(hop(talker).synced);
+        assert_eq!(
+            hop(talker).wireless,
+            Some(WirelessLink {
+                locked: true,
+                holdover: false,
+                signal: Some(-52),
+            })
+        );
+        assert!(!hop(listener).synced);
+        assert!(hop(listener).wireless.is_some_and(|hop| hop.holdover));
+        assert_eq!(hop(listener).delay, Some(12_000));
+        assert!(topology.apart.is_empty());
+        // A stream between them crosses both hops.
+        assert_eq!(
+            topology.route(WIFI, BEACONS).hops,
+            [(talker, true), (listener, false)]
+        );
     }
 
     #[test]
@@ -761,6 +959,7 @@ mod tests {
                     clock: console_clock,
                     path: Some(&console_path),
                     info: None,
+                    wireless: None,
                 }],
             },
             EntityReport {
@@ -771,6 +970,7 @@ mod tests {
                     clock: stage_box_clock,
                     path: Some(&stage_box_path),
                     info: None,
+                    wireless: None,
                 }],
             },
         ];

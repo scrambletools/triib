@@ -16,6 +16,7 @@ use atdecc::descriptor::DescriptorType;
 use atdecc::lite::{CvuMessage, LiteFlags, LiteMessage, LiteStatus};
 use atdecc::mvu::MvuMessage;
 use atdecc::pdu::{self, Pdu};
+use atdecc::wireless::{TimeMode, WirelessFlags, WirelessMessage, WirelessStatus};
 use avb_mrp::msrp;
 use iced::widget::{container, mouse_area, space};
 use iced::{Center, Element, Fill, Font, Length};
@@ -260,6 +261,8 @@ pub fn describe(triib: &Triib, frame: &Frame) -> Line {
                 vendor_unique.header.message_type == AecpMessageType::VENDOR_UNIQUE_RESPONSE;
             line.summary = if let Ok(message) = LiteMessage::from_pdu(&vendor_unique) {
                 describe_lite(message, response)
+            } else if let Ok(message) = WirelessMessage::from_pdu(&vendor_unique) {
+                describe_wireless(message, response)
             } else if let Ok(cvu) = CvuMessage::from_pdu(&vendor_unique) {
                 // A talker sends CVU SRP about itself, to no one in
                 // particular.
@@ -321,6 +324,49 @@ fn describe_lite(message: LiteMessage<'_>, response: bool) -> String {
         if let Some(offset) = status.offset() {
             summary.push_str(&format!(", offset {offset} ns"));
         }
+    }
+    summary
+}
+
+/// An AVB Wireless status query or its answer, with what the answer says.
+fn describe_wireless(message: WirelessMessage<'_>, response: bool) -> String {
+    let mut summary = format!(
+        "AVB Wireless: {}",
+        named(message.command_type.name(), message.command_type.0)
+    );
+    if message.unsolicited {
+        summary.push_str(", notification");
+    } else if response {
+        summary.push_str(", response");
+    }
+    let Ok(status) = WirelessStatus::decode(message.data) else {
+        return summary;
+    };
+    if status.access_point() {
+        let plural = if status.station_count == 1 { "" } else { "s" };
+        summary.push_str(&format!(
+            ", access point, {} station{plural}",
+            status.station_count
+        ));
+        return summary;
+    }
+    let mode = match status.time_mode {
+        TimeMode::NONE => "no time".to_owned(),
+        TimeMode::MODE_A_FTM => "Mode A over FTM".to_owned(),
+        TimeMode::MODE_A_TM => "Mode A over TM".to_owned(),
+        TimeMode::MODE_B => "Mode B".to_owned(),
+        TimeMode(other) => format!("time mode {other}"),
+    };
+    let time = if status.flags.contains(WirelessFlags::LOCKED) {
+        "locked"
+    } else if status.flags.contains(WirelessFlags::HOLDOVER) {
+        "holding over"
+    } else {
+        "not locked"
+    };
+    summary.push_str(&format!(", station, {mode}, {time}"));
+    if let Some(rssi) = status.signal() {
+        summary.push_str(&format!(", {rssi} dBm"));
     }
     summary
 }
@@ -883,6 +929,26 @@ pub(crate) mod tests {
         );
         assert_eq!(line.entity, Some(EntityId(0xd111_e597_f544_8000)));
         assert!(line.warnings.is_empty());
+    }
+
+    #[test]
+    fn avb_wireless_frames_say_what_they_report() {
+        let triib = sample();
+        let mut out = [0; 64];
+        let length =
+            atdecc::wireless::encode_get_wireless_status(WIRED_ESP, CONTROLLER, 4, 0, &mut out)
+                .unwrap();
+        let line = describe(&triib, &frame(true, out[..length].to_vec()));
+        assert_eq!(line.summary, "AVB Wireless: Get wireless status");
+        let [notification] =
+            <[Vec<u8>; 1]>::try_from(crate::view::tests::wireless_frames(WirelessFlags::LOCKED))
+                .unwrap();
+        let line = describe(&triib, &frame(false, notification));
+        assert_eq!(
+            line.summary,
+            "AVB Wireless: Get wireless status, notification, station, Mode A over FTM, locked, \
+             -52 dBm"
+        );
     }
 
     #[test]

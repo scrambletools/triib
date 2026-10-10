@@ -20,7 +20,7 @@ use iced::alignment::Vertical;
 use iced::font::Weight;
 use iced::mouse::{self, Cursor};
 use iced::time::Instant;
-use iced::widget::canvas::{Cache, Frame, LineDash, Path, Stroke, Text};
+use iced::widget::canvas::{Cache, Frame, LineCap, LineDash, Path, Stroke, Text};
 use iced::widget::text::LineHeight;
 use iced::{
     Color, Element, Event, Font, Length, Pixels, Point, Rectangle, Size, Theme, Vector, border,
@@ -651,8 +651,7 @@ fn fan(map: &Map, width: f32) -> Placement {
         .collect();
     // Corners run down the link; a wire going up runs them backwards.
     let mut put = |leg: &Leg, corners: Vec<Point>| {
-        let wire = Wire::new(corners);
-        wires[leg.line][leg.hop] = Some(if leg.up { wire.reversed() } else { wire });
+        wires[leg.line][leg.hop] = Some(Wire::new(corners).for_leg(map, leg));
     };
     let entry = |leg: &Leg, card: Rectangle| {
         let own = &entries[&leg.node];
@@ -929,7 +928,7 @@ fn compact(map: &Map) -> Placement {
                 Point::new(x, y),
                 Point::new(card.x, y),
             ]);
-            wires[leg.line][leg.hop] = Some(if leg.up { wire.reversed() } else { wire });
+            wires[leg.line][leg.hop] = Some(wire.for_leg(map, leg));
         }
     }
     let right = cards
@@ -962,6 +961,8 @@ fn compact(map: &Map) -> Placement {
 #[derive(Debug, Clone)]
 struct Wire {
     corners: Vec<Point>,
+    /// Along a Wi-Fi hop, drawn dotted.
+    wireless: bool,
     /// Points along the drawn wire with the distance to each from its start.
     samples: Vec<(Point, f32)>,
 }
@@ -1011,11 +1012,27 @@ impl Wire {
                 }
             }
         }
-        Self { corners, samples }
+        Self {
+            corners,
+            samples,
+            wireless: false,
+        }
     }
 
     fn reversed(&self) -> Self {
-        Self::new(self.corners.iter().rev().copied().collect())
+        Self {
+            wireless: self.wireless,
+            ..Self::new(self.corners.iter().rev().copied().collect())
+        }
+    }
+
+    /// The wire for a leg: reversed when it goes up, dotted along a Wi-Fi
+    /// hop.
+    fn for_leg(self, map: &Map, leg: &Leg) -> Self {
+        let mut wire = if leg.up { self.reversed() } else { self };
+        let (node, _) = map.lines[leg.line].hops[leg.hop];
+        wire.wireless = map.topology.nodes[node].link.wireless.is_some();
+        wire
     }
 
     fn length(&self) -> f32 {
@@ -1241,6 +1258,14 @@ impl NetMap {
                 stroke = stroke.dashed(&[6.0, 5.0]);
             }
             for wire in wires {
+                let stroke = if wire.wireless {
+                    Stroke {
+                        line_cap: LineCap::Round,
+                        ..stroke.dashed(&[0.5, 5.0])
+                    }
+                } else {
+                    stroke
+                };
                 frame.stroke(&wire.path(), stroke);
             }
             // Where a stream that is not flowing stops: a tick when it is
@@ -1693,6 +1718,9 @@ mod tests {
                     _ => None,
                 };
                 let (icon, name) = match node.kind {
+                    Kind::Bridge if node.access_point => {
+                        (Icon::WifiTethering, crate::fl!("netmap-access-point"))
+                    }
                     Kind::Bridge => (Icon::Hub, node.name.clone()),
                     Kind::Host => (Icon::Computer, crate::fl!("netmap-this-computer")),
                     Kind::Entity { .. } => (Icon::GraphicEq, node.name.clone()),
@@ -1713,6 +1741,12 @@ mod tests {
                     (_, _, Some(_)) => (crate::fl!("netmap-off-tree"), Paint::Failed),
                     (true, _, _) if node.parent.is_none() => {
                         (crate::fl!("avb-interface-grandmaster"), Paint::Clock)
+                    }
+                    (true, _, _) if node.link.wireless.is_some_and(|hop| hop.holdover) => {
+                        (crate::fl!("wireless-holdover"), Paint::Failed)
+                    }
+                    (true, _, _) if node.link.wireless.is_some_and(|hop| hop.locked) => {
+                        (crate::fl!("wireless-locked"), Paint::Muted)
                     }
                     (true, _, _) if node.link.synced => (crate::fl!("netmap-synced"), Paint::Muted),
                     (true, _, _) => (crate::fl!("netmap-not-synced"), Paint::Failed),
@@ -1785,6 +1819,7 @@ mod tests {
                 clock,
                 path,
                 info,
+                wireless: None,
             }],
         };
         let mut topology = Topology::build(
@@ -1824,6 +1859,85 @@ mod tests {
                 (WIRED, MAC, Status::Flowing),
                 (MAC, WIRED, Status::Flowing),
                 (WIRED, WIFI, Status::Advertised),
+            ],
+            clock,
+            None,
+        )
+    }
+
+    /// The bench with an AVB Wireless access point under the switch: the
+    /// Wi-Fi entity a station reporting its path, and another station
+    /// following beacons, holding over.
+    fn wireless(clock: bool) -> Map {
+        use atdecc::wireless::WirelessFlags;
+        const ACCESS_POINT: ClockIdentity = ClockIdentity(0x30ed_a0ff_fe11_2233);
+        const BEACONS: EntityId = EntityId(0xfc01_2cfd_fe80_0001);
+        const BEACONS_CLOCK: ClockIdentity = ClockIdentity(0xfc01_2cff_fefd_fe81);
+        let mac_path = [SWITCH, MAC_CLOCK];
+        let wired_path = [SWITCH, WIRED_CLOCK];
+        let wifi_path = [SWITCH, ACCESS_POINT, WIFI_CLOCK];
+        let (mac_info, wired_info, wifi_info) =
+            (info(SWITCH, 58), info(SWITCH, 432), info(SWITCH, 12_000));
+        let locked = crate::topology::test_station(ACCESS_POINT, WirelessFlags::LOCKED);
+        let holding = crate::topology::test_station(ACCESS_POINT, WirelessFlags::HOLDOVER);
+        let report = |entity_id, name, clock, path, info, wireless| EntityReport {
+            entity_id,
+            name,
+            interfaces: vec![InterfaceReport {
+                index: 0,
+                clock,
+                path,
+                info,
+                wireless,
+            }],
+        };
+        let mut topology = Topology::build(
+            &[
+                report(
+                    MAC,
+                    "Mac mini",
+                    MAC_CLOCK,
+                    Some(&mac_path[..]),
+                    Some(&mac_info),
+                    None,
+                ),
+                report(
+                    WIRED,
+                    "AVB Example Entity",
+                    WIRED_CLOCK,
+                    Some(&wired_path[..]),
+                    Some(&wired_info),
+                    None,
+                ),
+                report(
+                    WIFI,
+                    "Wi-Fi talker",
+                    WIFI_CLOCK,
+                    Some(&wifi_path[..]),
+                    Some(&wifi_info),
+                    Some(&locked),
+                ),
+                report(
+                    BEACONS,
+                    "Wi-Fi listener",
+                    BEACONS_CLOCK,
+                    None,
+                    Some(&wifi_info),
+                    Some(&holding),
+                ),
+            ],
+            Some(HostReport::Heard(SWITCH, 6, true)),
+        );
+        for node in &mut topology.nodes {
+            if node.clock == Some(SWITCH) {
+                node.name = "Mark of the Unicorn".to_owned();
+            }
+        }
+        draw(
+            topology,
+            &[
+                (WIFI, MAC, Status::Flowing),
+                (WIRED, BEACONS, Status::Flowing),
             ],
             clock,
             None,
@@ -1881,6 +1995,7 @@ mod tests {
                     clock: *own,
                     path: Some(path),
                     info: None,
+                    wireless: None,
                 }],
             })
             .collect();
@@ -1974,6 +2089,8 @@ mod tests {
             ("bench", bench(false), natural),
             ("bench-clock", bench(true), natural),
             ("bench-phone", bench(false), phone),
+            ("wireless", wireless(false), natural),
+            ("wireless-clock", wireless(true), natural),
             ("show", show(false, None), natural),
             ("show-clock", show(true, None), natural),
             ("show-picked", show(false, picked), natural),

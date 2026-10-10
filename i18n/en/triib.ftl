@@ -360,6 +360,9 @@ column-listener-streams = Listener streams
 column-avb-lite = AVB Lite
 # What an entity's talker streams take of its link.
 column-egress = Egress
+# Whether an entity's interface is a Wi-Fi station or access point, as the
+# AVB Wireless profile has it.
+column-wireless = Wireless
 
 ## Settings file
 
@@ -403,6 +406,8 @@ netmap-show-details = Show the details
 stream-numbered = Stream { $index }
 # An AVB switch with no vendor known.
 netmap-bridge = Bridge
+# A bridge whose port is a Wi-Fi access point.
+netmap-access-point = Access point
 netmap-device = Device
 netmap-this-computer = This computer
 netmap-connected = Connected
@@ -704,6 +709,88 @@ lite-egress-worked-out = From the formats of its connected stream outputs.
 lite-alarm-offset = PTP offset { $offset }, past the 50 µs AVB Lite allows
 # $share is how much of the link streams take, $limit the most they may.
 lite-alarm-egress = Egress at { $share } of the link, past the { $limit } streams may take
+
+## AVB Wireless
+# AVB Wireless is a profile of AVB for one Wi-Fi hop: an access point that
+# is an AVB bridge on its wired port, and stations that are talkers and
+# listeners. Keep "AVB", "FTM", "TM", "BSSID", "asCapable", "Wi-Fi",
+# "802.1AS", "Mode A", "Mode B" and "Class A" as written.
+
+# A Wi-Fi interface's role.
+wireless-station = Station
+wireless-access-point = Access point
+wireless-role = Role
+# How a station gets the grandmaster's time: 802.1AS over Fine Timing
+# Measurement or Timing Measurement frames, or the time the access point
+# puts in its beacons.
+wireless-mode = Mode
+wireless-time = Time
+wireless-mode-a-ftm = Mode A, 802.1AS over FTM
+wireless-mode-a-tm = Mode A, 802.1AS over TM
+wireless-mode-b = Mode B, from beacons
+wireless-no-time = No time
+wireless-other-mode = A mode the profile does not name
+# How a station's time holds: locked to the access point, keeping time on
+# its own after losing it, or not locked.
+wireless-locked = Locked
+wireless-holdover = Holding over
+wireless-not-locked = Not locked
+# A Wi-Fi interface in the entity list: a station and how its time holds,
+# or an access point and how many stations it has.
+wireless-row-locked = Station, locked
+wireless-row-holdover = Station, holding over
+wireless-row-not-locked = Station, not locked
+wireless-row-access-point = { $count ->
+    [one] Access point, { $count } station
+   *[other] Access point, { $count } stations
+}
+wireless-link = Link
+wireless-channel = channel { $channel }
+wireless-not-known = Not known
+# The strength of the access point's signal at the station.
+wireless-signal = Signal
+# The rate the station sends at.
+wireless-rate = Rate
+# $share is a share such as "98%".
+wireless-ftm-valid = { $share } valid
+# The round trip time of the last measurement; $rtt is a time such as
+# "42 ns".
+wireless-rtt = round trip { $rtt }
+wireless-bursts = { $count ->
+    [one] bursts of { $count } frame
+   *[other] bursts of { $count } frames
+}
+# Why the station's link is not an 802.1AS link; $reason is one of the
+# reasons below.
+wireless-not-as-capable = FALSE, { $reason }
+wireless-reason-bursts = the access point grants FTM bursts of other than three or two frames
+wireless-reason-measurement = neither FTM nor TM with the access point
+wireless-reason-signaling = no gPTP-capable Signaling from the access point
+wireless-reason-other = a reason the profile does not name
+# The station's own estimate of how far its clock is off.
+wireless-servo = Servo error
+wireless-stations = Stations
+wireless-station-count = { $count ->
+    [one] { $count } station
+   *[other] { $count } stations
+}
+# A station that cannot measure with FTM.
+wireless-no-ftm = without FTM
+# Listeners the access point does not serve, past its unicast limit.
+wireless-unserved = Listeners not served
+wireless-stream-frames = Stream frames
+# What the access point did with stream frames: sent to each station on
+# its own, found no listener for, dropped, and gave back their address.
+wireless-frames-of = { $readdressed } to stations, { $unmapped } without a listener, { $dropped } dropped, { $restored } from stations
+wireless-class-a-allowed = Allowed, for bench tests
+wireless-class-a-not-allowed = Not allowed
+# Alarms.
+wireless-alarm-not-locked = Wi-Fi time not locked to the access point
+wireless-alarm-holdover = Wi-Fi time holding over, lost from the access point
+wireless-alarm-unserved = { $count ->
+    [one] { $count } listener on the Wi-Fi port not served, past the unicast limit
+   *[other] { $count } listeners on the Wi-Fi port not served, past the unicast limit
+}
 
 ## Log
 # The ATDECC frames triib sends and hears. Each frame's summary stays in the

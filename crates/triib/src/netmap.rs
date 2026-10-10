@@ -26,7 +26,7 @@ use crate::fl;
 use crate::settings::NetworkShows;
 use crate::topology::{
     Apart, EntityReport, HostLite, HostReport, InterfaceReport, Kind as NodeKind, LiteReport,
-    NodeId, Route, Topology,
+    NodeId, Route, Topology, WirelessLink,
 };
 
 const PANEL_WIDTH: f32 = 360.0;
@@ -388,6 +388,9 @@ fn topology_of(triib: &Triib) -> Topology {
                             clock: interface.clock_identity,
                             path: model.as_path(interface.index),
                             info: model.avb_info(interface.index),
+                            wireless: model
+                                .wireless(interface.index)
+                                .map(|wireless| &wireless.status),
                         })
                         .collect()
                 })
@@ -516,7 +519,13 @@ fn node_name(topology: &Topology, node: NodeId) -> String {
             .clock
             .and_then(crate::topology::mac_of)
             .and_then(|mac| crate::vendor::name([mac[0], mac[1], mac[2]]))
-            .unwrap_or_else(|| fl!("netmap-bridge")),
+            .unwrap_or_else(|| {
+                if entry.access_point {
+                    fl!("netmap-access-point")
+                } else {
+                    fl!("netmap-bridge")
+                }
+            }),
         NodeKind::Host => fl!("netmap-this-computer"),
         NodeKind::Entity { .. } => entry.name.clone(),
         NodeKind::Clock => entry
@@ -799,6 +808,7 @@ fn cards(
             let key = key_of(topology, node);
             let entity = entity_of(topology, node);
             let (glyph, tag) = match entry.kind {
+                NodeKind::Bridge if entry.access_point => (Icon::WifiTethering, String::new()),
                 NodeKind::Bridge => (Icon::Hub, String::new()),
                 NodeKind::Host => (Icon::Computer, String::new()),
                 NodeKind::Clock => (Icon::Schedule, String::new()),
@@ -848,6 +858,14 @@ fn cards(
                         fl!("netmap-not-synced")
                     },
                     Paint::Muted,
+                ),
+                (NetworkShows::Clock, None, _) if let Some(hop) = entry.link.wireless => (
+                    wireless_time(hop),
+                    if hop.locked {
+                        Paint::Muted
+                    } else {
+                        Paint::Failed
+                    },
                 ),
                 (NetworkShows::Clock, None, _) if entry.link.synced => {
                     (fl!("netmap-synced"), Paint::Muted)
@@ -1016,6 +1034,50 @@ fn stream_item(stream: &Stream, paint: Paint) -> Item {
         swatch: paint,
         focus: stream.focus(),
     }
+}
+
+/// How a station's time holds over its Wi-Fi hop.
+fn wireless_time(hop: WirelessLink) -> String {
+    if hop.locked {
+        fl!("wireless-locked")
+    } else if hop.holdover {
+        fl!("wireless-holdover")
+    } else {
+        fl!("wireless-not-locked")
+    }
+}
+
+/// What a station reports of its Wi-Fi hop, for its details.
+fn wireless_facts(triib: &Triib, topology: &Topology, node: NodeId) -> Vec<(String, String)> {
+    let NodeKind::Entity {
+        entity_id,
+        interface,
+    } = topology.nodes[node].kind
+    else {
+        return Vec::new();
+    };
+    let Some(wireless) = triib
+        .models
+        .get(&entity_id)
+        .and_then(|model| model.wireless(interface))
+        .filter(|wireless| !wireless.status.access_point())
+    else {
+        return Vec::new();
+    };
+    let status = &wireless.status;
+    let time = crate::wireless_view::Time::of(status).text();
+    let mut link = vec![crate::wireless_view::link_text(status)];
+    if let Some(rssi) = status.signal() {
+        link.push(crate::wireless_view::signal_text(rssi));
+    }
+    vec![
+        (
+            fl!("wireless-mode"),
+            crate::wireless_view::mode_text(status.time_mode),
+        ),
+        (fl!("wireless-time"), time),
+        ("Wi-Fi".to_owned(), crate::i18n::list(link)),
+    ]
 }
 
 /// Whether the node is on a tree with gPTP running up to it.
@@ -1263,6 +1325,7 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
         facts.push((fl!("netmap-clock-path"), path.join(&arrow)));
         facts.push((fl!("netmap-hops"), (path.len() - 1).to_string()));
     }
+    facts.extend(wireless_facts(triib, topology, node));
     if let Some(delay) = entry.link.delay {
         facts.push((fl!("netmap-link-delay"), format!("{delay} ns")));
     }
@@ -1297,6 +1360,7 @@ fn clock_details(triib: &Triib, topology: &Topology, node: NodeId) -> Page {
         Some(apart) => apart_reason(apart),
         None if ok => fl!("netmap-synced-to-grandmaster"),
         None if entry.kind == NodeKind::Host => fl!("netmap-host-no-gptp"),
+        None if entry.link.wireless.is_some() => fl!("wireless-alarm-not-locked"),
         None => fl!("netmap-link-no-gptp"),
     };
     Page {
@@ -1676,6 +1740,7 @@ mod tests {
                     clock: clocks[place],
                     path: Some(&paths[place]),
                     info: None,
+                    wireless: None,
                 }],
             })
             .collect();

@@ -24,6 +24,7 @@ mod text;
 mod topology;
 mod vendor;
 mod view;
+mod wireless_view;
 
 use std::sync::{Mutex, OnceLock};
 

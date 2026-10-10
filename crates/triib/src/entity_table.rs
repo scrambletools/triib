@@ -98,6 +98,7 @@ fn value(field: EntityField, entity: &DiscoveredEntity, model: Option<&EntityMod
         EntityField::TalkerStreams => count(entity.adp.talker_stream_sources),
         EntityField::ListenerStreams => count(entity.adp.listener_stream_sinks),
         EntityField::AvbLite => model.map_or_else(String::new, crate::lite_view::mode),
+        EntityField::Wireless => model.map_or_else(String::new, crate::wireless_view::role),
         EntityField::Egress => model
             .and_then(|model| {
                 let (interface, _) = model.descriptors(DescriptorType::AVB_INTERFACE).next()?;

@@ -223,7 +223,7 @@ pub fn entity_section<'a>(model: &EntityModel) -> Vec<Element<'a, Message>> {
     items
 }
 
-fn property<'a>(label: &str, value: String, alarm: bool) -> Element<'a, Message> {
+pub(crate) fn property<'a>(label: &str, value: String, alarm: bool) -> Element<'a, Message> {
     let value = styled(value, Type::BodyMedium)
         .width(Fill)
         .align_x(dir::text_start());
@@ -327,8 +327,8 @@ pub struct Alarm {
     pub text: String,
 }
 
-/// Every entity's alarms: a PTP offset past 50 µs, and egress past 75% of
-/// a link.
+/// Every entity's alarms: a PTP offset past 50 µs, egress past 75% of a
+/// link, and AVB Wireless's (see [`crate::wireless_view::alarms`]).
 pub fn alarms(triib: &Triib) -> Vec<Alarm> {
     let mut alarms = Vec::new();
     for (&entity, model) in &triib.models {
@@ -361,6 +361,7 @@ pub fn alarms(triib: &Triib) -> Vec<Alarm> {
             }
         }
     }
+    alarms.extend(crate::wireless_view::alarms(triib));
     alarms
 }
 

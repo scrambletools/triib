@@ -119,11 +119,13 @@ pub enum EntityField {
     AvbLite,
     /// What its talker streams take of its link.
     Egress,
+    /// Its wireless interface's role, and how its time holds.
+    Wireless,
 }
 
 impl EntityField {
     /// Every field, in the order the column menus offer them.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::Group,
         Self::Product,
         Self::Vendor,
@@ -144,6 +146,7 @@ impl EntityField {
         Self::ListenerStreams,
         Self::AvbLite,
         Self::Egress,
+        Self::Wireless,
     ];
 
     /// The columns shown until the user changes them.
@@ -182,6 +185,7 @@ impl EntityField {
             Self::ListenerStreams => crate::fl!("column-listener-streams"),
             Self::AvbLite => crate::fl!("column-avb-lite"),
             Self::Egress => crate::fl!("column-egress"),
+            Self::Wireless => crate::fl!("column-wireless"),
         }
     }
 }

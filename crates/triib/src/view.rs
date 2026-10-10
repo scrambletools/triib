@@ -980,6 +980,7 @@ fn entity_sections<'a>(
         }
     }
     items.extend(crate::lite_view::entity_section(model));
+    items.extend(crate::wireless_view::entity_section(triib, model));
     items
 }
 
@@ -1716,6 +1717,34 @@ pub(crate) mod tests {
             .collect()
     }
 
+    /// What the Wi-Fi ESP would report as an AVB Wireless station, its time
+    /// as `flags` say, unsolicited.
+    pub(crate) fn wireless_frames(flags: atdecc::wireless::WirelessFlags) -> Vec<Vec<u8>> {
+        use atdecc::aecp::{AecpHeader, AecpMessageType, VendorUniquePdu};
+        use atdecc::id::ClockIdentity;
+        use atdecc::wireless::{WIRELESS_PROTOCOL_ID, WirelessCommandType};
+
+        let status = crate::topology::test_station(ClockIdentity(0x30ed_a0ff_fe11_2233), flags);
+        let mut payload = (0x8000 | WirelessCommandType::GET_WIRELESS_STATUS.0)
+            .to_be_bytes()
+            .to_vec();
+        payload.extend_from_slice(&status.to_bytes());
+        let notification = VendorUniquePdu {
+            header: AecpHeader {
+                message_type: AecpMessageType::VENDOR_UNIQUE_RESPONSE,
+                status: 0,
+                target_entity_id: WIFI_ESP,
+                controller_entity_id: EntityId(0x9c6b_00ff_fe30_9a2b),
+                sequence_id: 0,
+            },
+            protocol_id: WIRELESS_PROTOCOL_ID,
+            payload: &payload,
+        };
+        let mut out = [0; 160];
+        let length = notification.encode(&mut out).unwrap();
+        vec![out[..length].to_vec()]
+    }
+
     /// A bench entity as it would read with its descriptors changed by
     /// `patch`: read again by a controller from those descriptors, its
     /// stream input port answering GET_AUDIO_MAP with `mappings` (stream
@@ -2033,6 +2062,12 @@ pub(crate) mod tests {
                 true,
                 Size::new(1280.0, 1400.0),
             ),
+            (
+                "inspector-wireless",
+                View::Entities,
+                true,
+                Size::new(1280.0, 1400.0),
+            ),
             ("log-desktop", View::Entities, true, desktop),
             ("log-matrix", View::Matrix, false, desktop),
             // A small window with the inspector and the log open.
@@ -2078,6 +2113,8 @@ pub(crate) mod tests {
             };
             let mut models = if suffix.contains("lite") {
                 bench_then(&lite_frames(-72_400, 800_000)).1
+            } else if suffix.contains("wireless") {
+                bench_then(&wireless_frames(atdecc::wireless::WirelessFlags::HOLDOVER)).1
             } else {
                 models.clone()
             };
@@ -2106,6 +2143,8 @@ pub(crate) mod tests {
                 .any(|kind| suffix.contains(kind))
             {
                 Some(WIRED_ESP)
+            } else if suffix.contains("wireless") {
+                Some(WIFI_ESP)
             } else {
                 entities.keys().next().copied()
             };
