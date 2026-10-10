@@ -58,6 +58,7 @@ toolbar-connections = کنکشنز
 toolbar-network = نیٹ ورک
 toolbar-entities = اینٹیٹیز
 toolbar-rediscover = ہر اینٹیٹی سے اپنا اعلان کرنے کو کہیں
+toolbar-rescan = تمام اینٹیٹیز صاف کر کے دوبارہ اسکین کریں
 toolbar-search = اینٹیٹیز اور اسٹریمز تلاش کریں
 toolbar-presets = پری سیٹس
 toolbar-log = لاگ

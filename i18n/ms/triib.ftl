@@ -58,6 +58,7 @@ toolbar-connections = Sambungan
 toolbar-network = Rangkaian
 toolbar-entities = Entiti
 toolbar-rediscover = Minta setiap entiti mengumumkan dirinya
+toolbar-rescan = Kosongkan dan imbas semula semua entiti
 toolbar-search = Cari entiti dan strim
 toolbar-presets = Praset
 toolbar-log = Log

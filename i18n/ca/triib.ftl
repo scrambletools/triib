@@ -61,6 +61,7 @@ toolbar-connections = Connexions
 toolbar-network = Xarxa
 toolbar-entities = Entitats
 toolbar-rediscover = Demana a cada entitat que s’anunciï
+toolbar-rescan = Esborra i torna a escanejar totes les entitats
 toolbar-search = Cerca entitats i fluxos
 toolbar-presets = Presets
 toolbar-log = Registre

@@ -60,6 +60,7 @@ toolbar-connections = Bağlantılar
 toolbar-network = Ağ
 toolbar-entities = Varlıklar
 toolbar-rediscover = Her varlıktan kendini duyurmasını iste
+toolbar-rescan = Tüm varlıkları temizle ve yeniden tara
 toolbar-search = Varlıklarda ve akışlarda ara
 toolbar-presets = Ön ayarlar
 toolbar-log = Günlük

@@ -61,6 +61,7 @@ toolbar-connections = 接続
 toolbar-network = ネットワーク
 toolbar-entities = エンティティ
 toolbar-rediscover = すべてのエンティティにアドバタイズを要求
+toolbar-rescan = すべてのエンティティをクリアして再スキャン
 toolbar-search = エンティティとストリームを検索
 toolbar-presets = プリセット
 toolbar-log = ログ

@@ -61,6 +61,7 @@ toolbar-connections = Kết nối
 toolbar-network = Mạng
 toolbar-entities = Thực thể
 toolbar-rediscover = Yêu cầu mọi thực thể quảng bá lại
+toolbar-rescan = Xóa và quét lại mọi thực thể
 toolbar-search = Tìm thực thể và luồng
 toolbar-presets = Preset
 toolbar-log = Nhật ký

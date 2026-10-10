@@ -58,6 +58,7 @@ toolbar-connections = اتصال‌ها
 toolbar-network = شبکه
 toolbar-entities = موجودیت‌ها
 toolbar-rediscover = درخواست از همه موجودیت‌ها برای اعلام خود
+toolbar-rescan = پاک کردن و اسکن دوباره همه موجودیت‌ها
 toolbar-search = جستجوی موجودیت‌ها و جریان‌ها
 toolbar-presets = پیش‌تنظیم‌ها
 toolbar-log = لاگ

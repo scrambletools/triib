@@ -61,6 +61,7 @@ toolbar-connections = 연결
 toolbar-network = 네트워크
 toolbar-entities = 엔티티
 toolbar-rediscover = 모든 엔티티에 광고 요청
+toolbar-rescan = 모든 엔티티를 지우고 다시 스캔
 toolbar-search = 엔티티 및 스트림 검색
 toolbar-presets = 프리셋
 toolbar-log = 로그

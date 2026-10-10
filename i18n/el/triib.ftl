@@ -60,6 +60,7 @@ toolbar-connections = Συνδέσεις
 toolbar-network = Δίκτυο
 toolbar-entities = Οντότητες
 toolbar-rediscover = Ζητήστε από κάθε οντότητα να ανακοινώσει την παρουσία της
+toolbar-rescan = Εκκαθαρίστε και σαρώστε ξανά όλες τις οντότητες
 toolbar-search = Αναζήτηση οντοτήτων και ροών
 toolbar-presets = Προρυθμίσεις
 toolbar-log = Αρχείο καταγραφής

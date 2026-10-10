@@ -58,6 +58,7 @@ toolbar-connections = חיבורים
 toolbar-network = רשת
 toolbar-entities = ישויות
 toolbar-rediscover = בקשה מכל ישות להכריז על עצמה
+toolbar-rescan = ניקוי וסריקה מחדש של כל הישויות
 toolbar-search = חיפוש ישויות וזרמים
 toolbar-presets = פריסטים
 toolbar-log = יומן

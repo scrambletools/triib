@@ -58,6 +58,7 @@ toolbar-connections = Koneksi
 toolbar-network = Jaringan
 toolbar-entities = Entitas
 toolbar-rediscover = Minta setiap entitas mengumumkan diri
+toolbar-rescan = Bersihkan dan pindai ulang semua entitas
 toolbar-search = Cari entitas dan stream
 toolbar-presets = Preset
 toolbar-log = Log

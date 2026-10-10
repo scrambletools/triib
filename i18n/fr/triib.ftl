@@ -61,6 +61,7 @@ toolbar-connections = Connexions
 toolbar-network = Réseau
 toolbar-entities = Entités
 toolbar-rediscover = Demander à chaque entité de s’annoncer
+toolbar-rescan = Effacer et réanalyser toutes les entités
 toolbar-search = Rechercher des entités et des flux
 toolbar-presets = Presets
 toolbar-log = Journal

@@ -61,6 +61,7 @@ toolbar-connections = 连接
 toolbar-network = 网络
 toolbar-entities = 实体
 toolbar-rediscover = 请求所有实体重新通告
+toolbar-rescan = 清除并重新扫描所有实体
 toolbar-search = 搜索实体和流
 toolbar-presets = 预设
 toolbar-log = 日志

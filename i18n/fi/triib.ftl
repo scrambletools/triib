@@ -60,6 +60,7 @@ toolbar-connections = Yhteydet
 toolbar-network = Verkko
 toolbar-entities = Entiteetit
 toolbar-rediscover = Pyydä kaikkia entiteettejä mainostamaan itseään
+toolbar-rescan = Tyhjennä ja skannaa kaikki entiteetit uudelleen
 toolbar-search = Hae entiteettejä ja striimejä
 toolbar-presets = Esiasetukset
 toolbar-log = Loki

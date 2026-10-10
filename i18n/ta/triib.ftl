@@ -58,6 +58,7 @@ toolbar-connections = இணைப்புகள்
 toolbar-network = நெட்வொர்க்
 toolbar-entities = Entities
 toolbar-rediscover = ஒவ்வொரு entity-ஐயும் தன்னை advertise செய்யக் கேள்
+toolbar-rescan = எல்லா entity-களையும் அழித்து மீண்டும் ஸ்கேன் செய்
 toolbar-search = Entities மற்றும் streams-ஐத் தேடு
 toolbar-presets = Presets
 toolbar-log = பதிவு

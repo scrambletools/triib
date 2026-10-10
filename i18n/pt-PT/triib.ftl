@@ -61,6 +61,7 @@ toolbar-connections = Ligações
 toolbar-network = Rede
 toolbar-entities = Entidades
 toolbar-rediscover = Pedir a todas as entidades que se anunciem
+toolbar-rescan = Limpar e voltar a analisar todas as entidades
 toolbar-search = Procurar entidades e fluxos
 toolbar-presets = Presets
 toolbar-log = Registo

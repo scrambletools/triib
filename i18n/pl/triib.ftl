@@ -58,6 +58,7 @@ toolbar-connections = Połączenia
 toolbar-network = Sieć
 toolbar-entities = Encje
 toolbar-rediscover = Poproś wszystkie encje o ogłoszenie się
+toolbar-rescan = Wyczyść i ponownie przeskanuj wszystkie encje
 toolbar-search = Szukaj encji i strumieni
 toolbar-presets = Presety
 toolbar-log = Dziennik

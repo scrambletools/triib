@@ -60,6 +60,7 @@ toolbar-connections = Verbindungen
 toolbar-network = Netzwerk
 toolbar-entities = Entitäten
 toolbar-rediscover = Alle Entitäten auffordern, sich anzukündigen
+toolbar-rescan = Alle Entitäten verwerfen und neu einlesen
 toolbar-search = Entitäten und Streams suchen
 toolbar-presets = Presets
 toolbar-log = Log

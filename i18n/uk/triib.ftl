@@ -58,6 +58,7 @@ toolbar-connections = Підключення
 toolbar-network = Мережа
 toolbar-entities = Сутності
 toolbar-rediscover = Попросити всі сутності оголосити про себе
+toolbar-rescan = Очистити й повторно просканувати всі сутності
 toolbar-search = Пошук сутностей і потоків
 toolbar-presets = Пресети
 toolbar-log = Журнал

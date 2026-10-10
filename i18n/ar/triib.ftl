@@ -58,6 +58,7 @@ toolbar-connections = الاتصالات
 toolbar-network = الشبكة
 toolbar-entities = الكيانات
 toolbar-rediscover = اطلب من كل كيان أن يعلن عن نفسه
+toolbar-rescan = امسح كل الكيانات وأعد فحصها
 toolbar-search = البحث في الكيانات والتدفقات
 toolbar-presets = الإعدادات المسبقة
 toolbar-log = السجل

@@ -60,6 +60,7 @@ toolbar-connections = Kapcsolatok
 toolbar-network = Hálózat
 toolbar-entities = Entitások
 toolbar-rediscover = Minden entitás felkérése, hogy hirdesse meg magát
+toolbar-rescan = Minden entitás törlése és újraolvasása
 toolbar-search = Keresés az entitások és streamek között
 toolbar-presets = Presetek
 toolbar-log = Napló

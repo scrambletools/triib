@@ -58,6 +58,7 @@ toolbar-connections = Připojení
 toolbar-network = Síť
 toolbar-entities = Entity
 toolbar-rediscover = Požádat všechny entity, aby se ohlásily
+toolbar-rescan = Vymazat a znovu načíst všechny entity
 toolbar-search = Hledat entity a streamy
 toolbar-presets = Presety
 toolbar-log = Protokol

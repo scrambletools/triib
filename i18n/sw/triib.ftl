@@ -58,6 +58,7 @@ toolbar-connections = Miunganisho
 toolbar-network = Mtandao
 toolbar-entities = Huluki
 toolbar-rediscover = Omba kila huluki ijitangaze
+toolbar-rescan = Futa na uchanganue upya huluki zote
 toolbar-search = Tafuta huluki na mitiririko
 toolbar-presets = Preset
 toolbar-log = Kumbukumbu

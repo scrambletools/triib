@@ -61,6 +61,7 @@ toolbar-connections = Connessioni
 toolbar-network = Rete
 toolbar-entities = Entità
 toolbar-rediscover = Chiedi a ogni entità di annunciarsi
+toolbar-rescan = Cancella e riscansiona tutte le entità
 toolbar-search = Cerca entità e flussi
 toolbar-presets = Preset
 toolbar-log = Log

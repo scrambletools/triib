@@ -61,6 +61,7 @@ toolbar-connections = 連線
 toolbar-network = 網路
 toolbar-entities = 實體
 toolbar-rediscover = 要求所有實體重新通告
+toolbar-rescan = 清除並重新掃描所有實體
 toolbar-search = 搜尋實體與串流
 toolbar-presets = 預設集
 toolbar-log = 記錄

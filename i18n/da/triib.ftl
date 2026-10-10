@@ -60,6 +60,7 @@ toolbar-connections = Forbindelser
 toolbar-network = Netværk
 toolbar-entities = Entiteter
 toolbar-rediscover = Bed alle entiteter om at annoncere sig
+toolbar-rescan = Ryd og scan alle entiteter igen
 toolbar-search = Søg i entiteter og streams
 toolbar-presets = Presets
 toolbar-log = Log

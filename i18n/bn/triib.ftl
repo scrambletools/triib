@@ -58,6 +58,7 @@ toolbar-connections = সংযোগ
 toolbar-network = নেটওয়ার্ক
 toolbar-entities = Entities
 toolbar-rediscover = প্রতিটি entity-কে নিজেকে advertise করতে বলুন
+toolbar-rescan = সব entities সাফ করে আবার স্ক্যান করুন
 toolbar-search = Entities ও streams খুঁজুন
 toolbar-presets = Presets
 toolbar-log = লগ

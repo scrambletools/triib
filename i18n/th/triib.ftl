@@ -58,6 +58,7 @@ toolbar-connections = การเชื่อมต่อ
 toolbar-network = เครือข่าย
 toolbar-entities = เอนทิตี
 toolbar-rediscover = ขอให้ทุกเอนทิตีประกาศตัว
+toolbar-rescan = ล้างและสแกนเอนทิตีทั้งหมดใหม่
 toolbar-search = ค้นหาเอนทิตีและสตรีม
 toolbar-presets = พรีเซ็ต
 toolbar-log = บันทึกเหตุการณ์
