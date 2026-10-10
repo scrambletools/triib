@@ -487,9 +487,9 @@ netmap-problems = Problems
 netmap-help-back = Click the background to go back to the overview.
 netmap-help-stream = Click a stream to inspect it, or the background to go back to the overview.
 netmap-help-ptp = In AVB Lite the clock flows end to end from the grandmaster to every device, through switches that take no part, so none are shown. A device is in sync while it follows the grandmaster within 50 µs. Click a device or its wire to inspect its clock; click the background to clear.
-netmap-help-clock = The clock flows from the grandmaster through each bridge to every node on the tree. A broken grey line is a link gPTP does not run on. Click a device or its wire to inspect its clock path; click the background to clear.
-netmap-help-media-clock = Media clock (CRF) streams only, drawn the same way as audio: one wire per stream, coloured by talker. Click a wire to inspect its stream, or a device to see its streams; click the background to clear.
-netmap-help-audio = Each stream has its own wire, entering and leaving every bridge it crosses. Colour is by talker: each talker has a hue, and its streams are shades of it. Moving dots mean audio is flowing; a still red line is a failed reservation and a still grey line is advertised with no listener ready; both stop where the reservation stops. Devices in the middle column connect straight to the grandmaster's bridge. Click a wire to inspect its stream, or a device to see its streams; click the background to clear.
+netmap-help-clock = The clock flows from the grandmaster through each bridge to every node on the tree. A broken gray line is a link gPTP does not run on. Click a device or its wire to inspect its clock path; click the background to clear.
+netmap-help-media-clock = Media clock (CRF) streams only, drawn the same way as audio: one wire per stream, colored by talker. Click a wire to inspect its stream, or a device to see its streams; click the background to clear.
+netmap-help-audio = Each stream has its own wire, entering and leaving every bridge it crosses. Color is by talker: each talker has a hue, and its streams are shades of it. Moving dots mean audio is flowing; a still red line is a failed reservation and a still gray line is advertised with no listener ready; both stop where the reservation stops. Devices in the middle column connect straight to the grandmaster's bridge. Click a wire to inspect its stream, or a device to see its streams; click the background to clear.
 
 ## Connections
 # The matrix of talker stream outputs against listener stream inputs, where
@@ -707,7 +707,7 @@ lite-alarm-egress = Egress at { $share } of the link, past the { $limit } stream
 
 ## Log
 # The ATDECC frames triib sends and hears. Each frame's summary stays in the
-# standards' words, as packet analysers show them; ADP, AECP and ACMP are
+# standards' words, as packet analyzers show them; ADP, AECP and ACMP are
 # protocol names.
 
 log-all = All

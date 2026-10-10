@@ -37,7 +37,7 @@ use crate::topology::{NodeId, Topology};
 /// A device card at its smallest, in a bridge's column.
 const DEVICE: Size = Size::new(200.0, 46.0);
 /// The narrowest the grandmaster's own column is.
-const CENTRE_WIDTH: f32 = 150.0;
+const CENTER_WIDTH: f32 = 150.0;
 const BRIDGE_HEIGHT: f32 = 64.0;
 const ROOT: Size = Size::new(200.0, 56.0);
 /// The widest a card grows for its text before cutting it short.
@@ -61,7 +61,7 @@ const ELBOW: f32 = 2.0 * DEVICE_RADIUS;
 /// Between wires side by side in a column's gutter, in the grandmaster's
 /// column, rising from a bridge, and entering a bridge's side.
 const LANE: f32 = 7.0;
-const CENTRE_LANE: f32 = 5.0;
+const CENTER_LANE: f32 = 5.0;
 const TRUNK: f32 = 8.0;
 const ENTRY: f32 = 4.0;
 /// In the compact layout: how far each level steps in at least, the gap
@@ -105,7 +105,7 @@ pub struct NetMap {
 
 /// The map for an `area` of the given size: the trees scaled down to fit
 /// its width, or, when that would make them too small, stacked in the
-/// compact layout; centred when there is room to spare.
+/// compact layout; centered when there is room to spare.
 pub fn map(map: Map, area: Size) -> NetMap {
     let width = if area.width.is_finite() && area.width > 0.0 {
         area.width
@@ -146,7 +146,7 @@ pub fn map(map: Map, area: Size) -> NetMap {
     }
 }
 
-/// The colour of a wire, a swatch or a border.
+/// The color of a wire, a swatch or a border.
 pub fn paint_color(scheme: &Scheme, paint: Paint) -> Color {
     match paint {
         Paint::Clock if scheme.dark => Color::from_rgb8(0xf2, 0xc4, 0x6d),
@@ -169,7 +169,7 @@ pub fn paint_color(scheme: &Scheme, paint: Paint) -> Color {
     }
 }
 
-/// The colour of text in a paint: secondary text muted, borders' paint
+/// The color of text in a paint: secondary text muted, borders' paint
 /// readable.
 pub fn text_color(scheme: &Scheme, paint: Paint) -> Color {
     match paint {
@@ -178,7 +178,7 @@ pub fn text_color(scheme: &Scheme, paint: Paint) -> Color {
     }
 }
 
-/// A colour from hue in degrees, saturation and lightness.
+/// A color from hue in degrees, saturation and lightness.
 fn hsl(hue: f32, saturation: f32, lightness: f32) -> Color {
     let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
     let part = hue / 60.0;
@@ -301,7 +301,7 @@ enum Role {
 /// columns from the middle out.
 struct Grove {
     root: NodeId,
-    centre: Vec<NodeId>,
+    center: Vec<NodeId>,
     sides: [Vec<NodeId>; 2],
 }
 
@@ -361,7 +361,7 @@ fn fan(map: &Map, width: f32) -> Placement {
         role[root] = Role::Root;
         let mut grove = Grove {
             root,
-            centre: Vec::new(),
+            center: Vec::new(),
             sides: [Vec::new(), Vec::new()],
         };
         let mut heads = 0;
@@ -372,7 +372,7 @@ fn fan(map: &Map, width: f32) -> Placement {
                 visit(topology, child, side, &mut grove.sides[side], &mut role);
             } else {
                 role[child] = Role::Device;
-                grove.centre.push(child);
+                grove.center.push(child);
             }
         }
         groves.push(grove);
@@ -391,7 +391,7 @@ fn fan(map: &Map, width: f32) -> Placement {
                 rank[head] = place;
             }
         }
-        for (place, &device) in grove.centre.iter().enumerate() {
+        for (place, &device) in grove.center.iter().enumerate() {
             stack[device] = place;
         }
     }
@@ -481,21 +481,21 @@ fn fan(map: &Map, width: f32) -> Placement {
     let mut left = MARGIN;
     for grove in &groves {
         let root = grove.root;
-        let centre_width = grove
-            .centre
+        let center_width = grove
+            .center
             .iter()
             .map(|&device| natural[device])
-            .fold(CENTRE_WIDTH, f32::max)
+            .fold(CENTER_WIDTH, f32::max)
             .min(WIDEST);
-        let centre_lanes = count_of(&lanes, root);
-        let lane_low = -ELBOW - centre_lanes.saturating_sub(1) as f32 * CENTRE_LANE;
+        let center_lanes = count_of(&lanes, root);
+        let lane_low = -ELBOW - center_lanes.saturating_sub(1) as f32 * CENTER_LANE;
         let root_width = natural[root].clamp(ROOT.width, WIDEST);
-        let (root_left, root_right) = if grove.centre.is_empty() {
+        let (root_left, root_right) = if grove.center.is_empty() {
             (-root_width / 2.0, root_width / 2.0)
         } else {
             (
-                (centre_width - root_width).min(-50.0).min(lane_low - 12.0),
-                centre_width,
+                (center_width - root_width).min(-50.0).min(lane_low - 12.0),
+                center_width,
             )
         };
         // Each column's width and place, from the middle out.
@@ -509,7 +509,7 @@ fn fan(map: &Map, width: f32) -> Placement {
             let rises = count_of(&arches, head) + count_of(&rising, head);
             text.max(32.0 + rises.saturating_sub(1) as f32 * TRUNK)
         };
-        let mut low = root_left.min(if centre_lanes > 0 {
+        let mut low = root_left.min(if center_lanes > 0 {
             lane_low - ELBOW
         } else {
             root_left
@@ -569,10 +569,10 @@ fn fan(map: &Map, width: f32) -> Placement {
             }
         }
         let mut y = first;
-        for &device in &grove.centre {
+        for &device in &grove.center {
             cards[device] = Some(Rectangle::new(
                 Point::new(shift, y),
-                Size::new(centre_width, heights[device]),
+                Size::new(center_width, heights[device]),
             ));
             y += heights[device] + STACK_GAP;
         }
@@ -677,7 +677,7 @@ fn fan(map: &Map, width: f32) -> Placement {
                 Role::Head(side) => {
                     let sign = if side == 0 { -1.0 } else { 1.0 };
                     let x = outer_edge(above, side) + sign * (ELBOW + lane as f32 * LANE);
-                    // Centred down the head's side, however many leave it;
+                    // Centered down the head's side, however many leave it;
                     // the outer lanes leave higher, so none crosses another.
                     let middle = (group.len() - 1) as f32 / 2.0;
                     let top = above.center_y() + (middle - lane as f32) * ENTRY;
@@ -691,7 +691,7 @@ fn fan(map: &Map, width: f32) -> Placement {
                 _ => {
                     let x = middle.get(&upper).copied().unwrap_or(above.x)
                         - ELBOW
-                        - lane as f32 * CENTRE_LANE;
+                        - lane as f32 * CENTER_LANE;
                     vec![
                         Point::new(x, above.y + above.height),
                         Point::new(x, y),
@@ -716,7 +716,7 @@ fn fan(map: &Map, width: f32) -> Placement {
                 side,
                 20.0 + (count_of(&arches, leg.node) + rise_place(leg)) as f32 * TRUNK,
             );
-            // Centred down the grandmaster's side, the farther out higher.
+            // Centered down the grandmaster's side, the farther out higher.
             let middle = (group.len() - 1) as f32 / 2.0;
             let y = above.center_y() + (place as f32 - middle) * TRUNK;
             let into = if side == 0 {
@@ -835,7 +835,7 @@ fn compact(map: &Map) -> Placement {
         }
     }
     let indent = |node: NodeId| {
-        INDENT.max(ELBOW + 12.0 + CENTRE_LANE * lanes.get(&node).map_or(0, Vec::len) as f32)
+        INDENT.max(ELBOW + 12.0 + CENTER_LANE * lanes.get(&node).map_or(0, Vec::len) as f32)
     };
     let sizes: Vec<Size> = (0..count)
         .map(|node| {
@@ -923,7 +923,7 @@ fn compact(map: &Map) -> Placement {
                 own.iter().position(|other| other == leg).unwrap_or(0),
                 own.len(),
             );
-            let x = above.x + indent(upper) - ELBOW - lane as f32 * CENTRE_LANE;
+            let x = above.x + indent(upper) - ELBOW - lane as f32 * CENTER_LANE;
             let wire = Wire::new(vec![
                 Point::new(x, above.y + above.height),
                 Point::new(x, y),
@@ -974,12 +974,12 @@ enum Piece {
 impl Wire {
     fn new(corners: Vec<Point>) -> Self {
         let mut samples = Vec::new();
-        let mut travelled = 0.0;
+        let mut traveled = 0.0;
         let mut add = |point: Point, samples: &mut Vec<(Point, f32)>| {
             if let Some(&(last, _)) = samples.last() {
-                travelled += last.distance(point);
+                traveled += last.distance(point);
             }
-            samples.push((point, travelled));
+            samples.push((point, traveled));
         };
         for piece in pieces(&corners) {
             match piece {
@@ -1025,7 +1025,7 @@ impl Wire {
     fn point_at(&self, distance: f32) -> Point {
         let index = self
             .samples
-            .partition_point(|&(_, travelled)| travelled < distance)
+            .partition_point(|&(_, traveled)| traveled < distance)
             .clamp(1, self.samples.len().max(2) - 1);
         let ((from, at_from), (to, at_to)) = (self.samples[index - 1], self.samples[index]);
         let t = if at_to > at_from {
@@ -1555,7 +1555,7 @@ impl Dashed for Stroke<'static> {
     }
 }
 
-/// The colours the map draws with, from the theme's scheme.
+/// The colors the map draws with, from the theme's scheme.
 #[derive(Debug, Clone, Copy)]
 struct Colors {
     scheme: Scheme,

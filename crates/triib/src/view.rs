@@ -489,7 +489,7 @@ fn inspector(triib: &Triib, width: Length) -> Element<'_, Message> {
 pub const NAME_FIELD: &str = "inspector-name";
 
 /// A label and an element beside it, in the inspector.
-fn labelled<'a>(
+fn labeled<'a>(
     label: impl Into<String>,
     value: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
@@ -542,7 +542,7 @@ fn name_property<'a>(triib: &'a Triib, label: String, target: NameTarget) -> Ele
         .spacing(4)
         .into();
     }
-    labelled(label, name_line(triib, target, fl!("common-not-set")))
+    labeled(label, name_line(triib, target, fl!("common-not-set")))
 }
 
 /// A name with a button to edit it, `unset` standing in for none, or
@@ -593,7 +593,7 @@ fn name_field<'a>(text: &str) -> Element<'a, Message> {
             .style(style::outlined_field)
             .width(Fill),
         icon(Icon::Check, fl!("common-save"), Message::EditSubmitted),
-        icon(Icon::Close, fl!("common-cancel"), Message::EditCancelled),
+        icon(Icon::Close, fl!("common-cancel"), Message::EditCanceled),
     ]
     .spacing(4)
     .align_y(Center)

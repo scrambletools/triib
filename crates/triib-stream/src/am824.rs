@@ -1,5 +1,5 @@
 //! IEC 61883-6 AM824 PDUs (IEEE 1722-2016, 6.4): the 61883 header, the
-//! CIP header and data blocks of one labelled quadlet per channel, each
+//! CIP header and data blocks of one labeled quadlet per channel, each
 //! a 24-bit sample after the multi-bit linear audio label.
 
 use atdecc::stream_format::{FormatKind, Packing, StreamFormat};
@@ -164,7 +164,7 @@ impl Header {
     }
 }
 
-/// Writes `samples`, interleaved and from -1 to 1, as labelled 24-bit
+/// Writes `samples`, interleaved and from -1 to 1, as labeled 24-bit
 /// quadlets into `out`.
 pub fn write_samples(samples: &[f32], out: &mut [u8]) {
     for (sample, quadlet) in samples.iter().zip(out.as_chunks_mut::<4>().0) {

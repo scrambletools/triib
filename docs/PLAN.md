@@ -247,7 +247,7 @@ triib is MIT OR Apache-2.0. Things to keep that true:
   OEM license: users install it themselves, as with Hive and Wireshark.
 - **Avoid**: GPL or AGPL crates, and statically linked LGPL.
 - **Reference code**: la_avdecc (LGPL-3.0) and Hive (GPL) are for
-  behaviour, never copied; the IEEE and Avnu specifications are the source
+  behavior, never copied; the IEEE and Avnu specifications are the source
   for implementation. Do not paste standard text into code or docs beyond
   field names and short citations.
 - **Fonts**: Roboto Flex (OFL-1.1) and Material Symbols (Apache-2.0) ship

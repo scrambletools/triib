@@ -1,6 +1,6 @@
 //! The network view: the gPTP tree with each bridge's devices in a column
 //! under it, showing the clock, the audio streams or the media clock
-//! streams, each stream on a wire of its own coloured by its talker, and
+//! streams, each stream on a wire of its own colored by its talker, and
 //! beside it the details of what is brought forward.
 
 mod map;
@@ -56,8 +56,8 @@ pub enum NodeKey {
     Host,
 }
 
-/// A colour on the map or in the details, the theme deciding the exact
-/// colour.
+/// A color on the map or in the details, the theme deciding the exact
+/// color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Paint {
     /// The gPTP clock.
@@ -70,13 +70,13 @@ pub enum Paint {
     Idle,
     /// A link gPTP does not run on.
     Unsynced,
-    /// The theme's text colour.
+    /// The theme's text color.
     Text,
-    /// The theme's softer text colour.
+    /// The theme's softer text color.
     Soft,
-    /// The theme's muted colour, for secondary text.
+    /// The theme's muted color, for secondary text.
     Muted,
-    /// The theme's outline colour, for borders.
+    /// The theme's outline color, for borders.
     Plain,
 }
 
@@ -629,7 +629,7 @@ fn hue(place: usize) -> u16 {
         .unwrap_or_else(|| ((172.0 + place as f32 * 137.5) % 360.0) as u16)
 }
 
-/// Each stream's colour, from its talker and status: every talker has a
+/// Each stream's color, from its talker and status: every talker has a
 /// hue and its streams are shades of it; streams that are not flowing lose
 /// their hue.
 fn paints(streams: &[(EntityId, Status)]) -> Vec<Paint> {

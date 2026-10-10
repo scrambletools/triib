@@ -34,7 +34,7 @@ a space, and sentences use full-width punctuation (，。：；“”（）).
 | channel mapping | 通道映射 | Map / unmap: 映射 / 取消映射; not mapped 未映射. |
 | control | 控制项 | Not 控件 (a UI widget). An unnamed one is 控制项 { $index }. |
 | preset | 预设 | Recall is 调用, as on mixing desks (调用场景). |
-| identify | 识别 | "Could not identify" is phrased 无法让 … 执行识别, so it does not read as "could not recognise". |
+| identify | 识别 | "Could not identify" is phrased 无法让 … 执行识别, so it does not read as "could not recognize". |
 | counter | 计数器 | |
 | locked, lost lock | 锁定, 失锁 | [0] variants: 未锁定, 未失锁. |
 | interrupted | 中断 | |

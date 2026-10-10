@@ -39,7 +39,7 @@ the Fluent files, so they stay English in every language:
 - capability flags (Audio source, Media clock sink)
 - AEM and ACMP command and status names (Read descriptor, Not supported)
 
-The log's one-line frame summaries also stay English, as packet analysers
+The log's one-line frame summaries also stay English, as packet analyzers
 show them. `triib-cli` is English only.
 
 ### 2. Roles the standards name: talker and listener

@@ -15,7 +15,7 @@ percent "80٪", the Persian marks, beside the ASCII digits triib shows.
 | talker | Talker | Latin script, capitalized: خروجی‌های Talker. |
 | listener | Listener | Latin script, capitalized: ورودی‌های Listener. |
 | grandmaster | Grandmaster | Latin script. Never a word built on ارباب or اصلی. |
-| entity | موجودیت | The term standards and data modelling use. Device is دستگاه, kept for the network map. |
+| entity | موجودیت | The term standards and data modeling use. Device is دستگاه, kept for the network map. |
 | entity model | مدل موجودیت | |
 | controller | کنترلر | Kept apart from control (کنترل). |
 | stream | جریان | Flowing is جاری. |

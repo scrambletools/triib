@@ -110,7 +110,7 @@ h3 { font-size: 20px; margin: 0 0 6px; font-weight: 650; }
 .hero-icon { display: block; margin: 0 auto; }
 .lede { font-size: 20px; max-width: 680px; margin: 0 auto 24px; color: var(--on-surface-variant); }
 /* The rest of the hero's lede wraps at twice the width of its first
-   line, centred under it; narrower windows wrap it at their own width. */
+   line, centered under it; narrower windows wrap it at their own width. */
 .hero .lede { width: fit-content; max-width: none; }
 .lede-first { display: block; white-space: nowrap; }
 .lede-rest { display: block; width: 0; min-width: 200%; margin-left: -50%; }

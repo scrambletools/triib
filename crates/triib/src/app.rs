@@ -199,7 +199,7 @@ pub enum Message {
     EditName(NameTarget),
     EditChanged(String),
     EditSubmitted,
-    EditCancelled,
+    EditCanceled,
     /// Open or close a descriptor type in the inspector's tree.
     TreeToggled(EntityId, DescriptorType),
     SettingsOpened,
@@ -665,7 +665,7 @@ impl Triib {
                     return self.update(Message::Act(Action::Rename { target, name }));
                 }
             }
-            Message::EditCancelled => self.editing = None,
+            Message::EditCanceled => self.editing = None,
             Message::PresetsOpened => {
                 self.presets_open = true;
                 self.preset_report = None;
