@@ -2238,6 +2238,8 @@ struct Leaf {
     /// Peer delay to the neighbor, in nanoseconds.
     delay: Option<u32>,
     link_downs: Option<u32>,
+    /// A Wi-Fi station's hop to its access point: its time and signal.
+    wifi: Option<String>,
 }
 
 /// Reads every entity and prints the gPTP tree their paths make: the
@@ -2265,6 +2267,13 @@ fn network(interface: &str) -> std::io::Result<()> {
             }
         }
     }
+    // The bridges whose port a Wi-Fi station follows.
+    let access_points: BTreeSet<ClockIdentity> = controller
+        .entities()
+        .filter_map(|found| controller.model(found.entity_id()))
+        .flat_map(|model| model.wireless_interfaces())
+        .map(|(_, wireless)| wireless.status.ap_clock)
+        .collect();
     let mut roots: BTreeSet<ClockIdentity> = BTreeSet::new();
     let mut children: BTreeMap<ClockIdentity, BTreeSet<ClockIdentity>> = BTreeMap::new();
     let mut leaves: BTreeMap<Option<ClockIdentity>, Vec<Leaf>> = BTreeMap::new();
@@ -2303,12 +2312,34 @@ fn network(interface: &str) -> std::io::Result<()> {
             let counters = model
                 .counters(DescriptorType::AVB_INTERFACE, index)
                 .and_then(|counters| counters.avb_interface());
+            let station = model
+                .wireless(index)
+                .map(|wireless| wireless.status)
+                .filter(|status| !status.access_point());
+            let wifi = station.map(|status| {
+                let time = if status.flags.contains(WirelessFlags::LOCKED) {
+                    "time locked"
+                } else if status.flags.contains(WirelessFlags::HOLDOVER) {
+                    "holding over"
+                } else {
+                    "time not locked"
+                };
+                match status.signal() {
+                    Some(rssi) => format!("Wi-Fi, {time}, {rssi} dBm"),
+                    None => format!("Wi-Fi, {time}"),
+                }
+            });
             leaves.entry(path.last().copied()).or_default().push(Leaf {
                 entity_id,
                 name: name.clone(),
                 interface: index,
-                delay: model.avb_info(index).map(|info| info.propagation_delay),
+                // A Wi-Fi hop's delay of 0 is one not measured.
+                delay: model
+                    .avb_info(index)
+                    .map(|info| info.propagation_delay)
+                    .filter(|&delay| station.is_none() || delay > 0),
                 link_downs: counters.and_then(|counters| counters.link_down),
+                wifi,
             });
         }
     }
@@ -2318,6 +2349,7 @@ fn network(interface: &str) -> std::io::Result<()> {
     );
     let tree = Tree {
         controller,
+        access_points: &access_points,
         owners: &owners,
         children: &children,
         leaves: &leaves,
@@ -2373,6 +2405,7 @@ fn synced(synced: bool) -> &'static str {
 /// The gPTP tree the entities' paths make, to print.
 struct Tree<'a> {
     controller: &'a Controller,
+    access_points: &'a BTreeSet<ClockIdentity>,
     owners: &'a BTreeMap<ClockIdentity, (EntityId, u16)>,
     children: &'a BTreeMap<ClockIdentity, BTreeSet<ClockIdentity>>,
     leaves: &'a BTreeMap<Option<ClockIdentity>, Vec<Leaf>>,
@@ -2391,6 +2424,7 @@ impl Tree<'_> {
                     .unwrap_or("unnamed");
                 format!("entity \"{name}\" {entity_id} interface {index}")
             }
+            None if self.access_points.contains(&node) => "bridge, Wi-Fi access point".to_owned(),
             None => "bridge".to_owned(),
         };
         let role = if depth == 0 { "grandmaster, " } else { "" };
@@ -2413,6 +2447,7 @@ impl Tree<'_> {
 
 fn print_leaf(leaf: &Leaf, depth: usize) {
     let mut details = vec![format!("interface {}", leaf.interface)];
+    details.extend(leaf.wifi.clone());
     if let Some(delay) = leaf.delay {
         details.push(format!("peer delay {delay} ns"));
     }
