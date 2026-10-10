@@ -6,7 +6,7 @@ Everything a release ships is built from this repository:
 |---|---|
 | `data/io.github.scrambletools.triib.desktop` | Desktop entry |
 | `data/io.github.scrambletools.triib.metainfo.xml` | AppStream metadata, with the release history |
-| `data/icons/hicolor/` | App icon, once one is chosen: every package picks it up when it is there |
+| `data/icons/hicolor/` | App icon, which every package picks up |
 | `packaging/licenses/` | The licenses of the fonts triib carries, from scramble-ui |
 | `scripts/dist-install.sh` | Installs a build of triib, triib-cli and triib-endpointd and the files above into a system layout; the Linux packages use it |
 | `packaging/nfpm.yaml`, `packaging/linux/postinstall.sh` | Debian and RPM packages, made with nfpm, which grant the programs `CAP_NET_RAW` as they install |
