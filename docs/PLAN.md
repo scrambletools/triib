@@ -767,10 +767,14 @@ triib is MIT OR Apache-2.0. Things to keep that true:
     restarts the interface through `triib-link-reset@`, at most every
     ten minutes (checked 2026-10-09 with the cable unplugged and back).
   - The fallback weighs nothing while the link is down, and starts
-    afresh as it comes up (profile 2.2). ptp4l stays on the AVB Lite
-    profile until the fallback has weighed for 10 s, so starting, or
-    the link coming up, on an AVB Lite network no longer moves it to
-    gPTP and back (checked on the bridge: gPTP 10 s after starting).
+    afresh as it comes up (profile 2.2). From the AVB Lite profile,
+    where nobody here asks for peer delay, the fallback listens: one
+    gPTP peer asking without the TLV, as a bridge does every second,
+    moves ptp4l to gPTP at once while it keeps listening, and a
+    beacon then brings it back without the 30 s wait; two such peers
+    are a flooding switch, and none for 10 s is condition 2's silence.
+    On the bridge, from the AVB Lite unit: gPTP after 0.5 s and
+    ptp4l in sync after 6.8 s.
 - To do:
   - Report the atlantic driver's time stamps to its maintainers: left
     on multicast PTP frames after a renegotiation, and 12 octets cut

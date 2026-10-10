@@ -173,7 +173,11 @@ pub enum Ptp4l {
 /// holds. Where ptp4l runs gPTP on the interface it asks the peer itself,
 /// and the answers to its requests, which this hears too, count as they
 /// would to this one's: whether ptp4l calls the peer asCapable does not,
-/// as it does not while it starts.
+/// as it does not while it starts. Where ptp4l runs the AVB Lite profile
+/// nobody here asks, so it listens: one gPTP peer asking without the TLV,
+/// as an AVB bridge does every second, may be a bridge; two are a switch
+/// flooding the bridge-group address, as condition 3 shows by its
+/// responders; and none for 10 s, condition 2's silence.
 pub struct Fallback {
     identity: u64,
     sequence: u16,
@@ -194,6 +198,9 @@ pub struct Fallback {
     link_down: bool,
     /// Since when it has weighed: its start, or the link coming up.
     armed_at: Duration,
+    /// The gPTP peers heard asking for peer delay without the Endpoint
+    /// Declaration TLV since then.
+    peers: Vec<[u8; 10]>,
     next: Duration,
     outgoing: VecDeque<Vec<u8>>,
 }
@@ -215,6 +222,7 @@ impl Fallback {
             reason: configured.then_some(FallbackReason::CONFIGURED),
             link_down: false,
             armed_at: now,
+            peers: Vec::new(),
             next: now + START_GRACE,
             outgoing: VecDeque::new(),
         }
@@ -252,9 +260,16 @@ impl Fallback {
                 self.ptp4l_since = Some(now);
             }
             self.armed_at = now;
+            self.peers.clear();
             self.next = now + START_GRACE;
         }
         self.link_down = !up;
+    }
+
+    /// How many gPTP peers it has heard asking for peer delay without the
+    /// Endpoint Declaration TLV since it started weighing.
+    pub fn gptp_peers(&self) -> usize {
+        self.peers.len()
     }
 
     /// Whether it has weighed long enough to have heard another
@@ -283,10 +298,22 @@ impl Fallback {
             return;
         }
         let kind = first & 0x0f;
-        if matches!(kind, PDELAY_REQ | PDELAY_RESP | PDELAY_RESP_FOLLOW_UP)
-            && has_endpoint_tlv(message, PDELAY_LEN)
-        {
+        let endpoint = has_endpoint_tlv(message, PDELAY_LEN);
+        if matches!(kind, PDELAY_REQ | PDELAY_RESP | PDELAY_RESP_FOLLOW_UP) && endpoint {
             self.fall_back(FallbackReason::ENDPOINT_TLV);
+        }
+        if kind == PDELAY_REQ && !endpoint {
+            let requester = u64::from_be_bytes(message[20..28].try_into().unwrap_or_default());
+            let mut peer = [0; 10];
+            peer.copy_from_slice(&message[20..30]);
+            if requester != self.identity && !self.peers.contains(&peer) {
+                self.peers.push(peer);
+                // An AVB bridge's port is the only peer that asks; two
+                // asking is a switch flooding the bridge-group address.
+                if self.peers.len() >= 2 {
+                    self.fall_back(FallbackReason::MULTIPLE_RESPONDERS);
+                }
+            }
         }
         if kind != PDELAY_RESP {
             return;
@@ -331,6 +358,11 @@ impl Fallback {
             if now.saturating_sub(last) >= PEERLESS {
                 self.fall_back(FallbackReason::PDELAY_UNANSWERED);
             }
+        }
+        // Where ptp4l runs the AVB Lite profile nobody here asks: 10 s
+        // with no gPTP peer asking either is condition 2's silence.
+        if self.ptp4l == Ptp4l::Lite && self.peers.is_empty() && self.settled(now) {
+            self.fall_back(FallbackReason::PDELAY_UNANSWERED);
         }
         if now < self.next {
             return;
@@ -648,6 +680,52 @@ mod tests {
         sync.extend([0xa5; 12]);
         assert!(stamped(&sync));
         assert!(!stamped(&[0x0b, 0x02]));
+    }
+
+    /// Where ptp4l runs the AVB Lite profile it listens: one gPTP peer
+    /// asking without the TLV keeps AVB open, its own requests and an
+    /// endpoint's do not count, two peers fall back, and so do 10 s
+    /// without any.
+    #[test]
+    fn under_the_lite_profile_it_listens_for_peers() {
+        const BRIDGE: u64 = 0x0001_f2ff_feff_3b14;
+        let plain = |identity: u64, sequence: u16| {
+            let mut message = pdelay_request(identity, sequence);
+            message.truncate(PDELAY_LEN);
+            message[2..4].copy_from_slice(&(PDELAY_LEN as u16).to_be_bytes());
+            message
+        };
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Lite);
+        for second in 0..20u16 {
+            let now = Duration::from_secs(u64::from(second));
+            fallback.handle_timeout(now);
+            assert_eq!(fallback.poll_transmit(), None);
+            fallback.handle_ptp(now, &plain(BRIDGE, second));
+            // ptp4l's own requests, as this hears them.
+            fallback.handle_ptp(now, &plain(IDENTITY, second));
+        }
+        assert_eq!(fallback.gptp_peers(), 1);
+        assert_eq!(fallback.reason(), None);
+        fallback.handle_ptp(Duration::from_secs(20), &plain(0x3333_33ff_fe33_3333, 1));
+        assert_eq!(fallback.reason(), Some(FallbackReason::MULTIPLE_RESPONDERS));
+
+        // An endpoint's beacon is no gPTP peer: it falls back for itself.
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Lite);
+        fallback.handle_ptp(Duration::ZERO, &pdelay_request(0x3333_33ff_fe33_3333, 1));
+        assert_eq!(fallback.gptp_peers(), 0);
+        assert_eq!(fallback.reason(), Some(FallbackReason::ENDPOINT_TLV));
+
+        // Nobody asking for 10 s.
+        let mut fallback = Fallback::new(IDENTITY, false, Duration::ZERO);
+        fallback.set_ptp4l(Duration::ZERO, Ptp4l::Lite);
+        for second in 0..10 {
+            fallback.handle_timeout(Duration::from_secs(second));
+        }
+        assert_eq!(fallback.reason(), None);
+        fallback.handle_timeout(Duration::from_secs(10));
+        assert_eq!(fallback.reason(), Some(FallbackReason::PDELAY_UNANSWERED));
     }
 
     /// It has weighed long enough 10 s after it starts or the link comes
