@@ -22,8 +22,8 @@ use atdecc::stream_format::{FormatKind, StreamFormat};
 use atdecc::{
     ADP_ACMP_MULTICAST, ClockIdentity, EntityId, EntityModelId, Instant, MacAddress, StreamId,
 };
-use avb_mrp::msrp::{self, Domain, ListenerState, TalkerDeclaration, TalkerFailure};
-use avb_mrp::{Participant, Registration, mvrp};
+use avb_mrp::Registration;
+use avb_mrp::msrp::{self, ListenerState, TalkerDeclaration, TalkerFailure};
 use avb_net::Socket;
 use avb_net::stream::FrameSender;
 use triib_stream::audio::{Sink, Source};
@@ -32,15 +32,18 @@ use triib_stream::{Listener, ListenerConfig, MediaClock, Talker, TalkerConfig};
 use crate::config::{Config, EndpointConfig, Kind, LiteChoice, binding_text};
 use crate::gptp;
 use crate::lite::{self, Declared, Fallback, Ptp4l};
+use crate::port::{Port, VLAN};
 use crate::profile::{self, Profile};
 use crate::status::{DaemonStatus, EndpointStatus, status_path};
 
 /// Entity model IDs under Scramble Tools' MA-S `8C-1F-64-36-C`.
 const TALKER_MODEL: EntityModelId = EntityModelId(0x8c1f_6436_c000_0002);
 const LISTENER_MODEL: EntityModelId = EntityModelId(0x8c1f_6436_c000_0003);
-/// Class A's priority and VLAN.
+/// Class A's priority; its VLAN is the port's.
 const PRIORITY: u8 = 3;
-const VLAN: u16 = 2;
+/// How long after the last MRP from another participant on the port it
+/// is still reported.
+const FOREIGN_MRP_QUIET: Duration = Duration::from_secs(30);
 /// The latency a talker declares for itself, in nanoseconds.
 const TALKER_LATENCY: u32 = 125_000;
 /// How often the streams' counters are logged.
@@ -94,8 +97,9 @@ enum Input {
     /// computer, and the frame.
     Avtp(MacAddress, bool, Vec<u8>),
     Ptp(MacAddress, Vec<u8>),
-    Msrp(Vec<u8>),
-    Mvrp(Vec<u8>),
+    /// From where, and the frame.
+    Msrp(MacAddress, Vec<u8>),
+    Mvrp(MacAddress, Vec<u8>),
     Gptp(Option<gptp::Status>),
     Link(profile::Link),
 }
@@ -304,8 +308,11 @@ pub struct Runtime {
     msrp: Arc<Socket>,
     mvrp: Arc<Socket>,
     endpoints: Vec<Endpoint>,
-    msrp_participant: Participant,
-    mvrp_participant: Participant,
+    /// The port's one MSRP and one MVRP participant, for every endpoint.
+    port: Port,
+    /// When MRP from this computer's address that this daemon did not send
+    /// was last heard: another participant on the port.
+    foreign_mrp: Option<Clock>,
     /// The claim on the talkers' destination addresses, one each.
     maap: Option<Maap>,
     /// Peer delay messages, which tell AVB from AVB Lite.
@@ -507,14 +514,14 @@ impl Runtime {
             stop.clone(),
             sender.clone(),
             "msrp",
-            |_, _, bytes| Input::Msrp(bytes),
+            |source, _, bytes| Input::Msrp(source, bytes),
         )?;
         read_into(
             mvrp.clone(),
             stop.clone(),
             sender.clone(),
             "mvrp",
-            |_, _, bytes| Input::Mvrp(bytes),
+            |source, _, bytes| Input::Mvrp(source, bytes),
         )?;
         read_into(
             ptp.clone(),
@@ -579,8 +586,8 @@ impl Runtime {
             msrp,
             mvrp,
             endpoints,
-            msrp_participant: Participant::new(msrp::FORMAT, Duration::ZERO, seed),
-            mvrp_participant: Participant::new(mvrp::FORMAT, Duration::ZERO, seed ^ 0x5555),
+            port: Port::new(seed),
+            foreign_mrp: None,
             maap,
             tagged: FrameSender::open(&interface)?,
             ptp,
@@ -655,17 +662,10 @@ impl Runtime {
                 endpoint.entity.entity_id()
             ));
         }
-        // Every endpoint takes part in class A on VLAN 2, and each talker
-        // declares its stream.
-        self.mvrp_participant
-            .declare(since, mvrp::VID, mvrp::value(VLAN), None);
-        self.msrp_participant.declare(
-            since,
-            msrp::attribute::DOMAIN,
-            Domain::CLASS_A.value(),
-            None,
-        );
-        // Talkers declare their streams once MAAP gives them addresses.
+        // Every endpoint takes part in class A on VLAN 2, declared once for
+        // the port; talkers declare their streams once MAAP gives them
+        // addresses.
+        self.port.join(since);
         if let Some(maap) = &mut self.maap {
             maap.start(now);
         }
@@ -840,6 +840,7 @@ impl Runtime {
             started: self.started,
             interface: self.interface.clone(),
             gptp: self.gptp_text.clone(),
+            foreign_mrp: self.foreign_mrp_heard(),
             endpoints,
         };
         let _ = triib_store::save(&path, &status);
@@ -854,13 +855,10 @@ impl Runtime {
             .filter_map(|endpoint| endpoint.entity.poll_timeout())
             .min()
             .map(|at| at.saturating_duration_since(now));
-        let mrp = [
-            self.msrp_participant.poll_timeout(),
-            self.mvrp_participant.poll_timeout(),
-        ]
-        .into_iter()
-        .min()
-        .map(|at| at.saturating_sub(since));
+        let mrp = [self.port.msrp.poll_timeout(), self.port.mvrp.poll_timeout()]
+            .into_iter()
+            .min()
+            .map(|at| at.saturating_sub(since));
         let maap = self
             .maap
             .as_ref()
@@ -926,8 +924,14 @@ impl Runtime {
                     self.update_correction();
                 }
             }
-            Input::Msrp(bytes) => self.msrp_participant.handle_pdu(since, &bytes),
-            Input::Mvrp(bytes) => self.mvrp_participant.handle_pdu(since, &bytes),
+            // MRP from this computer's own address that the socket did not
+            // send is another participant on the port, which this one must
+            // not take for a peer's.
+            Input::Msrp(source, _) | Input::Mvrp(source, _) if source == self.mac => {
+                self.foreign_participant();
+            }
+            Input::Msrp(_, bytes) => self.port.msrp.handle_pdu(since, &bytes),
+            Input::Mvrp(_, bytes) => self.port.mvrp.handle_pdu(since, &bytes),
             Input::Gptp(status) => {
                 // ptp4l on another interface says nothing of this one: its
                 // clock identity comes from that interface's address.
@@ -1011,8 +1015,7 @@ impl Runtime {
         for endpoint in &mut self.endpoints {
             endpoint.entity.handle_timeout(now);
         }
-        self.msrp_participant.handle_timeout(since);
-        self.mvrp_participant.handle_timeout(since);
+        self.port.handle_timeout(since);
         if let Some(maap) = &mut self.maap {
             maap.handle_timeout(now);
         }
@@ -1051,10 +1054,10 @@ impl Runtime {
                     self.entity_event(index, event);
                 }
             }
-            while let Some(registration) = self.msrp_participant.poll_event() {
+            while let Some(registration) = self.port.msrp.poll_event() {
                 self.registration(registration);
             }
-            while self.mvrp_participant.poll_event().is_some() {}
+            while self.port.mvrp.poll_event().is_some() {}
             if !self.flush() {
                 break;
             }
@@ -1105,10 +1108,10 @@ impl Runtime {
         while let Some(message) = self.fallback.poll_transmit() {
             let _ = self.ptp.send(lite::PDELAY_DESTINATION, &message);
         }
-        while let Some(pdu) = self.msrp_participant.poll_transmit() {
+        while let Some(pdu) = self.port.msrp.poll_transmit() {
             let _ = self.msrp.send(avb_mrp::MSRP_DESTINATION, &pdu);
         }
-        while let Some(pdu) = self.mvrp_participant.poll_transmit() {
+        while let Some(pdu) = self.port.mvrp.poll_transmit() {
             let _ = self.mvrp.send(avb_mrp::MVRP_DESTINATION, &pdu);
         }
         handed
@@ -1165,7 +1168,7 @@ impl Runtime {
             return;
         }
         let since = self.elapsed();
-        self.msrp_participant.declare(
+        self.port.msrp.declare(
             since,
             msrp::attribute::TALKER_ADVERTISE,
             msrp::talker_value(&declaration),
@@ -1265,7 +1268,7 @@ impl Runtime {
             endpoint.escalate_at = None;
         }
         let since = self.elapsed();
-        self.msrp_participant.withdraw(
+        self.port.msrp.withdraw(
             since,
             msrp::attribute::TALKER_ADVERTISE,
             &stream_id.0.to_be_bytes(),
@@ -1495,12 +1498,13 @@ impl Runtime {
         match state {
             Some(_) if own.is_some() => {
                 if let Some(key) = self.endpoints[index].declared.take() {
-                    self.msrp_participant
+                    self.port
+                        .msrp
                         .withdraw(since, msrp::attribute::LISTENER, &key);
                 }
             }
             Some(state) => {
-                self.msrp_participant.declare(
+                self.port.msrp.declare(
                     since,
                     msrp::attribute::LISTENER,
                     key.clone(),
@@ -1509,7 +1513,8 @@ impl Runtime {
                 self.endpoints[index].declared = Some(key);
             }
             None => {
-                self.msrp_participant
+                self.port
+                    .msrp
                     .withdraw(since, msrp::attribute::LISTENER, &key);
                 self.endpoints[index].declared = None;
             }
@@ -1610,7 +1615,8 @@ impl Runtime {
             .entity
             .set_input_reservation(0, InputReservation::default());
         if let Some(key) = endpoint.declared.take() {
-            self.msrp_participant
+            self.port
+                .msrp
                 .withdraw(since, msrp::attribute::LISTENER, &key);
         }
         if let Some((stream_id, talker, state)) = endpoint.cvu_to.take() {
@@ -1791,6 +1797,25 @@ impl Runtime {
 
     /// Stops the streams, withdraws the declarations and says the entities
     /// are leaving.
+    /// Notes another MRP participant on the port, and says so when it is
+    /// first heard after a quiet spell.
+    fn foreign_participant(&mut self) {
+        if !self.foreign_mrp_heard() {
+            log(format!(
+                "another program declares MSRP or MVRP on {} from this computer's address; \
+                 two participants on one port can withdraw what these endpoints need",
+                self.interface
+            ));
+        }
+        self.foreign_mrp = Some(Clock::now());
+    }
+
+    /// Whether another participant was heard on the port lately.
+    fn foreign_mrp_heard(&self) -> bool {
+        self.foreign_mrp
+            .is_some_and(|heard| heard.elapsed() < FOREIGN_MRP_QUIET)
+    }
+
     fn shut_down(&mut self) {
         let since = self.elapsed();
         if self.lite.is_some() {
@@ -1813,26 +1838,18 @@ impl Runtime {
             endpoint.listener = None;
             endpoint.entity.depart();
         }
-        let declared: Vec<(u8, Vec<u8>)> = self
+        let streams: Vec<StreamId> = self
             .endpoints
             .iter()
             .filter_map(|endpoint| endpoint.entity.output_stream(0))
-            .map(|(stream_id, _)| {
-                (
-                    msrp::attribute::TALKER_ADVERTISE,
-                    stream_id.0.to_be_bytes().to_vec(),
-                )
-            })
+            .map(|(stream_id, _)| stream_id)
             .collect();
-        for (kind, key) in declared {
-            self.msrp_participant.withdraw(since, kind, &key);
-        }
+        self.port.withdraw_streams(since, streams);
         // Long enough for the withdrawals to go out.
         let until = since + Duration::from_millis(400);
         while self.elapsed() < until {
             let now = self.elapsed();
-            self.msrp_participant.handle_timeout(now);
-            self.mvrp_participant.handle_timeout(now);
+            self.port.handle_timeout(now);
             let _ = self.flush();
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -1861,24 +1878,19 @@ impl Runtime {
             endpoint.talker = None;
             endpoint.listener = None;
             if let Some(key) = endpoint.declared.take() {
-                self.msrp_participant
+                self.port
+                    .msrp
                     .withdraw(since, msrp::attribute::LISTENER, &key);
             }
             if let Some((stream_id, _)) = self.endpoints[index].entity.output_stream(0) {
-                self.msrp_participant.withdraw(
+                self.port.msrp.withdraw(
                     since,
                     msrp::attribute::TALKER_ADVERTISE,
                     &stream_id.0.to_be_bytes(),
                 );
             }
         }
-        self.msrp_participant.withdraw(
-            since,
-            msrp::attribute::DOMAIN,
-            &Domain::CLASS_A.value()[..1],
-        );
-        self.mvrp_participant
-            .withdraw(since, mvrp::VID, &mvrp::value(VLAN));
+        self.port.leave(since);
         self.talkers.clear();
         self.ready_remotely.clear();
         let mut lite = LiteMode {
@@ -1941,14 +1953,7 @@ impl Runtime {
         self.talkers.clear();
         self.ready_remotely.clear();
         self.fallback = Fallback::new(self.own_clock.0, false, since);
-        self.mvrp_participant
-            .declare(since, mvrp::VID, mvrp::value(VLAN), None);
-        self.msrp_participant.declare(
-            since,
-            msrp::attribute::DOMAIN,
-            Domain::CLASS_A.value(),
-            None,
-        );
+        self.port.join(since);
         for index in 0..self.endpoints.len() {
             match self.endpoints[index].config.kind {
                 Kind::Talker if self.addressed() => self.declare_talker(index),

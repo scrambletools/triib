@@ -362,7 +362,29 @@ pub fn alarms(triib: &Triib) -> Vec<Alarm> {
         }
     }
     alarms.extend(crate::wireless_view::alarms(triib));
+    alarms.extend(foreign_mrp_alarm(triib));
     alarms
+}
+
+/// Another MRP participant on this computer's port, as its daemon heard
+/// it, on the first of its endpoints triib sees.
+fn foreign_mrp_alarm(triib: &Triib) -> Option<Alarm> {
+    let status = triib
+        .endpoints
+        .as_ref()
+        .filter(|status| status.foreign_mrp)?;
+    let entity = status
+        .endpoints
+        .iter()
+        .filter_map(|endpoint| endpoint.entity_id.parse::<EntityId>().ok())
+        .find(|entity| triib.entities.contains_key(entity))?;
+    Some(Alarm {
+        entity,
+        text: fl!(
+            "host-alarm-foreign-mrp",
+            interface = status.interface.clone()
+        ),
+    })
 }
 
 /// The alarms of one entity, for the top of its Diagnostics tab.
@@ -453,6 +475,42 @@ mod tests {
         let mut gone = lite_bench(-72_400, 800_000);
         gone.entities.remove(&WIRED_ESP);
         assert!(super::alarms(&gone).is_empty());
+    }
+
+    /// Another MRP participant on this computer's port, which its daemon
+    /// heard, raises an alarm on the first of its endpoints triib sees.
+    #[test]
+    fn another_participant_on_the_port_raises_an_alarm() {
+        use triib_endpointd::config::Kind;
+        use triib_endpointd::status::{DaemonStatus, EndpointStatus};
+        let mut triib = lite_bench(-180, 6_336);
+        let endpoint = |entity: EntityId| EndpointStatus {
+            entity_id: entity.to_string(),
+            name: "Host listener 1".into(),
+            kind: Kind::Listener,
+            state: "listening".into(),
+            audio: "discard".into(),
+            channels: 8,
+        };
+        let mut status = DaemonStatus {
+            pid: 1,
+            started: 0,
+            interface: "enp2s0".into(),
+            gptp: String::new(),
+            foreign_mrp: false,
+            endpoints: vec![endpoint(EntityId(0x1234)), endpoint(WIRED_ESP)],
+        };
+        triib.endpoints = Some(status.clone());
+        assert!(alarms(&triib).is_empty());
+        status.foreign_mrp = true;
+        triib.endpoints = Some(status);
+        assert_eq!(
+            alarms(&triib),
+            [Alarm {
+                entity: WIRED_ESP,
+                text: "Another program on this computer declares MSRP or MVRP on enp2s0".to_owned(),
+            }]
+        );
     }
 
     #[test]

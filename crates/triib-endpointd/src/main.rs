@@ -119,7 +119,31 @@ fn main() -> ExitCode {
         env!("CARGO_PKG_VERSION"),
         config.interface
     );
+    // One daemon on an interface, whoever runs it, claimed again when the
+    // file names another.
+    let mut claimed: Option<(String, triib_endpointd::status::Claim)> = None;
     loop {
+        if claimed
+            .as_ref()
+            .is_none_or(|(interface, _)| *interface != config.interface)
+        {
+            // The interface it held before is free first.
+            drop(claimed.take());
+            match triib_endpointd::status::claim_interface(&config.interface) {
+                Ok(Some(claim)) => claimed = Some((config.interface.clone(), claim)),
+                Ok(None) => {
+                    eprintln!(
+                        "another triib-endpointd runs on {}, for this or another user or root",
+                        config.interface
+                    );
+                    return ExitCode::FAILURE;
+                }
+                Err(error) => {
+                    eprintln!("could not claim {}: {error}", config.interface);
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
         match runtime::Runtime::new(config, Some(path.clone()), stop.clone())
             .and_then(runtime::Runtime::run)
         {

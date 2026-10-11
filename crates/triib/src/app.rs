@@ -80,6 +80,8 @@ pub struct Triib {
     /// What triib-endpointd says this computer's talkers and listeners
     /// are doing, while it runs.
     pub endpoints: Option<triib_endpointd::status::DaemonStatus>,
+    /// The interface another user's or root's triib-endpointd holds.
+    pub endpoints_elsewhere: Option<String>,
     /// The audio devices' names: inputs, then outputs.
     pub audio_devices: (Vec<String>, Vec<String>),
     /// What the network view brings forward.
@@ -273,6 +275,7 @@ impl Triib {
             neighbor: None,
             cannot_listen: None,
             endpoints: None,
+            endpoints_elsewhere: None,
             audio_devices: (Vec::new(), Vec::new()),
             network_focus: None,
             overflow_open: false,
@@ -322,6 +325,7 @@ impl Triib {
             neighbor: None,
             cannot_listen: None,
             endpoints: None,
+            endpoints_elsewhere: None,
             audio_devices: (Vec::new(), Vec::new()),
             network_focus: None,
             overflow_open: false,
@@ -826,6 +830,9 @@ impl Triib {
             Message::External(External::Endpoints(status)) => {
                 self.endpoints = status;
                 return self.go_on_recalling();
+            }
+            Message::External(External::EndpointsElsewhere(interface)) => {
+                self.endpoints_elsewhere = interface;
             }
             Message::External(External::AudioDevices(inputs, outputs)) => {
                 self.audio_devices = (inputs, outputs);

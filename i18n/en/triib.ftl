@@ -911,6 +911,13 @@ host-new-listener = Host listener { $number }
 host-failed = Could not add it to this computer: { $reason }
 host-needs-clock = This computer's own talkers and listeners need a wired interface with a PTP hardware clock
 host-no-ptp4l = ptp4l does not answer, so this computer's streams cannot keep gPTP time
+# Another user's triib-endpointd, or root's, runs this computer's talkers
+# and listeners on the interface; this user's cannot run beside it.
+host-elsewhere = triib-endpointd runs on { $interface } for another user or as root, so this computer's talkers and listeners run there, not here
+# MSRP and MVRP are protocols that reserve bandwidth and VLANs; keep them as
+# written. Another program on this computer runs them on the same port.
+host-foreign-mrp = Another program declares MSRP or MVRP on { $interface } from this computer's address, which can withdraw what this computer's streams need
+host-alarm-foreign-mrp = Another program on this computer declares MSRP or MVRP on { $interface }
 host-state = State
 host-streaming = Streaming
 host-waiting = Waiting for a listener

@@ -40,6 +40,9 @@ pub enum External {
     /// What triib-endpointd says it is doing, or `None` when it is not
     /// running.
     Endpoints(Option<triib_endpointd::status::DaemonStatus>),
+    /// The interface another user's or root's triib-endpointd holds, the
+    /// one this user's endpoints would run on.
+    EndpointsElsewhere(Option<String>),
     /// The audio devices' names: inputs, then outputs.
     AudioDevices(Vec<String>, Vec<String>),
 }
@@ -156,15 +159,27 @@ fn watch_endpoints() {
         .name("endpoint-watch".into())
         .spawn(|| {
             let mut last = None;
+            let mut last_elsewhere = None;
             let mut devices = None;
             let mut turn = 0u64;
             loop {
                 turn += 1;
                 let now = triib_endpointd::status::read();
                 let recalling = host::RECALLING.load(std::sync::atomic::Ordering::Relaxed);
+                // Without a daemon of this user's, whether another holds
+                // the interface its endpoints would run on.
+                let elsewhere = if now.is_none() {
+                    host::elsewhere()
+                } else {
+                    None
+                };
                 if recalling || Some(&now) != last.as_ref() {
                     post(External::Endpoints(now.clone()));
                     last = Some(now);
+                }
+                if Some(&elsewhere) != last_elsewhere.as_ref() {
+                    post(External::EndpointsElsewhere(elsewhere.clone()));
+                    last_elsewhere = Some(elsewhere);
                 }
                 if turn % 15 == 1 {
                     let found = triib_stream::audio::device_names();

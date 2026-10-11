@@ -19,6 +19,10 @@ pub struct DaemonStatus {
     pub started: u64,
     pub interface: String,
     pub gptp: String,
+    /// Another program declares MSRP or MVRP on the interface from this
+    /// computer's address, which can withdraw what the endpoints need.
+    #[serde(default)]
+    pub foreign_mrp: bool,
     #[serde(rename = "endpoint", default)]
     pub endpoints: Vec<EndpointStatus>,
 }
@@ -65,6 +69,59 @@ pub fn take_lock() -> io::Result<Option<File>> {
     }
 }
 
+/// A daemon's hold on an interface, against daemons of every user: two on
+/// one port would each run MSRP and MVRP there, and the one withdrawing
+/// what the other still declares takes it from the bridge, as a
+/// point-to-point port's participants do not hear each other's Leave.
+/// Released when the daemon ends, however it ends.
+pub struct Claim {
+    #[cfg(target_os = "linux")]
+    _socket: std::os::unix::net::UnixListener,
+}
+
+/// The name of an interface's claim, in Linux's abstract socket names,
+/// which every user shares.
+#[cfg(target_os = "linux")]
+fn claim_name(interface: &str) -> io::Result<std::os::unix::net::SocketAddr> {
+    use std::os::linux::net::SocketAddrExt;
+    std::os::unix::net::SocketAddr::from_abstract_name(format!("triib-endpointd/{interface}"))
+}
+
+/// Claims `interface` for this daemon: `None` when a daemon of this or
+/// another user, or root's, holds it.
+pub fn claim_interface(interface: &str) -> io::Result<Option<Claim>> {
+    #[cfg(target_os = "linux")]
+    {
+        match std::os::unix::net::UnixListener::bind_addr(&claim_name(interface)?) {
+            Ok(socket) => Ok(Some(Claim { _socket: socket })),
+            Err(error) if error.kind() == io::ErrorKind::AddrInUse => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = interface;
+        Ok(Some(Claim {}))
+    }
+}
+
+/// Whether a daemon holds `interface`, this user's or another's, from
+/// the socket names Linux lists, without connecting to the claim, which
+/// no daemon accepts.
+pub fn interface_claimed(interface: &str) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let name = format!(" @triib-endpointd/{interface}");
+        std::fs::read_to_string("/proc/net/unix")
+            .is_ok_and(|sockets| sockets.lines().any(|line| line.ends_with(&name)))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = interface;
+        false
+    }
+}
+
 /// What the daemon says, while it runs: its file is there and its
 /// process too.
 pub fn read() -> Option<DaemonStatus> {
@@ -80,4 +137,23 @@ fn running(pid: u32) -> bool {
 #[cfg(not(target_os = "linux"))]
 fn running(_pid: u32) -> bool {
     true
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_daemon_claims_an_interface() {
+        let interface = format!("test{}", std::process::id());
+        assert!(!interface_claimed(&interface));
+        let claim = claim_interface(&interface).unwrap();
+        assert!(claim.is_some());
+        assert!(interface_claimed(&interface));
+        // A second daemon, of any user, is turned away while it is held.
+        assert!(claim_interface(&interface).unwrap().is_none());
+        drop(claim);
+        assert!(!interface_claimed(&interface));
+        assert!(claim_interface(&interface).unwrap().is_some());
+    }
 }

@@ -844,6 +844,7 @@ mod tests {
             started: 1_000,
             interface: "enp6s0".to_owned(),
             gptp: String::new(),
+            foreign_mrp: false,
             endpoints: Vec::new(),
         });
         assert!(!host_ready(&triib, &preset, 2_000));

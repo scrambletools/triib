@@ -124,6 +124,13 @@ after the link renegotiates, as when a cable goes back in, and ptp4l
 drops every frame until the interface goes down and up; the daemon sees
 them and restarts the interface through `triib-link-reset@<interface>`.
 
+The daemon runs MSRP and MVRP once for the port, for all its endpoints,
+as MRP runs per port: two participants on one point-to-point port do not
+hear each other's Leave, so one withdrawing VLAN 2 would take it from the
+bridge while the other still needs it. So one daemon runs on an interface
+whichever user starts it, and triib says when another user's holds it, or
+when another program on this computer declares MSRP or MVRP on the port.
+
 ## Building
 
 ```

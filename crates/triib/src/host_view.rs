@@ -24,8 +24,17 @@ pub fn bar(triib: &Triib) -> Option<Element<'_, Message>> {
         return None;
     }
     let able = triib.hosts_endpoints();
+    let foreign = triib
+        .endpoints
+        .as_ref()
+        .filter(|status| status.foreign_mrp)
+        .map(|status| status.interface.clone());
     let note = if !able {
         Some(fl!("host-needs-clock"))
+    } else if let Some(interface) = &triib.endpoints_elsewhere {
+        Some(fl!("host-elsewhere", interface = interface.clone()))
+    } else if let Some(interface) = foreign {
+        Some(fl!("host-foreign-mrp", interface = interface))
     } else if triib
         .endpoints
         .as_ref()

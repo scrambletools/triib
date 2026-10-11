@@ -2414,6 +2414,7 @@ pub(crate) mod tests {
             started: 0,
             interface: "enp6s0".into(),
             gptp: "grandmaster 0x0001f2fffeff3b14, asCapable".into(),
+            foreign_mrp: false,
             endpoints: vec![EndpointStatus {
                 entity_id: WIRED_ESP.to_string(),
                 name: "Host listener 1".into(),

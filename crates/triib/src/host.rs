@@ -169,11 +169,23 @@ pub fn set_channels(
     save(&path, &config)
 }
 
-/// Starts triib-endpointd, from beside triib, unless it runs already or
-/// was started a moment ago and has not said so yet.
+/// The interface this user's endpoints would run on, when another
+/// user's or root's daemon holds it: a daemon of this user's would be
+/// turned away.
+pub fn elsewhere() -> Option<String> {
+    let interface = triib_store::load::<Config>(&config::path()?)
+        .ok()?
+        .interface;
+    (!interface.is_empty() && triib_endpointd::status::interface_claimed(&interface))
+        .then_some(interface)
+}
+
+/// Starts triib-endpointd, from beside triib, unless it runs already, was
+/// started a moment ago and has not said so yet, or another user's holds
+/// the interface.
 pub fn ensure_running() -> Result<(), String> {
     static STARTED: Mutex<Option<Instant>> = Mutex::new(None);
-    if triib_endpointd::status::read().is_some() {
+    if triib_endpointd::status::read().is_some() || elsewhere().is_some() {
         return Ok(());
     }
     let mut started = STARTED.lock().unwrap_or_else(PoisonError::into_inner);
