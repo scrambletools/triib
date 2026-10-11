@@ -681,9 +681,9 @@ presets-recalling = { $count ->
 }
 presets-missing = { $report } Ikke til stede eller ikke læst: { $missing }.
 presets-deleted = Slettede »{ $name }«.
-presets-host-note = Det gemmer også denne computers egne talkers og listeners og starter dem igen, når det hentes.
+presets-host-note = Det gemmer også denne computers egne talkere og listenere og starter dem igen, når det hentes.
 presets-host-endpoints = { $count } på denne computer
-presets-starting-host = Starter denne computers talkers og listeners for »{ $name }«; resten følger, når de er tilbage.
+presets-starting-host = Starter denne computers talkere og listenere for »{ $name }«; resten følger, når de er tilbage.
 
 ## Controls
 
@@ -706,13 +706,16 @@ common-decimal-separator = {","}
 
 host-add-talker = Tilføj talker
 host-add-listener = Tilføj listener
-host-show-mine = Vis kun denne computers egne talkers og listeners
+host-show-mine = Vis kun denne computers egne talkere og listenere
 host-show-all = Vis alle entiteter
 host-new-talker = Værts-talker { $number }
 host-new-listener = Værts-listener { $number }
 host-failed = Kunne ikke tilføje den til denne computer: { $reason }
-host-needs-clock = Denne computers egne talkers og listeners kræver et kablet interface med et PTP-hardwareur
+host-needs-clock = Denne computers egne talkere og listenere kræver et kablet interface med et PTP-hardwareur
 host-no-ptp4l = ptp4l svarer ikke, så denne computers streams kan ikke holde gPTP-tid
+host-elsewhere = triib-endpointd kører på { $interface } for en anden bruger eller som root, så denne computers talkere og listenere kører der, ikke her
+host-foreign-mrp = Et andet program erklærer MSRP eller MVRP på { $interface } fra denne computers adresse og kan dermed trække det tilbage, som denne computers streams har brug for
+host-alarm-foreign-mrp = Et andet program på denne computer erklærer MSRP eller MVRP på { $interface }
 host-state = Tilstand
 host-streaming = Streamer
 host-waiting = Venter på en listener
